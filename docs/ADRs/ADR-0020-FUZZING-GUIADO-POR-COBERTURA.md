@@ -98,8 +98,9 @@ Aprovado e implementado:
 | `cargo +nightly fuzz build` | **sucesso** (compila os três alvos) |
 | `cargo test --workspace` | exit 0 (workspace principal **não** compila `fuzz/`) |
 | `cargo +nightly fuzz run texto` | **falha no ambiente local**: `STATUS_DLL_NOT_FOUND` (runtime ASan ausente no toolchain nightly Windows); execução fica no job de CI em Linux |
+| `.github/workflows/fuzz.yml` (run `41430066954`) | **sucesso**: `texto` 4 499 017 execuções (cov 1231), `decoder` 8 440 896 (cov 501), `verificador` 4 267 947 (cov 1507); **0 crashes** em 120 s por alvo |
 
 Limite: a execução local do fuzzer no Windows não é suportada sem a DLL de runtime
-do ASan; o caminho de execução é o job `fuzz.yml` (Linux nightly). Nenhuma campanha
-de fuzzing guiado por cobertura foi executada ainda — "sem crash" continua
-pendente de rodada.
+do ASan; o caminho de execução é o job `fuzz.yml` (Linux nightly). A campanha de
+cobertura rodou (~17,2 M execuções, 0 crashes no orçamento), mas "sem crash" nesta
+rodada não prova ausência de vulnerabilidade.

@@ -265,7 +265,9 @@ estável.
 - Verificado: `cargo +nightly fuzz build` **compila**; `cargo test --workspace`
   segue verde **sem** compilar `fuzz/`. Execução local no Windows falha por falta
   da DLL de runtime do ASan (`STATUS_DLL_NOT_FOUND`) — o caminho de execução é o
-  job de CI em Linux.
+  job de CI em Linux. **Job `fuzz.yml` no CI (run `41430066954`)**: `texto`
+  4 499 017, `decoder` 8 440 896, `verificador` 4 267 947 execuções; **0 crashes**
+  em 120 s por alvo (≈17,2 M execuções).
 
 ### 3. Licença de Rio e Lift (decisão do mantenedor)
 

@@ -72,9 +72,25 @@ mantenedor. O custo aceito é não haver feedback de cobertura.
 
 ## 5. Próximos passos sugeridos
 
-- Propor ADR para fuzzer guiado por cobertura (dependência de desenvolvimento,
-  licença e versão fixadas) e rodar por tempo em runner dedicado.
 - Adicionar mutação de aridade/assinatura e de fronteiras de limite estrutural
   como alvos dedicados.
-- Registrar o tempo de parede quando houver runner com orçamento fixo (hoje o
-  critério é número de operações).
+- Aumentar o orçamento do fuzzing guiado por cobertura (hoje 120 s por alvo) e
+  persistir o corpus entre execuções.
+
+## 6. Fuzzing guiado por cobertura (ADR-0020)
+
+Ferramenta: `cargo-fuzz` **0.13.2** + `libfuzzer-sys` **=0.4.13**, toolchain
+**nightly**, workspace isolado `fuzz/`. Execução no CI (`.github/workflows/fuzz.yml`,
+`ubuntu-latest`), run `41430066954`, orçamento de **120 s por alvo**.
+
+| Alvo | Execuções | Cobertura (cov) | Crashes |
+|---|---:|---:|---:|
+| `texto` (`rvm_text::parse`) | 4 499 017 | 1 231 | 0 |
+| `decoder` (`rvm_bytecode::decode`) | 8 440 896 | 501 | 0 |
+| `verificador` (`parse` + `verify`) | 4 267 947 | 1 507 | 0 |
+
+- Total: **≈ 17,2 milhões de execuções**, **0 crashes** no orçamento.
+- Execução local no Windows **não** é suportada sem a DLL de runtime do ASan
+  (`STATUS_DLL_NOT_FOUND`); o caminho é o job de CI em Linux.
+- "0 crashes em 120 s por alvo" descreve **apenas esta rodada**; não prova ausência
+  de vulnerabilidade nem substitui auditoria.
