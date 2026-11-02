@@ -19,6 +19,7 @@ público; itens marcados “bloqueante” impedem a tag.
 - [ ] `docs/GUIA-USUARIO.md` cobre instalação, comandos, opções, códigos de
       saída, `--allow-fs-read` e limites.
 - [ ] `docs/INCORPORACAO.md` cobre `execute`/`execute_with_host`.
+- [ ] `docs/RELEASE-NOTES.md` atualizado para a versão.
 - [ ] Exemplos (`examples/*.rvm`) verificam e os que não usam host executam com
       a saída esperada.
 - [ ] Links internos e badges do README não estão quebrados.

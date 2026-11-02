@@ -80,6 +80,10 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+      - name: Aggregate checksums
+        run: |
+          cd dist
+          sha256sum *.tar.gz *.zip > SHA256SUMS
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
