@@ -1,0 +1,64 @@
+# rvm-ir — Package Contract
+
+## Overview
+
+`rvm-ir` define o modelo da RIR experimental EXP-0 (`Module`, `Function`,
+`Block`, `Instr`, `Op`, `Terminator`) e a checagem estrutural
+`structure::check`, que roda antes de qualquer verificação de tipos e antes de
+alocar memória proporcional ao módulo. Depende apenas de `rvm-spec`. O crate não
+executa, não valida tipos e não conhece texto nem bytecode: é a fronteira de
+dados compartilhada (ADR-0002).
+
+## Interface
+
+- `FnId`, `BlockId`, `ValueId` — aliases `u32` com invariante de densidade.
+- `Module` — `name`, `version`, `entry`, `functions`
+  (`lib.rs:Module`); `function(id)`, `function_by_name(name)`.
+- `Function` — `id`, `name`, `params`, `ret`, `entry`, `blocks`
+  (`lib.rs:Function`); `block(id)`, `value_count()`, `value_type(id)`.
+- `Param` — `name`, `ty`.
+- `Block` — `id`, `label`, `params`, `instrs`, `term` (`lib.rs:Block`).
+- `BlockParam` — `value`, `name`, `ty` (merge por phi explícito).
+- `Instr` — `def`, `op`.
+- `Op` — `ConstI64`, `ConstBool`, `Bin`, `Cmp`, `Call`; `result_type`,
+  `operand_ids` (`lib.rs:Op`).
+- `Terminator` — `Return`, `Br`, `CondBr`; `operand_ids` (`lib.rs:Terminator`).
+- `BranchTarget` — `target`, `args`.
+- `structure::check(&Module, &Limits) -> Result<(), RvmError>`
+  (`structure.rs:check`).
+- `testing` — construtores de módulos válidos para testes, habilitados por
+  `cfg(test)` ou pela feature `test-helpers` (`lib.rs:testing`).
+
+## Invariants
+
+- `functions[i].id == i` e `blocks[i].id == i`; IDs não densos ou duplicados são
+  `invalid_module` (`structure.rs:check_function`).
+- Parâmetros de função ocupam os `ValueId` `0..params.len()`; os demais valores
+  (parâmetros de bloco e definições) completam `{0..N-1}` sem repetição.
+- O bloco de entrada não declara parâmetros.
+- Nomes são identificadores ASCII `[A-Za-z_][A-Za-z0-9_]*`, não vazios, com no
+  máximo `Limits::max_name_len` bytes; `v` + apenas dígitos é reservado para
+  impressão canônica e é rejeitado em parâmetros (`structure.rs:is_reserved_value_name`).
+- Nomes de função são únicos no módulo; rótulos e nomes de valor são únicos na
+  função.
+- Todo operando referencia valor existente (`invalid_module`); todo alvo de
+  desvio referencia bloco existente (`invalid_control_flow`); toda função chamada
+  existe (`invalid_module`).
+- Toda contagem é comparada com `Limits` antes da alocação; a soma de valores usa
+  aritmética verificada e o vetor de presença só é alocado depois da checagem.
+- O terminador é obrigatório por tipo (`Block::term` não é `Option`); bloco sem
+  terminador é rejeitado na fronteira textual, não representável aqui.
+- `Function::value_type` não infere tipo de `call_static` (depende da assinatura
+  do alvo): devolve `None` nesse caso, por decisão documentada.
+- `structure::check` não olha tipos de operandos nem dominância; isso é
+  responsabilidade de `rvm-verify`.
+
+## Side Effects
+
+- `None`. `structure::check` é função pura; a única alocação relevante é o vetor
+  de presença de valores, limitado por `Limits::max_values_per_function` e alocado
+  depois da checagem. Sem IO, rede, ambiente, relógio, processos ou `unsafe`.
+
+## Verification
+
+- Run: `cargo test --workspace`

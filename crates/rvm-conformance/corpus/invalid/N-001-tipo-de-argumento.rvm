@@ -1,0 +1,18 @@
+; id: N-001
+; expect: error invalid_type
+; tipo incompatível em argumento de chamada (conformidade N-001)
+module n001 version 1
+entry main
+
+fn main() -> i64 {
+  entry:
+    v0 = const_bool true
+    v1 = call_static soma(v0)
+    return v1
+}
+
+fn soma(a: i64) -> i64 {
+  entry:
+    v1 = add_i64_checked a, a
+    return v1
+}

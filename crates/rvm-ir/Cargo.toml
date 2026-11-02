@@ -1,0 +1,17 @@
+[package]
+name = "rvm-ir"
+description = "Modelo de RIR experimental (EXP-0) e invariantes estruturais da RSUVM."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[features]
+# Helpers de construção usados apenas em testes de outros crates do workspace.
+test-helpers = []
+
+[dependencies]
+rvm-spec.workspace = true
+
+[lints]
+workspace = true

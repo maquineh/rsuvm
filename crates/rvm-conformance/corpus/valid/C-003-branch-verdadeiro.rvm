@@ -1,0 +1,17 @@
+; id: C-003
+; expect: value i64:1
+; desvio com condição true executa somente o bloco correspondente (conformidade C-003)
+module c003 version 1
+entry escolhe
+
+fn escolhe() -> i64 {
+  entry:
+    v0 = const_bool true
+    cond_br v0, entao, senao
+  entao:
+    v1 = const_i64 1
+    return v1
+  senao:
+    v2 = const_i64 2
+    return v2
+}

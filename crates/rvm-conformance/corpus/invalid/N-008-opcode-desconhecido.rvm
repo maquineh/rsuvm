@@ -1,0 +1,12 @@
+; id: N-008
+; expect: error unknown_opcode
+; opcode desconhecido: divisão não existe no subset EXP-0 (conformidade N-008)
+module n008 version 1
+entry main
+
+fn main() -> i64 {
+  entry:
+    v0 = const_i64 1
+    v1 = div_i64 v0, v0
+    return v1
+}

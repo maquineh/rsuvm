@@ -1,0 +1,12 @@
+; id: C-013
+; expect: value bool:true
+; args: i64:3, i64:3
+; extra: menor ou igual com operandos iguais
+module c013 version 1
+entry menor_ou_igual
+
+fn menor_ou_igual(a: i64, b: i64) -> bool {
+  entry:
+    v2 = le_i64 a, b
+    return v2
+}

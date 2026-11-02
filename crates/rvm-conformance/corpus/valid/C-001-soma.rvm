@@ -1,0 +1,12 @@
+; id: C-001
+; expect: value i64:30
+; args: i64:10, i64:20
+; soma de dois i64 (conformidade C-001)
+module c001 version 1
+entry soma
+
+fn soma(a: i64, b: i64) -> i64 {
+  entry:
+    v2 = add_i64_checked a, b
+    return v2
+}

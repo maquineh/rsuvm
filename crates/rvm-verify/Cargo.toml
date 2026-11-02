@@ -1,0 +1,17 @@
+[package]
+name = "rvm-verify"
+description = "Verificador experimental de RIR da RSUVM: tipos, fluxo de controle e dominância (EXP-0)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+rvm-spec.workspace = true
+rvm-ir.workspace = true
+
+[dev-dependencies]
+rvm-ir = { workspace = true, features = ["test-helpers"] }
+
+[lints]
+workspace = true

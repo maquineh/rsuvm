@@ -1,0 +1,10 @@
+; id: N-007
+; expect: error invalid_type
+; retorno incompatível com a assinatura: função -> i64 retorna sem valor (conformidade N-007)
+module n007 version 1
+entry main
+
+fn main() -> i64 {
+  entry:
+    return
+}

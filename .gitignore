@@ -1,0 +1,11 @@
+# Artefatos de build
+/target
+**/target
+**/*.rs.bk
+*.pdb
+*.rlib
+*.rmeta
+
+# Artefatos gerados pelo CLI em execuções locais
+*.rsvmbc
+*.out

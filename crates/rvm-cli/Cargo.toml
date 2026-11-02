@@ -1,0 +1,23 @@
+[package]
+name = "rvm-cli"
+description = "CLI de desenvolvimento da RSUVM: run, check, fmt, encode, run-bc. Não concede capabilities."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[[bin]]
+name = "rsuvm"
+path = "src/main.rs"
+
+[dependencies]
+rvm-spec.workspace = true
+rvm-ir.workspace = true
+rvm-runtime.workspace = true
+rvm-text.workspace = true
+rvm-verify.workspace = true
+rvm-bytecode.workspace = true
+rvm-interpreter.workspace = true
+
+[lints]
+workspace = true

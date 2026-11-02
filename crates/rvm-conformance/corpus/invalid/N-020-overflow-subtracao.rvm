@@ -1,0 +1,13 @@
+; id: N-020
+; expect: trap integer_overflow
+; extra: subtração transborda i64 (i64::MIN - 1)
+module n020 version 1
+entry main
+
+fn main() -> i64 {
+  entry:
+    v0 = const_i64 -9223372036854775808
+    v1 = const_i64 1
+    v2 = sub_i64_checked v0, v1
+    return v2
+}

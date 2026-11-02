@@ -1,0 +1,11 @@
+; id: N-014
+; expect: error unsupported_version
+; extra: versão de módulo inexistente
+module n014 version 2
+entry main
+
+fn main() -> i64 {
+  entry:
+    v0 = const_i64 1
+    return v0
+}

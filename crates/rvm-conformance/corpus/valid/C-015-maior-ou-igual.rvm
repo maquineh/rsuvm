@@ -1,0 +1,12 @@
+; id: C-015
+; expect: value bool:true
+; args: i64:5, i64:5
+; extra: maior ou igual com operandos iguais
+module c015 version 1
+entry maior_ou_igual
+
+fn maior_ou_igual(a: i64, b: i64) -> bool {
+  entry:
+    v2 = ge_i64 a, b
+    return v2
+}

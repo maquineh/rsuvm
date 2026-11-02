@@ -1,0 +1,12 @@
+[package]
+name = "rvm-spec"
+description = "Núcleo semântico experimental da RSUVM: tipos, operações, códigos de erro e limites (EXP-0)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+
+[lints]
+workspace = true

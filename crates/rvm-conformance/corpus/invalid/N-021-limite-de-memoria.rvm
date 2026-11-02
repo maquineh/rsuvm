@@ -1,0 +1,12 @@
+; id: N-021
+; expect: limit out_of_memory
+; memory: 100
+; extra: quota de memória modelada menor que um frame
+module n021 version 1
+entry main
+
+fn main() -> i64 {
+  entry:
+    v0 = const_i64 1
+    return v0
+}

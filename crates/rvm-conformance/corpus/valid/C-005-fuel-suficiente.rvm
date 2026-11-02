@@ -1,0 +1,23 @@
+; id: C-005
+; expect: value i64:6
+; fuel suficiente: cadeia de três chamadas termina normalmente (conformidade C-005)
+; custo esperado: 5 (main) + 3 x 3 (incrementa) = 14 unidades de fuel
+; fuel: 50
+module c005 version 1
+entry main
+
+fn main() -> i64 {
+  entry:
+    v0 = const_i64 3
+    v1 = call_static incrementa(v0)
+    v2 = call_static incrementa(v1)
+    v3 = call_static incrementa(v2)
+    return v3
+}
+
+fn incrementa(a: i64) -> i64 {
+  entry:
+    v1 = const_i64 1
+    v2 = add_i64_checked a, v1
+    return v2
+}

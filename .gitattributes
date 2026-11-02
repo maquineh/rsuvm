@@ -1,0 +1,11 @@
+# Normalização de line endings do repositório.
+# Código e documentação em LF (checkout consistente entre Windows/Linux);
+# scripts PowerShell em CRLF.
+* text=auto eol=lf
+*.rs text eol=lf
+*.toml text eol=lf
+*.md text eol=lf
+*.rvm text eol=lf
+*.yml text eol=lf
+*.ps1 text eol=crlf
+Cargo.lock text eol=lf

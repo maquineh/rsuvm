@@ -1,0 +1,12 @@
+; id: C-010
+; expect: value i64:-3
+; args: i64:2, i64:5
+; extra: subtração com resultado negativo
+module c010 version 1
+entry subtrai
+
+fn subtrai(a: i64, b: i64) -> i64 {
+  entry:
+    v2 = sub_i64_checked a, b
+    return v2
+}

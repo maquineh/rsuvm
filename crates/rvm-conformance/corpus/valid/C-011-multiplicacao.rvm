@@ -1,0 +1,12 @@
+; id: C-011
+; expect: value i64:42
+; args: i64:6, i64:7
+; extra: multiplicação com overflow verificado
+module c011 version 1
+entry multiplica
+
+fn multiplica(a: i64, b: i64) -> i64 {
+  entry:
+    v2 = mul_i64_checked a, b
+    return v2
+}

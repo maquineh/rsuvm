@@ -1,0 +1,16 @@
+; id: C-016
+; expect: value unit
+; extra: chamada estática de função que retorna unit
+module c016 version 1
+entry main
+
+fn main() -> unit {
+  entry:
+    v0 = call_static nada()
+    return
+}
+
+fn nada() -> unit {
+  entry:
+    return
+}

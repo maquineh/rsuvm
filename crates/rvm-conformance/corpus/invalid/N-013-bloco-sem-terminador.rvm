@@ -1,0 +1,10 @@
+; id: N-013
+; expect: error invalid_control_flow
+; extra: bloco sem terminador
+module n013 version 1
+entry main
+
+fn main() -> i64 {
+  entry:
+    v0 = const_i64 1
+}

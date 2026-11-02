@@ -1,0 +1,17 @@
+; id: N-015
+; expect: error invalid_type
+; extra: argumento de bloco com tipo incompatível com o parâmetro do alvo
+module n015 version 1
+entry main
+
+fn main(c: bool) -> i64 {
+  entry:
+    v1 = const_i64 1
+    cond_br c, alvo(v1), fim
+  alvo(x: bool):
+    v2 = const_bool true
+    return v1
+  fim:
+    v3 = const_i64 3
+    return v3
+}

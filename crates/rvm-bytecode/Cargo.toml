@@ -1,0 +1,17 @@
+[package]
+name = "rvm-bytecode"
+description = "Codificação binária experimental e decoder limitado da RSUVM (EXP-0, não normativo)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+rvm-spec.workspace = true
+rvm-ir.workspace = true
+
+[dev-dependencies]
+rvm-ir = { workspace = true, features = ["test-helpers"] }
+
+[lints]
+workspace = true

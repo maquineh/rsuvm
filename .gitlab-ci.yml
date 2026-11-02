@@ -1,0 +1,47 @@
+# Pipeline de validação da RSUVM (EXP-0).
+# Espelha o gate local documentado em AGENTS.md §4 e em docs/RELATORIOS/.
+# Zero dependências externas: não há `cargo fetch` nem cache de registry.
+
+stages:
+  - validate
+
+variables:
+  CARGO_TERM_COLOR: never
+
+default:
+  image: rust:1.94.1-slim-bookworm
+  before_script:
+    - rustup component add rustfmt clippy
+  timeout: 30m
+
+format:
+  stage: validate
+  script:
+    - cargo fmt --all -- --check
+
+clippy:
+  stage: validate
+  script:
+    - cargo clippy --workspace --all-targets -- -D warnings
+
+test:
+  stage: validate
+  script:
+    - cargo test --workspace
+
+# A semântica de overflow não pode depender do perfil: o release também é testado.
+test-release:
+  stage: validate
+  script:
+    - cargo test --release --workspace
+
+# Windows não é provisionado por padrão (ver .gitlab-ci.yml de projetos da casa).
+# Habilitar quando existir runner com tag `windows-msvc`.
+windows:
+  stage: validate
+  tags:
+    - windows-msvc
+  rules:
+    - if: '$RSUVM_WINDOWS_CI == "1"'
+  script:
+    - cargo test --workspace

@@ -1,0 +1,17 @@
+; id: N-017
+; expect: error invalid_type
+; extra: condição de cond_br não é bool
+module n017 version 1
+entry main
+
+fn main() -> i64 {
+  entry:
+    v0 = const_i64 1
+    cond_br v0, a, b
+  a:
+    v1 = const_i64 2
+    return v1
+  b:
+    v2 = const_i64 3
+    return v2
+}

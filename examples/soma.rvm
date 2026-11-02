@@ -1,0 +1,12 @@
+; Exemplo mínimo do formato textual experimental (EXP-0).
+; Executar: cargo run -p rvm-cli -- run examples/soma.rvm --arg i64:10 --arg i64:20
+; Saída esperada: i64:30
+
+module exemplo version 1
+entry soma
+
+fn soma(a: i64, b: i64) -> i64 {
+  entry:
+    v2 = add_i64_checked a, b
+    return v2
+}

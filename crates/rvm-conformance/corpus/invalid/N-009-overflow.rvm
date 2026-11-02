@@ -1,0 +1,13 @@
+; id: N-009
+; expect: trap integer_overflow
+; soma/sub/mul transborda i64 (conformidade N-009)
+module n009 version 1
+entry main
+
+fn main() -> i64 {
+  entry:
+    v0 = const_i64 9223372036854775807
+    v1 = const_i64 1
+    v2 = add_i64_checked v0, v1
+    return v2
+}

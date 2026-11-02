@@ -1,0 +1,11 @@
+; id: N-003
+; expect: error invalid_module
+; uso de valor não declarado (conformidade N-003)
+module n003 version 1
+entry main
+
+fn main() -> i64 {
+  entry:
+    v0 = add_i64_checked x, x
+    return v0
+}

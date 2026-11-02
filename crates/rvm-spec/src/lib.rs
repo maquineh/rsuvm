@@ -1,0 +1,733 @@
+//! `rvm-spec` — núcleo semântico da RSUVM (EXP-0).
+//!
+//! Este crate é independente de linguagem hospedeira (ADR-0001) e não depende de
+//! nenhum outro crate do workspace. Ele define:
+//!
+//! - os tipos do subset: [`Type::Unit`], [`Type::Bool`], [`Type::I64`];
+//! - as operações aritméticas verificadas ([`BinOp`]) e as comparações ([`CmpOp`]);
+//! - a tabela estável de códigos/categorias de erro ([`ErrorCode`]);
+//! - o tipo de diagnóstico [`RvmError`] com localização;
+//! - os limites estruturais [`Limits`] usados antes de alocar.
+//!
+//! A semântica de overflow é fixa e não depende do modo debug/release do Rust:
+//! toda operação aritmética usa `i64::checked_*` e devolve [`None`] quando o
+//! resultado sai de `[-2^63, 2^63-1]`; quem chama transforma `None` no trap
+//! `integer_overflow`.
+
+#![forbid(unsafe_code)]
+#![deny(missing_docs)]
+#![cfg_attr(
+    test,
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::indexing_slicing
+    )
+)]
+
+use core::fmt;
+
+/// Versão experimental da representação intermediária implementada por este workspace.
+///
+/// Módulos com outra versão são rejeitados com [`ErrorCode::UnsupportedVersion`].
+pub const IR_VERSION: u16 = 1;
+
+/// Tipo de valor do subset EXP-0.
+///
+/// Não existe coerção implícita entre tipos: toda operação declara tipos de
+/// operandos e o verificador compara tipos exatos.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum Type {
+    /// Tipo unitário: ausência de valor útil. Único tipo aceitável como retorno
+    /// de função que não produz valor.
+    Unit,
+    /// Booleano. Resultado de comparações e único tipo aceito como condição de
+    /// `cond_br`.
+    Bool,
+    /// Inteiro assinado de 64 bits. Overflow em soma/subtração/multiplicação
+    /// produz o trap `integer_overflow`.
+    I64,
+}
+
+impl Type {
+    /// Nome estável do tipo no formato textual e nos relatórios.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Type::Unit => "unit",
+            Type::Bool => "bool",
+            Type::I64 => "i64",
+        }
+    }
+
+    /// Converte um nome estável de tipo em [`Type`].
+    ///
+    /// Devolve [`None`] para qualquer nome fora do subset; quem chama deve
+    /// transformar isso em [`ErrorCode::UnknownType`].
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "unit" => Some(Type::Unit),
+            "bool" => Some(Type::Bool),
+            "i64" => Some(Type::I64),
+            _ => None,
+        }
+    }
+}
+
+impl fmt::Display for Type {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+/// Operação aritmética binária verificada sobre `i64`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum BinOp {
+    /// Soma com verificação de overflow (`add_i64_checked`).
+    AddI64Checked,
+    /// Subtração com verificação de overflow (`sub_i64_checked`).
+    SubI64Checked,
+    /// Multiplicação com verificação de overflow (`mul_i64_checked`).
+    MulI64Checked,
+}
+
+impl BinOp {
+    /// Nome estável da operação no formato textual.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            BinOp::AddI64Checked => "add_i64_checked",
+            BinOp::SubI64Checked => "sub_i64_checked",
+            BinOp::MulI64Checked => "mul_i64_checked",
+        }
+    }
+
+    /// Converte o nome estável da operação em [`BinOp`].
+    ///
+    /// Devolve [`None`] para operações fora do subset; quem chama deve
+    /// transformar isso em [`ErrorCode::UnknownOpcode`].
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "add_i64_checked" => Some(BinOp::AddI64Checked),
+            "sub_i64_checked" => Some(BinOp::SubI64Checked),
+            "mul_i64_checked" => Some(BinOp::MulI64Checked),
+            _ => None,
+        }
+    }
+
+    /// Tipo exigido de cada operando.
+    #[must_use]
+    pub const fn operand_type(self) -> Type {
+        Type::I64
+    }
+
+    /// Tipo do valor definido pela operação.
+    #[must_use]
+    pub const fn result_type(self) -> Type {
+        Type::I64
+    }
+
+    /// Aplica a operação com overflow verificado.
+    ///
+    /// Devolve [`None`] quando o resultado matemático não cabe em `i64`
+    /// (inclusive `i64::MIN * -1` e `i64::MIN - 1`). O contrato não depende de
+    /// `cfg!(debug_assertions)`.
+    #[must_use]
+    pub fn eval_i64(self, lhs: i64, rhs: i64) -> Option<i64> {
+        match self {
+            BinOp::AddI64Checked => lhs.checked_add(rhs),
+            BinOp::SubI64Checked => lhs.checked_sub(rhs),
+            BinOp::MulI64Checked => lhs.checked_mul(rhs),
+        }
+    }
+}
+
+impl fmt::Display for BinOp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+/// Comparação sobre `i64` (assinada) que produz `bool`.
+///
+/// Igualdade (`eq_i64`, `ne_i64`) e ordem (`lt_i64`, `le_i64`, `gt_i64`,
+/// `ge_i64`) usam a ordem assinada padrão de `i64`. Comparações de `bool` e
+/// `unit` não existem no EXP-0.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum CmpOp {
+    /// Igualdade (`eq_i64`).
+    Eq,
+    /// Desigualdade (`ne_i64`).
+    Ne,
+    /// Menor que (`lt_i64`).
+    Lt,
+    /// Menor ou igual (`le_i64`).
+    Le,
+    /// Maior que (`gt_i64`).
+    Gt,
+    /// Maior ou igual (`ge_i64`).
+    Ge,
+}
+
+impl CmpOp {
+    /// Nome estável da comparação no formato textual.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            CmpOp::Eq => "eq_i64",
+            CmpOp::Ne => "ne_i64",
+            CmpOp::Lt => "lt_i64",
+            CmpOp::Le => "le_i64",
+            CmpOp::Gt => "gt_i64",
+            CmpOp::Ge => "ge_i64",
+        }
+    }
+
+    /// Converte o nome estável da comparação em [`CmpOp`].
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "eq_i64" => Some(CmpOp::Eq),
+            "ne_i64" => Some(CmpOp::Ne),
+            "lt_i64" => Some(CmpOp::Lt),
+            "le_i64" => Some(CmpOp::Le),
+            "gt_i64" => Some(CmpOp::Gt),
+            "ge_i64" => Some(CmpOp::Ge),
+            _ => None,
+        }
+    }
+
+    /// Tipo exigido de cada operando.
+    #[must_use]
+    pub const fn operand_type(self) -> Type {
+        Type::I64
+    }
+
+    /// Tipo do valor definido pela comparação.
+    #[must_use]
+    pub const fn result_type(self) -> Type {
+        Type::Bool
+    }
+
+    /// Aplica a comparação assinada.
+    #[must_use]
+    pub fn eval_i64(self, lhs: i64, rhs: i64) -> bool {
+        match self {
+            CmpOp::Eq => lhs == rhs,
+            CmpOp::Ne => lhs != rhs,
+            CmpOp::Lt => lhs < rhs,
+            CmpOp::Le => lhs <= rhs,
+            CmpOp::Gt => lhs > rhs,
+            CmpOp::Ge => lhs >= rhs,
+        }
+    }
+}
+
+impl fmt::Display for CmpOp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+/// Categoria de diagnóstico, conforme TechSpec §7.
+///
+/// As categorias distinguem fronteiras do pipeline: [`Decode`](Self::Decode)
+/// (texto/bytes malformados), [`Verify`](Self::Verify) (módulo estrutural ou
+/// tipadamente inválido), [`Trap`](Self::Trap) (comportamento semântico
+/// definido que impede resultado), [`Resource`](Self::Resource) (quota
+/// excedida) e [`Capability`](Self::Capability) (efeito de host negado).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ErrorCategory {
+    /// Entrada textual/binária malformada, versão desconhecida ou tamanho excedido.
+    Decode,
+    /// Módulo estrutural ou tipadamente inválido; nunca chega ao executor.
+    Verify,
+    /// Trap semântico definido (por exemplo `integer_overflow`).
+    Trap,
+    /// Limite de recurso (fuel ou profundidade) excedido.
+    Resource,
+    /// Capacidade do host ausente ou negada.
+    Capability,
+}
+
+impl ErrorCategory {
+    /// Nome estável da categoria.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            ErrorCategory::Decode => "decode",
+            ErrorCategory::Verify => "verify",
+            ErrorCategory::Trap => "trap",
+            ErrorCategory::Resource => "resource",
+            ErrorCategory::Capability => "capability",
+        }
+    }
+}
+
+impl fmt::Display for ErrorCategory {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+/// Classe de falha observável pelo host (RF-05).
+///
+/// Distingue as três respostas exigidas pelo PRD: módulo inválido, trap
+/// semântico e limite de recurso, além da negação de capability.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ErrorClass {
+    /// Falha de decode ou verificação: o módulo não é executável.
+    Module,
+    /// Trap semântico durante execução.
+    Trap,
+    /// Quota de execução excedida.
+    ResourceLimit,
+    /// Efeito de host negado.
+    Capability,
+}
+
+impl ErrorClass {
+    /// Nome estável da classe.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            ErrorClass::Module => "module",
+            ErrorClass::Trap => "trap",
+            ErrorClass::ResourceLimit => "resource_limit",
+            ErrorClass::Capability => "capability",
+        }
+    }
+}
+
+impl fmt::Display for ErrorClass {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+/// Código de erro estável do protótipo.
+///
+/// Mensagens humanas podem mudar; estes nomes são o contrato verificável pelo
+/// corpus de conformidade (`docs/CONTRATOS/ERROS-EXP-0.md`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ErrorCode {
+    /// Texto ou bytes fora da gramática/formato experimental.
+    SyntaxError,
+    /// Imediato numérico ou tamanho fora de faixa representável.
+    InvalidNumber,
+    /// Nome de instrução ou terminador desconhecido.
+    UnknownOpcode,
+    /// Nome de tipo desconhecido.
+    UnknownType,
+    /// Versão de módulo ou de codificação não suportada.
+    UnsupportedVersion,
+    /// Entrada truncada: faltam bytes para o que foi declarado.
+    TruncatedInput,
+    /// Entrada maior que [`Limits::max_input_bytes`]; rejeitada antes de ler o corpo.
+    InputTooLarge,
+    /// Módulo estruturalmente inválido (IDs, referências, limites, nomes).
+    InvalidModule,
+    /// Tipo ou aridade incompatível.
+    InvalidType,
+    /// Fluxo de controle inválido (terminador, alvo, dominância, retorno).
+    InvalidControlFlow,
+    /// Recurso do formato/host fora do suportado pelo EXP-0.
+    UnsupportedFeature,
+    /// Trap aritmético: resultado fora de `[-2^63, 2^63-1]`.
+    IntegerOverflow,
+    /// Fuel esgotado antes do despacho.
+    OutOfFuel,
+    /// Profundidade máxima de chamadas excedida.
+    CallDepthExceeded,
+    /// Quota de memória de frames excedida.
+    OutOfMemory,
+    /// Capability do host negada (deny-by-default).
+    CapabilityDenied,
+}
+
+impl ErrorCode {
+    /// Nome estável do código, usado no corpus e nas mensagens.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            ErrorCode::SyntaxError => "syntax_error",
+            ErrorCode::InvalidNumber => "invalid_number",
+            ErrorCode::UnknownOpcode => "unknown_opcode",
+            ErrorCode::UnknownType => "unknown_type",
+            ErrorCode::UnsupportedVersion => "unsupported_version",
+            ErrorCode::TruncatedInput => "truncated_input",
+            ErrorCode::InputTooLarge => "input_too_large",
+            ErrorCode::InvalidModule => "invalid_module",
+            ErrorCode::InvalidType => "invalid_type",
+            ErrorCode::InvalidControlFlow => "invalid_control_flow",
+            ErrorCode::UnsupportedFeature => "unsupported_feature",
+            ErrorCode::IntegerOverflow => "integer_overflow",
+            ErrorCode::OutOfFuel => "out_of_fuel",
+            ErrorCode::CallDepthExceeded => "call_depth_exceeded",
+            ErrorCode::OutOfMemory => "out_of_memory",
+            ErrorCode::CapabilityDenied => "capability_denied",
+        }
+    }
+
+    /// Converte o nome estável de volta ao código.
+    ///
+    /// Usado pelo corpus para declarar a expectativa de erro por nome.
+    #[must_use]
+    pub fn from_stable_name(name: &str) -> Option<Self> {
+        match name {
+            "syntax_error" => Some(ErrorCode::SyntaxError),
+            "invalid_number" => Some(ErrorCode::InvalidNumber),
+            "unknown_opcode" => Some(ErrorCode::UnknownOpcode),
+            "unknown_type" => Some(ErrorCode::UnknownType),
+            "unsupported_version" => Some(ErrorCode::UnsupportedVersion),
+            "truncated_input" => Some(ErrorCode::TruncatedInput),
+            "input_too_large" => Some(ErrorCode::InputTooLarge),
+            "invalid_module" => Some(ErrorCode::InvalidModule),
+            "invalid_type" => Some(ErrorCode::InvalidType),
+            "invalid_control_flow" => Some(ErrorCode::InvalidControlFlow),
+            "unsupported_feature" => Some(ErrorCode::UnsupportedFeature),
+            "integer_overflow" => Some(ErrorCode::IntegerOverflow),
+            "out_of_fuel" => Some(ErrorCode::OutOfFuel),
+            "call_depth_exceeded" => Some(ErrorCode::CallDepthExceeded),
+            "out_of_memory" => Some(ErrorCode::OutOfMemory),
+            "capability_denied" => Some(ErrorCode::CapabilityDenied),
+            _ => None,
+        }
+    }
+
+    /// Categoria do pipeline à qual o código pertence.
+    #[must_use]
+    pub const fn category(self) -> ErrorCategory {
+        match self {
+            ErrorCode::SyntaxError
+            | ErrorCode::InvalidNumber
+            | ErrorCode::UnknownOpcode
+            | ErrorCode::UnknownType
+            | ErrorCode::UnsupportedVersion
+            | ErrorCode::TruncatedInput
+            | ErrorCode::InputTooLarge => ErrorCategory::Decode,
+            ErrorCode::InvalidModule
+            | ErrorCode::InvalidType
+            | ErrorCode::InvalidControlFlow
+            | ErrorCode::UnsupportedFeature => ErrorCategory::Verify,
+            ErrorCode::IntegerOverflow => ErrorCategory::Trap,
+            ErrorCode::OutOfFuel | ErrorCode::CallDepthExceeded | ErrorCode::OutOfMemory => {
+                ErrorCategory::Resource
+            }
+            ErrorCode::CapabilityDenied => ErrorCategory::Capability,
+        }
+    }
+
+    /// Classe de falha observável (RF-05).
+    #[must_use]
+    pub const fn class(self) -> ErrorClass {
+        match self.category() {
+            ErrorCategory::Decode | ErrorCategory::Verify => ErrorClass::Module,
+            ErrorCategory::Trap => ErrorClass::Trap,
+            ErrorCategory::Resource => ErrorClass::ResourceLimit,
+            ErrorCategory::Capability => ErrorClass::Capability,
+        }
+    }
+}
+
+impl fmt::Display for ErrorCode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Localização de um diagnóstico dentro de um módulo.
+///
+/// Os campos são `String`/`u32` de propriedade própria: diagnósticos são frios e
+/// não devem carregar referências para dentro de módulos não confiáveis.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Location {
+    /// O módulo inteiro (versão, nome, contagem de funções, entry point).
+    Module,
+    /// Uma função (nome, limites, assinatura).
+    Function {
+        /// Nome declarado da função.
+        function: String,
+    },
+    /// Um bloco (parâmetros, terminador, limites).
+    Block {
+        /// Nome declarado da função.
+        function: String,
+        /// Rótulo do bloco.
+        block: String,
+    },
+    /// Uma instrução específica, identificada por índice (base zero) no bloco.
+    Instruction {
+        /// Nome declarado da função.
+        function: String,
+        /// Rótulo do bloco.
+        block: String,
+        /// Índice da instrução dentro do bloco.
+        index: u32,
+    },
+    /// Um valor SSA, identificado pelo seu `ValueId`.
+    Value {
+        /// Nome declarado da função.
+        function: String,
+        /// Identificador numérico do valor.
+        value: u32,
+    },
+}
+
+impl fmt::Display for Location {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Location::Module => f.write_str("módulo"),
+            Location::Function { function } => write!(f, "função `{function}`"),
+            Location::Block { function, block } => {
+                write!(f, "função `{function}`, bloco `{block}`")
+            }
+            Location::Instruction {
+                function,
+                block,
+                index,
+            } => write!(f, "função `{function}`, bloco `{block}`, instrução {index}"),
+            Location::Value { function, value } => {
+                write!(f, "função `{function}`, valor v{value}")
+            }
+        }
+    }
+}
+
+/// Diagnóstico estruturado do protótipo.
+///
+/// Carrega sempre um [`ErrorCode`] estável; o texto humano (`detail`) e a
+/// [`Location`] ajudam a depuração, mas não são contrato de conformidade.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RvmError {
+    code: ErrorCode,
+    detail: String,
+    location: Option<Location>,
+}
+
+impl RvmError {
+    /// Cria um diagnóstico com código estável e detalhe livre.
+    pub fn new(code: ErrorCode, detail: impl Into<String>) -> Self {
+        Self {
+            code,
+            detail: detail.into(),
+            location: None,
+        }
+    }
+
+    /// Anexa (ou substitui) a localização do diagnóstico.
+    #[must_use]
+    pub fn at(mut self, location: Location) -> Self {
+        self.location = Some(location);
+        self
+    }
+
+    /// Código estável do erro.
+    #[must_use]
+    pub const fn code(&self) -> ErrorCode {
+        self.code
+    }
+
+    /// Categoria do pipeline à qual o erro pertence.
+    #[must_use]
+    pub const fn category(&self) -> ErrorCategory {
+        self.code.category()
+    }
+
+    /// Classe observável (RF-05).
+    #[must_use]
+    pub const fn class(&self) -> ErrorClass {
+        self.code.class()
+    }
+
+    /// Texto humano, instável, para depuração.
+    #[must_use]
+    pub fn detail(&self) -> &str {
+        &self.detail
+    }
+
+    /// Localização opcional dentro do módulo.
+    #[must_use]
+    pub const fn location(&self) -> Option<&Location> {
+        self.location.as_ref()
+    }
+}
+
+impl fmt::Display for RvmError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {}", self.code.as_str(), self.detail)?;
+        if let Some(location) = &self.location {
+            write!(f, " [{location}]")?;
+        }
+        Ok(())
+    }
+}
+
+impl std::error::Error for RvmError {}
+
+/// Limites estruturais aplicados antes de alocar ou executar.
+///
+/// Todo limite é expresso em unidades do modelo (contagens, não bytes), exceto
+/// [`Limits::max_input_bytes`], que limita a entrada textual/binária. O host
+/// fornece os limites; o verificador e o decoder comparam **antes** de reservar
+/// memória, e falham fechado quando o limite é excedido.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Limits {
+    /// Máximo de funções por módulo.
+    pub max_functions: u32,
+    /// Máximo de blocos por função.
+    pub max_blocks_per_function: u32,
+    /// Máximo de parâmetros de função.
+    pub max_params: u32,
+    /// Máximo de parâmetros por bloco.
+    pub max_block_params: u32,
+    /// Máximo de instruções por bloco.
+    pub max_instrs_per_block: u32,
+    /// Máximo de valores SSA (parâmetros + definições + parâmetros de bloco) por função.
+    pub max_values_per_function: u32,
+    /// Máximo de argumentos em uma chamada ou desvio.
+    pub max_call_args: u32,
+    /// Tamanho máximo, em bytes, de nomes e rótulos.
+    pub max_name_len: u32,
+    /// Tamanho máximo, em bytes, da entrada textual ou binária de um módulo.
+    pub max_input_bytes: u32,
+}
+
+impl Default for Limits {
+    fn default() -> Self {
+        Self {
+            max_functions: 64,
+            max_blocks_per_function: 256,
+            max_params: 16,
+            max_block_params: 8,
+            max_instrs_per_block: 1024,
+            max_values_per_function: 4096,
+            max_call_args: 16,
+            max_name_len: 64,
+            max_input_bytes: 1_048_576,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn aritmetica_verificada_nao_transborda_em_silencio() {
+        assert_eq!(BinOp::AddI64Checked.eval_i64(10, 20), Some(30));
+        assert_eq!(BinOp::AddI64Checked.eval_i64(i64::MAX, 1), None);
+        assert_eq!(BinOp::SubI64Checked.eval_i64(i64::MIN, 1), None);
+        assert_eq!(BinOp::SubI64Checked.eval_i64(-1, -1), Some(0));
+        assert_eq!(BinOp::MulI64Checked.eval_i64(2, 3), Some(6));
+        assert_eq!(BinOp::MulI64Checked.eval_i64(i64::MAX, 2), None);
+        assert_eq!(BinOp::MulI64Checked.eval_i64(i64::MIN, -1), None);
+        assert_eq!(BinOp::AddI64Checked.eval_i64(i64::MIN, i64::MAX), Some(-1));
+    }
+
+    #[test]
+    fn comparacoes_sao_assinadas() {
+        assert!(CmpOp::Lt.eval_i64(-2, 1));
+        assert!(!CmpOp::Lt.eval_i64(1, -2));
+        assert!(CmpOp::Ge.eval_i64(i64::MAX, i64::MAX));
+        assert!(CmpOp::Ne.eval_i64(i64::MIN, i64::MAX));
+        assert!(CmpOp::Eq.eval_i64(0, 0));
+    }
+
+    #[test]
+    fn nomes_de_tipo_e_operacao_sao_bidirecionais() {
+        for ty in [Type::Unit, Type::Bool, Type::I64] {
+            assert_eq!(Type::from_name(ty.name()), Some(ty));
+        }
+        for op in [
+            BinOp::AddI64Checked,
+            BinOp::SubI64Checked,
+            BinOp::MulI64Checked,
+        ] {
+            assert_eq!(BinOp::from_name(op.name()), Some(op));
+        }
+        for op in [
+            CmpOp::Eq,
+            CmpOp::Ne,
+            CmpOp::Lt,
+            CmpOp::Le,
+            CmpOp::Gt,
+            CmpOp::Ge,
+        ] {
+            assert_eq!(CmpOp::from_name(op.name()), Some(op));
+            assert_eq!(op.result_type(), Type::Bool);
+            assert_eq!(op.operand_type(), Type::I64);
+        }
+        assert_eq!(Type::from_name("f64"), None);
+        assert_eq!(BinOp::from_name("div_i64"), None);
+    }
+
+    #[test]
+    fn tabela_de_erros_e_estavel() {
+        // Nomes estáveis são contrato com o corpus; reordenar ou renomear exige ADR.
+        assert_eq!(ErrorCode::IntegerOverflow.as_str(), "integer_overflow");
+        assert_eq!(ErrorCode::OutOfFuel.as_str(), "out_of_fuel");
+        assert_eq!(ErrorCode::CallDepthExceeded.as_str(), "call_depth_exceeded");
+        assert_eq!(ErrorCode::InvalidType.as_str(), "invalid_type");
+        for code in [
+            ErrorCode::SyntaxError,
+            ErrorCode::TruncatedInput,
+            ErrorCode::InvalidModule,
+            ErrorCode::InvalidType,
+            ErrorCode::InvalidControlFlow,
+            ErrorCode::UnsupportedFeature,
+            ErrorCode::IntegerOverflow,
+            ErrorCode::OutOfFuel,
+            ErrorCode::CallDepthExceeded,
+            ErrorCode::CapabilityDenied,
+        ] {
+            assert_eq!(ErrorCode::from_stable_name(code.as_str()), Some(code));
+        }
+        assert_eq!(
+            ErrorCode::InvalidType.class(),
+            ErrorClass::Module,
+            "tipo inválido é falha de módulo"
+        );
+        assert_eq!(
+            ErrorCode::IntegerOverflow.class(),
+            ErrorClass::Trap,
+            "overflow é trap semântico, não erro de verificador"
+        );
+        assert_eq!(
+            ErrorCode::OutOfMemory.class(),
+            ErrorClass::ResourceLimit,
+            "memória é limite de recurso"
+        );
+        assert_eq!(
+            ErrorCode::OutOfFuel.class(),
+            ErrorClass::ResourceLimit,
+            "fuel é limite de recurso"
+        );
+    }
+
+    #[test]
+    fn diagnostico_exibe_codigo_e_local() {
+        let error =
+            RvmError::new(ErrorCode::InvalidType, "condição não é bool").at(Location::Block {
+                function: "f".to_string(),
+                block: "entry".to_string(),
+            });
+        assert_eq!(error.code(), ErrorCode::InvalidType);
+        assert_eq!(error.category(), ErrorCategory::Verify);
+        assert!(error.to_string().contains("invalid_type"));
+        assert!(error.to_string().contains("bloco `entry`"));
+    }
+
+    #[test]
+    fn limites_padrao_sao_ordens_de_grandeza_pequenas() {
+        let limits = Limits::default();
+        assert!(limits.max_functions > 0);
+        assert!(limits.max_blocks_per_function > 0);
+        assert!(limits.max_instrs_per_block > 0);
+        assert!(limits.max_values_per_function > 0);
+        assert!(limits.max_input_bytes > 0);
+    }
+}

@@ -1,0 +1,21 @@
+# Índice de ADRs — RSUVM
+
+ADRs registram decisões e pendências deste repositório. Status **não** é sinônimo
+de aprovação para produção.
+
+Os ADRs 0001..0008 são da fundação e vivem, sem modificação, em
+`../fundacao/ADRs/` (RVM independente de linguagem, RIR como fronteira,
+intérprete antes de JIT, bytecode não congelado, capabilities deny-by-default,
+memória/transferência, integração Lift e integração Rio).
+
+| ADR | Tema | Status |
+|---|---|---|
+| [0009](ADR-0009-ESTRUTURA-DE-CRATES.md) | Workspace de crates e grafo de dependências | Aceito experimentalmente |
+| [0010](ADR-0010-FORMATO-TEXTUAL-EXPERIMENTAL.md) | Formato textual EXP-0-TEXT para corpus e CLI | Aceito experimentalmente |
+| [0011](ADR-0011-BYTECODE-ESPELHO-LINEAR.md) | Protótipo de bytecode espelho da RIR | Proposto (ADR-0004 aberto) |
+| [0012](ADR-0012-TETO-DE-PROFUNDIDADE.md) | Teto de profundidade e frames explícitos | Aceito experimentalmente (revisado após teste) |
+| [0013](ADR-0013-QUOTA-DE-MEMORIA.md) | Quota de memória modelada para frames | Aceito experimentalmente |
+
+Estados usados: `Proposto`, `Aceito experimentalmente`, `Validado no escopo`,
+`Rejeitado`, `Substituído`. "Validado no escopo" exige critério e evidência
+registrados em relatório; nenhum ADR deste repositório atingiu esse estado.

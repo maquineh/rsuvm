@@ -1,0 +1,12 @@
+; id: N-005
+; expect: error invalid_control_flow
+; bloco com dois terminadores (conformidade N-005)
+module n005 version 1
+entry main
+
+fn main() -> i64 {
+  entry:
+    v0 = const_i64 1
+    return v0
+    return v0
+}

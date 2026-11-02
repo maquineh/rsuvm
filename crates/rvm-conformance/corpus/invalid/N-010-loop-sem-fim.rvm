@@ -1,0 +1,13 @@
+; id: N-010
+; expect: limit out_of_fuel
+; fuel: 1000
+; loop sem fim com quota finita (conformidade N-010)
+module n010 version 1
+entry main
+
+fn main() -> i64 {
+  entry:
+    br loop
+  loop:
+    br loop
+}

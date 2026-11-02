@@ -1,0 +1,14 @@
+; id: N-018
+; expect: error invalid_control_flow
+; extra: bloco inalcançável a partir da entrada
+module n018 version 1
+entry main
+
+fn main() -> i64 {
+  entry:
+    v0 = const_i64 1
+    return v0
+  orfao:
+    v1 = const_i64 2
+    return v1
+}

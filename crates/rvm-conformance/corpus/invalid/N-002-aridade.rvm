@@ -1,0 +1,18 @@
+; id: N-002
+; expect: error invalid_type
+; aridade incorreta em chamada estática (conformidade N-002)
+module n002 version 1
+entry main
+
+fn main() -> i64 {
+  entry:
+    v0 = const_i64 1
+    v1 = call_static soma(v0)
+    return v1
+}
+
+fn soma(a: i64, b: i64) -> i64 {
+  entry:
+    v2 = add_i64_checked a, b
+    return v2
+}

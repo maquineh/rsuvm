@@ -1,0 +1,12 @@
+; id: N-016
+; expect: error invalid_control_flow
+; extra: uso de valor antes da sua definição no mesmo bloco (dominância)
+module n016 version 1
+entry main
+
+fn main() -> i64 {
+  entry:
+    v0 = add_i64_checked v1, v1
+    v1 = const_i64 1
+    return v0
+}

@@ -1,0 +1,13 @@
+; id: N-019
+; expect: trap integer_overflow
+; extra: multiplicação transborda i64 (complementa N-009, que cobre soma)
+module n019 version 1
+entry main
+
+fn main() -> i64 {
+  entry:
+    v0 = const_i64 4611686018427387904
+    v1 = const_i64 4
+    v2 = mul_i64_checked v0, v1
+    return v2
+}

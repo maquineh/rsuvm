@@ -1,0 +1,12 @@
+; id: N-004
+; expect: error invalid_module
+; definição duplicada do mesmo valor (conformidade N-004)
+module n004 version 1
+entry main
+
+fn main() -> i64 {
+  entry:
+    v0 = const_i64 1
+    v0 = const_i64 2
+    return v0
+}

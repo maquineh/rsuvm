@@ -1,0 +1,12 @@
+; id: N-011
+; expect: limit call_depth_exceeded
+; max-depth: 8
+; recursão excede a profundidade permitida (conformidade N-011)
+module n011 version 1
+entry main
+
+fn main() -> i64 {
+  entry:
+    v0 = call_static main()
+    return v0
+}

@@ -1,0 +1,19 @@
+; id: C-007
+; expect: value i64:2
+; args: bool:false
+; extra: merge explícito por parâmetros de bloco (phi), caminho else
+module c007 version 1
+entry escolhe
+
+fn escolhe(c: bool) -> i64 {
+  entry:
+    v1 = const_i64 1
+    v2 = const_i64 2
+    cond_br c, entao(v1), senao(v2)
+  entao(b0: i64):
+    br merge(b0)
+  senao(b1: i64):
+    br merge(b1)
+  merge(escolhido: i64):
+    return escolhido
+}

@@ -1,0 +1,11 @@
+; id: N-006
+; expect: error invalid_control_flow
+; destino de desvio inexistente (conformidade N-006)
+module n006 version 1
+entry main
+
+fn main() -> i64 {
+  entry:
+    v0 = const_i64 1
+    br naoexiste
+}

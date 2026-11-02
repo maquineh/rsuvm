@@ -1,0 +1,58 @@
+# RSUVM — Rust Universal Virtual Machine (protótipo experimental EXP-0).
+#
+# Estado: protótipo de pesquisa. Nenhum formato binário, semântica ou API é
+# estável. Ver docs/ARQUITETURA.md, docs/CONTRATOS/ e docs/ADRs/.
+#
+# Política de dependências: zero dependências externas (apenas `std`). Qualquer
+# crate nova exige justificativa, licença verificada, versão fixada e aprovação
+# do mantenedor (AGENTS.md, regra 12).
+
+[workspace]
+resolver = "2"
+members = [
+    "crates/rvm-spec",
+    "crates/rvm-ir",
+    "crates/rvm-runtime",
+    "crates/rvm-verify",
+    "crates/rvm-text",
+    "crates/rvm-bytecode",
+    "crates/rvm-interpreter",
+    "crates/rvm-cli",
+    "crates/rvm-conformance",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+publish = false
+
+[workspace.dependencies]
+rvm-spec = { path = "crates/rvm-spec" }
+rvm-ir = { path = "crates/rvm-ir" }
+rvm-runtime = { path = "crates/rvm-runtime" }
+rvm-verify = { path = "crates/rvm-verify" }
+rvm-text = { path = "crates/rvm-text" }
+rvm-bytecode = { path = "crates/rvm-bytecode" }
+rvm-interpreter = { path = "crates/rvm-interpreter" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"
+unused_must_use = "deny"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+# Defesa em profundidade: bibliotecas não abortam o processo nem indexam sem
+# checagem. Testes são liberados via `cfg_attr(test, allow(...))` em cada crate.
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+indexing_slicing = "warn"
+
+# O subset EXP-0 não pode depender do modo debug/release do Rust (ADR-0001/0003):
+# a semântica de overflow vem de operações `checked_*`. Como defesa adicional,
+# aritmética acidental entra em pânico também em release, em vez de dar wrap.
+[profile.release]
+overflow-checks = true
+debug-assertions = false

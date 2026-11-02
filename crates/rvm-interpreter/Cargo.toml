@@ -1,0 +1,19 @@
+[package]
+name = "rvm-interpreter"
+description = "Intérprete de referência da RSUVM: execução determinística com fuel, profundidade e traps."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+rvm-spec.workspace = true
+rvm-ir.workspace = true
+rvm-runtime.workspace = true
+rvm-verify.workspace = true
+
+[dev-dependencies]
+rvm-ir = { workspace = true, features = ["test-helpers"] }
+
+[lints]
+workspace = true

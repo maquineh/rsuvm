@@ -1,0 +1,10 @@
+; id: C-009
+; expect: value unit
+; extra: função que retorna unit sem valor
+module c009 version 1
+entry main
+
+fn main() -> unit {
+  entry:
+    return
+}

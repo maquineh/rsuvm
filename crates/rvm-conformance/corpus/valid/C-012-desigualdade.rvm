@@ -1,0 +1,12 @@
+; id: C-012
+; expect: value bool:false
+; args: i64:3, i64:3
+; extra: desigualdade entre i64 iguais
+module c012 version 1
+entry diferente
+
+fn diferente(a: i64, b: i64) -> bool {
+  entry:
+    v2 = ne_i64 a, b
+    return v2
+}
