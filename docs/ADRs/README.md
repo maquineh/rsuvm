@@ -35,6 +35,7 @@ memória/transferência, integração Lift e integração Rio).
 | [0031](ADR-0031-IGUALDADE-OPTION.md) | Igualdade de `option` no núcleo | Aceito experimentalmente |
 | [0032](ADR-0032-FIELD-SET-FUNCIONAL.md) | Mutação de campo por atualização funcional (`field_set`) | Aceito experimentalmente |
 | [0033](ADR-0033-RESULT.md) | `Result` no núcleo (payloads escalares) | Aceito experimentalmente |
+| [0034](ADR-0034-TIPOS-POR-ID.md) | Representação de tipos por id (tabela no módulo) | **Proposto** (não implementado) |
 
 Estados usados: `Proposto`, `Aceito experimentalmente`, `Validado no escopo`,
 `Rejeitado`, `Substituído`. "Validado no escopo" exige critério e evidência

@@ -1,0 +1,27 @@
+; id: C-056
+; expect: value ok:i64:12
+; extra: propagação `?` (Ok) expressa no CFG: is_ok + unwrap + rewrap (ADR-0034/relatório)
+module c056 version 1
+entry usa
+
+fn dobra(x: i64) -> result i64 string {
+  entry:
+    v1 = const_i64 2
+    v2 = mul_i64_checked x, v1
+    v3 = result_ok i64 string v2
+    return v3
+}
+
+fn usa() -> result i64 string {
+  entry:
+    v0 = const_i64 6
+    v1 = call_static dobra(v0)
+    v2 = result_is_ok v1
+    cond_br v2, ok(v1), err(v1)
+  ok(r: result i64 string):
+    v4 = result_unwrap r
+    v5 = result_ok i64 string v4
+    return v5
+  err(e: result i64 string):
+    return e
+}

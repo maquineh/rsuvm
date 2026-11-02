@@ -1,0 +1,25 @@
+; id: C-057
+; expect: value err:str:e
+; extra: propagação `?` (Err) expressa no CFG: devolve o Err sem unwrap (ADR-0034/relatório)
+module c057 version 1
+entry usa
+
+fn falha() -> result i64 string {
+  entry:
+    v0 = const_str "e"
+    v1 = result_err i64 string v0
+    return v1
+}
+
+fn usa() -> result i64 string {
+  entry:
+    v0 = call_static falha()
+    v1 = result_is_ok v0
+    cond_br v1, ok(v0), err(v0)
+  ok(r: result i64 string):
+    v3 = result_unwrap r
+    v4 = result_ok i64 string v3
+    return v4
+  err(e: result i64 string):
+    return e
+}

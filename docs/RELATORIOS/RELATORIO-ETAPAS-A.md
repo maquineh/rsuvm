@@ -422,11 +422,25 @@ adaptador **não** constrói `Result` (não há fonte no subconjunto Lift: só
 aninhado** fica adiado (exige payload não-escalar em `Type`, isto é, uma
 representação de tipos não-`Copy` ou uma tabela de tipos no módulo).
 
+### Representação de tipos por id — ADR-0034 (proposta) e `?` (bloqueado)
+
+A ADR-0034 registra a decisão (não implementada) de trocar o enum `Type: Copy` por
+uma **tabela de tipos** no módulo (`TypeId`), com `array`/`struct`/`option`/
+`result` recursivos por id, validação de ciclos e migração faseada. É o caminho
+para destravar `Option`/`Result` de agregados e aninhados.
+
+A propagação `?` no adaptador está **bloqueada na origem**: o Lift não tem o
+operador `?` (só `T?` de tipo; `UnaryOperator` = `Negate|Not`; a documentação do
+Lift declara `?` não implementado). Não se inventou sintaxe. O padrão de `?` é
+expressável na RIR e está demonstrado no corpus: `C-056` (`Ok` → `ok:i64:12`) e
+`C-057` (`Err` → `err:str:e`). Detalhes e evidências em
+`docs/RELATORIOS/PROPAGACAO-INTERROGACAO.md`.
+
 ### Verificação (Resultado)
 
 | Comando | Resultado |
 |---|---|
-| `cargo test --workspace` | **148 passed, 0 failed**; corpus 55 válidos + 41 inválidos |
+| `cargo test --workspace` | **148 passed, 0 failed**; corpus 57 válidos + 41 inválidos |
 | `cargo test --manifest-path frontends/lift-rir/Cargo.toml` | 42 passed, 0 failed (33 diferencial + 9 CLI) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | exit 0 |
 | `cargo fmt --all -- --check` | exit 0 |
