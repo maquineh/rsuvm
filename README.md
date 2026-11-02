@@ -92,8 +92,9 @@ cargo run -p rvm-cli -- check examples/soma.rvm
 - Run: `cargo test --workspace`
 - Gate adicional usado no relatório: `cargo clippy --workspace --all-targets -- -D
   warnings` e `cargo fmt --all -- --check`.
-- CI: `.gitlab-ci.yml` roda `fmt --check`, `clippy -D warnings`, `test` e
-  `test --release`; Windows é opcional por regra.
+- CI: `.gitlab-ci.yml` (GitLab) e `.github/workflows/ci.yml` (GitHub Actions)
+  rodam `fmt --check`, `clippy -D warnings`, `test` e `test --release`; Windows é
+  opcional por regra.
 - Resultados atuais e log bruto: [RELATORIO-IMPLEMENTACAO](./docs/RELATORIOS/RELATORIO-IMPLEMENTACAO.md)
   e [EVIDENCIAS-EXECUCAO](./docs/RELATORIOS/EVIDENCIAS-EXECUCAO.md): 120 testes
   verdes, 16 casos válidos + 20 inválidos no corpus.

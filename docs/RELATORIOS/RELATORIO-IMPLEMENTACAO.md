@@ -39,7 +39,7 @@ Documentos novos: `docs/ARQUITETURA.md`; contratos `RIR-EXP-0-IMPLEMENTACAO`,
 ADR-0011 (bytecode protótipo), ADR-0012 (profundidade/frames explícitos) e
 ADR-0013 (quota de memória modelada);
 `docs/RELATORIOS/BASELINE-RIO.md` (RIO-BASELINE-001), `EVIDENCIAS-EXECUCAO.md`,
-este relatório; `.gitlab-ci.yml` (gate de CI); `AGENTS.md` do repositório e
+este relatório; `.gitlab-ci.yml` e `.github/workflows/ci.yml` (gates de CI); `AGENTS.md` do repositório e
 `scripts/gerar-evidencias.ps1`.
 
 ## 2. Requisitos atendidos (PRD §6)
@@ -65,6 +65,7 @@ Log bruto: `docs/RELATORIOS/EVIDENCIAS-EXECUCAO.md` (gerado por
 |---|---|
 | `cargo build --workspace --all-targets` | `Finished dev profile`, exit 0 |
 | `cargo test --workspace` | **120 passed, 0 failed** (14 alvos) |
+| `cargo test --release --workspace` | **120 passed, 0 failed** (semântica independente do perfil) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | `Finished`, **0 warnings** |
 | `cargo fmt --all -- --check` | sem saída (formatado) |
 | `rsuvm run examples/soma.rvm --arg i64:10 --arg i64:20` | `i64:30`, exit 0 |
@@ -210,8 +211,9 @@ executados.
 3. **Fuzzing limitado e determinístico**: 10 módulos × 200 mutações (bytecode) e
    10 × 200 (texto); não é campanha e não prova ausência de bugs.
 4. **Sem revisão independente ou auditoria** de segurança.
-5. **Versionamento e CI**: repositório git inicializado e `.gitlab-ci.yml`
-   adicionado (fmt, clippy, test, test-release). O push para o remoto GitHub e a
+5. **Versionamento e CI**: repositório git inicializado, publicado no GitHub e
+   com gates em `.gitlab-ci.yml` e `.github/workflows/ci.yml` (fmt, clippy, test,
+   test-release). O push para o remoto GitHub e a
    proteção da branch principal dependem de credencial do mantenedor.
 6. **Licença do projeto não definida** (pendência do mantenedor).
 7. **Corpus parcial**: cobre `add/sub/mul`, `eq/ne/lt/le/gt/ge`, chamada com `unit` e overflow de `add/sub/mul`; ainda não cobre limite estrutural, encadeamento de merges nem `call_static` com aridade máxima.

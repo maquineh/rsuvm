@@ -1,0 +1,28 @@
+# CI no GitHub Actions: espelha o gate local de AGENTS.md §4.
+# Sem dependências externas no projeto, então não há cache de registry.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: |
+          rustup component add rustfmt clippy
+          rustc --version
+          cargo --version
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Tests
+        run: cargo test --workspace
+      # A semântica não pode depender do perfil: release também é testado.
+      - name: Tests (release)
+        run: cargo test --release --workspace
