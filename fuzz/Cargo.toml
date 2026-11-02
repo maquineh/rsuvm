@@ -1,0 +1,46 @@
+# Workspace separado de fuzzing (ADR-0020). NÃO é membro do workspace principal
+# (ver `exclude = ["fuzz"]` em ../Cargo.toml): `cargo test --workspace` e o CI
+# estável não compilam isto.
+#
+# Ferramenta: cargo-fuzz 0.13.2 (https://github.com/rust-fuzz/cargo-fuzz), MIT OR Apache-2.0.
+# Runtime:    libfuzzer-sys =0.4.13, licença "(MIT OR Apache-2.0) AND NCSA".
+# Requer toolchain nightly. Versões fixadas (ADR-0020).
+[package]
+name = "rsuvm-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "=0.4.13"
+rvm-spec = { path = "../crates/rvm-spec" }
+rvm-text = { path = "../crates/rvm-text" }
+rvm-bytecode = { path = "../crates/rvm-bytecode" }
+rvm-verify = { path = "../crates/rvm-verify" }
+
+[[bin]]
+name = "texto"
+path = "fuzz_targets/texto.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "decoder"
+path = "fuzz_targets/decoder.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "verificador"
+path = "fuzz_targets/verificador.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]
+members = ["."]

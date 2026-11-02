@@ -1,0 +1,33 @@
+# Fuzzing guiado por cobertura (ADR-0020). Toolchain nightly; não gateia o CI
+# estável. Roda por disparo manual ou semanalmente. Requer `fuzz/` (workspace
+# separado) com versões fixadas.
+name: fuzz
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * 1'
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --version 0.13.2 --locked
+      - name: Fuzz parser textual
+        run: cargo fuzz run texto -- -max_total_time=120 -print_final_stats=1
+      - name: Fuzz decoder binario
+        run: cargo fuzz run decoder -- -max_total_time=120 -print_final_stats=1
+      - name: Fuzz verificador
+        run: cargo fuzz run verificador -- -max_total_time=120 -print_final_stats=1
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-artifacts
+          path: |
+            fuzz/artifacts
+            fuzz/corpus

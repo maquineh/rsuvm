@@ -79,20 +79,22 @@ Workload: `k` chamadas encadeadas a `inc(a) = a + 1`; **intra** = módulo único
 
 ### 5.2 Runner dedicado (GitHub Actions)
 
-Workflow `.github/workflows/bench.yml`, run `41428569139` (`ubuntu-latest`).
+Workflow `.github/workflows/bench.yml`, run `41429076866` (`ubuntu-latest`).
 Mesmos parâmetros (11 amostras × 20 000 execuções, medianas).
 
 | k | fuel | intra ns | inter ns | H06 rel | dispersão |
 |---:|---:|---:|---:|---:|---:|
-| 1 | 6 | 187,1 | 183,3 | — | 0,4730 |
-| 4 | 18 | 522,0 | 514,8 | −0,0101 | 0,1196 |
-| 16 | 66 | 1 884,6 | 1 832,2 | −0,0332 | 0,0132 |
-| 64 | 258 | 7 183,7 | 7 056,5 | −0,0141 | 0,0108 |
-| 256 | 1 026 | 28 437,3 | 27 738,9 | −0,0269 | 0,0028 |
+| 1 | 6 | 164,0 | 165,4 | — | 0,1140 |
+| 4 | 18 | 472,5 | 472,4 | −0,0050 | 0,1155 |
+| 16 | 66 | 1 714,3 | 1 720,7 | 0,0053 | 0,1450 |
+| 64 | 258 | 6 671,5 | 6 661,1 | −0,0034 | 0,0791 |
+| 256 | 1 026 | 26 516,0 | 26 480,5 | −0,0013 | 0,0133 |
 
-- Custo de ligação (k = 64): ≈ 11 317 ns por ligação (uma vez, fora da execução).
+- Custo de ligação (k = 64): ≈ 9 557 ns por ligação (uma vez, fora da execução).
 - **Classificação: H06 CONFIRMADA.** No ponto classificador (maior `k`, 256), a
-  dispersão é **0,28%** (≤ 10%) e o overhead relativo é **−0,0269** (≤ 0,25).
+  dispersão é **1,33%** (≤ 10%) e o overhead relativo é **−0,0013** (≤ 0,25).
+- Uma execução anterior no mesmo runner (run `41428569139`) deu overhead −0,0269
+  no ponto classificador, com dispersão 0,28% — mesmo veredito.
 - **H03 — confirmada estruturalmente**: a ligação resolve `call_static` para um
   índice global antes da verificação; não há serialização por chamada (ADR-0018).
 

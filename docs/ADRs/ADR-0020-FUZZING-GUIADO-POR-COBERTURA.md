@@ -1,6 +1,6 @@
 # ADR-0020 — Fuzzing guiado por cobertura (dependência de desenvolvimento)
 
-- **Status:** Proposto (aguarda aprovação explícita do mantenedor)
+- **Status:** Aceito experimentalmente (aprovado pelo mantenedor em 2026-11-02)
 - **Data:** 2026-11-02
 - **Requisitos:** etapa "próximos passos" 2 (decisão em ADR); lacuna 3 do §9
   ("fuzzing limitado e determinístico"); `AGENTS.md` regras 2 e 12 (dependência
@@ -77,9 +77,29 @@ Fatos verificados (crates.io/GitHub em 2026-11-02):
 - `docs/RELATORIOS/FUZZING-EXP-0.md` registra ferramenta, versão, sementes,
   corpus, tempo, crashes e minimizações.
 
-## Pendência
+## Implementação (2026-11-02)
 
-Tornar este ADR **Aceito experimentalmente** e implementar requer **aprovação
-explícita do mantenedor** para a dependência de desenvolvimento, a licença NCSA e
-o uso de nightly (regra 12 de `AGENTS.md`). Enquanto não aprovado, o repositório
-permanece com a campanha determinística do ADR-0019.
+Aprovado e implementado:
+
+- `fuzz/` criado como **workspace separado** (`fuzz/Cargo.toml` com
+  `[workspace] members = ["."]`), com `libfuzzer-sys = "=0.4.13"` e versões
+  fixadas em `fuzz/Cargo.lock`.
+- `Cargo.toml` da raiz ganhou `exclude = ["fuzz"]`: `cargo test --workspace` e
+  `cargo build --workspace --all-targets` **não** compilam `fuzz/` (verificado).
+- Alvos: `texto`, `decoder`, `verificador` (`fuzz/fuzz_targets/`), com corpus
+  inicial em `fuzz/corpus/` e `fuzz/README.md`.
+- Job de CI: `.github/workflows/fuzz.yml` (nightly, `ubuntu-latest`, disparo
+  manual/semanal, publica artefatos). Não gateia o CI estável.
+
+### Validação executada
+
+| Comando | Resultado |
+|---|---|
+| `cargo +nightly fuzz build` | **sucesso** (compila os três alvos) |
+| `cargo test --workspace` | exit 0 (workspace principal **não** compila `fuzz/`) |
+| `cargo +nightly fuzz run texto` | **falha no ambiente local**: `STATUS_DLL_NOT_FOUND` (runtime ASan ausente no toolchain nightly Windows); execução fica no job de CI em Linux |
+
+Limite: a execução local do fuzzer no Windows não é suportada sem a DLL de runtime
+do ASan; o caminho de execução é o job `fuzz.yml` (Linux nightly). Nenhuma campanha
+de fuzzing guiado por cobertura foi executada ainda — "sem crash" continua
+pendente de rodada.

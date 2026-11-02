@@ -253,25 +253,34 @@ estável.
 - Caminho de runner dedicado: workflow **manual** `.github/workflows/bench.yml`
   (GitHub-hosted, `workflow_dispatch`) publica o log como artefato `bench-log`.
 
-### 2. Fuzzing guiado por cobertura (decisão)
+### 2. Fuzzing guiado por cobertura (implementado)
 
-- `docs/ADRs/ADR-0020-FUZZING-GUIADO-POR-COBERTURA.md` (**Proposto**): fixa
-  `libfuzzer-sys` **0.4.13** (licença `(MIT OR Apache-2.0) AND NCSA`) e
-  `cargo-fuzz` **0.13.2** (licença `MIT OR Apache-2.0`), uso de **nightly**,
-  isolamento em `fuzz/` como workspace separado e excluído.
-- **Não implementado**: exige aprovação explícita do mantenedor (regra 12).
-  A campanha determinística do ADR-0019 permanece.
+- `docs/ADRs/ADR-0020-FUZZING-GUIADO-POR-COBERTURA.md` (**Aceito
+  experimentalmente**): fixa `libfuzzer-sys` **0.4.13** (licença
+  `(MIT OR Apache-2.0) AND NCSA`) e `cargo-fuzz` **0.13.2** (licença
+  `MIT OR Apache-2.0`), uso de **nightly**, isolamento em `fuzz/`.
+- Implementado: `fuzz/` como workspace separado (`exclude = ["fuzz"]` na raiz),
+  alvos `texto`/`decoder`/`verificador`, `fuzz/Cargo.lock` fixado, e job
+  `.github/workflows/fuzz.yml` (nightly, Linux).
+- Verificado: `cargo +nightly fuzz build` **compila**; `cargo test --workspace`
+  segue verde **sem** compilar `fuzz/`. Execução local no Windows falha por falta
+  da DLL de runtime do ASan (`STATUS_DLL_NOT_FOUND`) — o caminho de execução é o
+  job de CI em Linux.
 
-### 3. Licença de Rio e Lift
+### 3. Licença de Rio e Lift (decisão do mantenedor)
 
-- `docs/RELATORIOS/PEDIDO-LICENCA-RIO-LIFT.md`: pedido pronto para envio, com
-  fatos, usos contemplados e perguntas. É **ação humana**; nada foi copiado.
+- `docs/RELATORIOS/LICENSEAMENTO-RIO-LIFT.md` (substitui o antigo pedido): os três
+  projetos têm o **mesmo autor**, então não há terceiro a consultar — a licença de
+  Rio e Lift é decisão do titular. O bloqueio é **formal** (falta declarar), não de
+  terceiros.
+- Estado inalterado até o mantenedor decidir; ADR-0015/ADR-0017 permanecem.
 
 ### Verificação (Resultado)
 
 | Comando | Resultado |
 |---|---|
-| `cargo bench -p rvm-interpreter --bench chamada` | executou; dispersão até 65%; H06 inconclusiva |
+| `cargo bench -p rvm-interpreter --bench chamada` | dev: dispersão 65% (inconclusiva); runner dedicado: H06 **confirmada** |
+| `cargo +nightly fuzz build` | exit 0 (compila os três alvos) |
 | `cargo build --workspace --all-targets` | exit 0 |
 | `cargo clippy --workspace --all-targets -- -D warnings` | exit 0 |
 | `cargo fmt --all -- --check` | exit 0 |

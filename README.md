@@ -44,6 +44,8 @@ cargo run -p rvm-cli -- check examples/soma.rvm
   textual experimental; não são contrato de código.
 - [scripts](./scripts/gerar-evidencias.ps1) — geração do log de evidências de
   execução; não é artefato de runtime.
+- [fuzz](./fuzz/README.md) — workspace **separado** de fuzzing guiado por cobertura
+  (nightly, dependência de dev; não faz parte do workspace principal; ADR-0020).
 
 ## Workspace Invariants
 
@@ -94,7 +96,8 @@ cargo run -p rvm-cli -- check examples/soma.rvm
   warnings` e `cargo fmt --all -- --check`.
 - CI: `.gitlab-ci.yml` (GitLab) e `.github/workflows/ci.yml` (GitHub Actions)
   rodam `fmt --check`, `clippy -D warnings`, `test` e `test --release`; Windows é
-  opcional por regra.
+  opcional por regra. Workflows auxiliares **manuais**: `bench.yml` (benchmark
+  pré-registrado) e `fuzz.yml` (fuzzing guiado por cobertura, nightly).
 - Resultados atuais e log bruto: [RELATORIO-IMPLEMENTACAO](./docs/RELATORIOS/RELATORIO-IMPLEMENTACAO.md)
   e [EVIDENCIAS-EXECUCAO](./docs/RELATORIOS/EVIDENCIAS-EXECUCAO.md): 144 testes
   verdes, 19 casos válidos + 23 inválidos no corpus.
