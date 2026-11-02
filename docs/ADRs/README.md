@@ -17,6 +17,7 @@ memória/transferência, integração Lift e integração Rio).
 | [0013](ADR-0013-QUOTA-DE-MEMORIA.md) | Quota de memória modelada para frames | Aceito experimentalmente |
 | [0014](ADR-0014-LICENCA-DO-REPOSITORIO.md) | Licença dupla `MIT OR Apache-2.0` do repositório | Aceito experimentalmente |
 | [0015](ADR-0015-POLITICA-DE-REUSO-DO-RIO.md) | Política de reuso do Rio (referência comportamental) | Aceito experimentalmente |
+| [0016](ADR-0016-MEMORIA-DE-BUFFERS-DE-ARGUMENTOS.md) | Buffers transitórios de argumentos na quota de memória | Aceito experimentalmente |
 
 Estados usados: `Proposto`, `Aceito experimentalmente`, `Validado no escopo`,
 `Rejeitado`, `Substituído`. "Validado no escopo" exige critério e evidência

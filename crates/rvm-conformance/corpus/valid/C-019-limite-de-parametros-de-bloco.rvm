@@ -1,0 +1,27 @@
+; id: C-019
+; expect: value i64:36
+; extra: limite de parâmetros de bloco no máximo (8 parâmetros)
+module c019 version 1
+entry main
+
+fn main() -> i64 {
+  entry:
+    v0 = const_i64 1
+    v1 = const_i64 2
+    v2 = const_i64 3
+    v3 = const_i64 4
+    v4 = const_i64 5
+    v5 = const_i64 6
+    v6 = const_i64 7
+    v7 = const_i64 8
+    br junta(v0, v1, v2, v3, v4, v5, v6, v7)
+  junta(a0: i64, a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64):
+    v15 = add_i64_checked a0, a1
+    v16 = add_i64_checked v15, a2
+    v17 = add_i64_checked v16, a3
+    v18 = add_i64_checked v17, a4
+    v19 = add_i64_checked v18, a5
+    v20 = add_i64_checked v19, a6
+    v21 = add_i64_checked v20, a7
+    return v21
+}

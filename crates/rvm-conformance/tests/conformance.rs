@@ -346,7 +346,9 @@ fn corpus_valido_executa_e_reproduz() {
         count >= 16,
         "corpus válido inesperadamente pequeno: {count}"
     );
-    for required in ["C-001", "C-006", "C-010", "C-011", "C-016"] {
+    for required in [
+        "C-001", "C-006", "C-010", "C-011", "C-016", "C-017", "C-018", "C-019",
+    ] {
         assert!(
             ids.contains(required),
             "caso obrigatório `{required}` ausente"
@@ -362,7 +364,8 @@ fn corpus_invalido_e_rejeitado_antes_da_execucao() {
         "corpus inválido inesperadamente pequeno: {count}"
     );
     for required in [
-        "N-001", "N-007", "N-009", "N-010", "N-011", "N-019", "N-020", "N-021",
+        "N-001", "N-007", "N-009", "N-010", "N-011", "N-019", "N-020", "N-021", "N-022", "N-023",
+        "N-024",
     ] {
         assert!(
             ids.contains(required),

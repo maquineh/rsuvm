@@ -46,10 +46,12 @@ carrega localização nos diagnósticos. Executa a RIR diretamente, sem JIT/AOT
   aborta) quando não há memória.
 
 - Memória: antes de alocar os slots de um frame, o intérprete cobra
-  `frame_cost(value_count)`; a conta é de memória viva e o custo é liberado no
-  retorno. Exceder `config.memory_limit()` produz `out_of_memory` com localização
-  da função, antes de qualquer alocação; `memory_peak` registra o pico. O modelo não
-  mede RSS (ADR-0013).
+  `frame_cost(value_count)`; antes de alocar um buffer de argumentos de
+  chamada/desvio, cobra `arg_buffer_cost(args)`. A conta é de memória viva e o
+  custo é liberado no retorno (frame) ou ao fim do desvio (buffer). Exceder
+  `config.memory_limit()` produz `out_of_memory` com localização da função, antes
+  de qualquer alocação; `memory_peak` registra o pico. O modelo não mede RSS
+  (ADR-0013, ADR-0016).
 
 ## Side Effects
 

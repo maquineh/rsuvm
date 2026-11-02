@@ -5,7 +5,8 @@
 Diretório do corpus de conformidade em dados e dos testes de integração. É a
 prova executável do EXP-0: casos válidos e inválidos derivados de
 `docs/fundacao/TESTES/CONFORMIDADE.md` (C-001..C-006, N-001..N-012) mais casos
-adicionais identificados como tal.
+adicionais identificados como tal. A meta de cobertura por operação está em
+`docs/CONTRATOS/CORPUS-COBERTURA.md`.
 
 ## Subdirectories & Boundaries
 

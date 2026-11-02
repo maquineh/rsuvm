@@ -55,7 +55,52 @@ Rio **apenas como referência comportamental**. Registradas nos ADRs 0014 e 0015
 
 ## A2 — Corpus/cobertura e quota de memória (itens 3–4)
 
-A preencher na etapa A2.
+### Item 3 (ampliar o corpus e fixar meta de cobertura por operação)
+
+- Casos válidos novos:
+  - `C-017-encadeamento-de-merges.rvm` — um merge alimenta outro merge;
+  - `C-018-aridade-maxima-de-chamada.rvm` — `call_static` com 16 parâmetros e 16
+    argumentos (limites máximos);
+  - `C-019-limite-de-parametros-de-bloco.rvm` — bloco com exatamente 8 parâmetros.
+- Casos inválidos novos:
+  - `N-022-parametros-de-bloco-em-excesso.rvm` — 9 > 8 ⇒ `invalid_module`;
+  - `N-023-argumentos-de-chamada-em-excesso.rvm` — 17 > 16 ⇒ `invalid_module`;
+  - `N-024-limite-de-buffer-de-argumentos.rvm` — quota de memória no limiar do
+    buffer (ADR-0016) ⇒ `out_of_memory`.
+- Meta de cobertura por operação: `docs/CONTRATOS/CORPUS-COBERTURA.md`, verificada
+  por `crates/rvm-conformance/tests/coverage.rs` (toda operação do subset e todo
+  terminador em ≥1 caso válido; códigos de erro centrais em ≥1 caso inválido).
+- Limites estruturais: `rvm-ir/src/structure.rs` ganhou teste de fronteira exata
+  (aceita no limite) e casos acima do limite para parâmetros de função, parâmetros
+  de bloco, argumentos de chamada, argumentos de desvio, blocos e valores.
+- Corpus agora: **19 válidos** (C-001..C-019) e **23 inválidos**
+  (N-001..N-011, N-013..N-024).
+
+### Item 4 (quota de memória e consumo por frame)
+
+- `rvm-runtime` ganhou `arg_buffer_cost(args) = args × SLOT_BYTES` (saturado).
+- O intérprete passou a cobrar o buffer transitório de argumentos de **chamada**
+  (`Op::Call`, antes de `collect_args`) e de **desvio** (`br`/`cond_br`, em `jump`),
+  liberando-o ao fim. O buffer de desvio deixou de ser reutilizado entre saltos,
+  para que o modelo corresponda à memória viva.
+- `RunOutcome::memory_peak` passa a incluir frames **e** buffers.
+- Decisão e limites em `docs/ADRs/ADR-0016-MEMORIA-DE-BUFFERS-DE-ARGUMENTOS.md`;
+  ADR-0013 atualizado para apontar a extensão.
+
+### Verificação (Resultado)
+
+| Comando | Resultado |
+|---|---|
+| `cargo test --workspace` | **131 passed, 0 failed** (antes: 120) |
+| `cargo test --release --workspace` | 131 passed, 0 failed |
+| `cargo clippy --workspace --all-targets -- -D warnings` | exit 0, sem warnings |
+| `cargo fmt --all -- --check` | exit 0, sem diferenças |
+| pico de `soma` com buffer | 704 = 328 (main) + 48 (2 args) + 328 (soma) |
+| pico de `com_merge` com buffer de desvio | 424 = 400 (frame de 6 valores) + 24 |
+| corpus N-024 (`memory: 703`) | `limit out_of_memory` (só falha por causa do buffer) |
+
+Lacuna remanescente: o modelo ainda **não** mede RSS real nem a capacidade
+reservada do `Vec`; é quota determinística, não medição de consumo.
 
 ## A3 — Fuzzing e benchmarks (itens 5–6)
 

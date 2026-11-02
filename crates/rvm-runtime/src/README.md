@@ -14,8 +14,9 @@ crate toca sistema operacional. Depende apenas de `rvm-spec`.
   (`lib.rs:Value`).
 - `DEFAULT_FUEL` — saldo padrão de execução (`100_000`).
 - `DEFAULT_MEMORY_LIMIT_BYTES` (16 MiB), `FRAME_BASE_BYTES` (256), `SLOT_BYTES`
-  (24) e `frame_cost(slots) -> u64` — modelo determinístico de memória por frame
-  (`lib.rs:frame_cost`).
+  (24), `frame_cost(slots) -> u64` e `arg_buffer_cost(args) -> u64` — modelo
+  determinístico de memória por frame e por buffer transitório de argumentos
+  (`lib.rs:frame_cost`, `lib.rs:arg_buffer_cost`).
 - `MemoryLimit` — `new(bytes)`, `get()`, `DEFAULT` (16 MiB); `0` é aceito.
 - `CallDepthLimit` — `HARD_MAX = 256`, `DEFAULT = 64`, `new(u16) -> Option<Self>`,
   `get()` (`lib.rs:CallDepthLimit`).
@@ -42,9 +43,10 @@ crate toca sistema operacional. Depende apenas de `rvm-spec`.
   `None`. O teto de 256 é aplicado pelo intérprete sobre uma pilha de frames na
   heap (ADR-0012).
 - `Value` não carrega ponteiro, referência ou handle do processo hospedeiro; todo
-- A quota de memória é um **modelo em bytes RSUVM** (`frame_cost`), não medição de
-  RSS: `256 + slots × 24`, saturada. `MemoryLimit` não é validado contra teto; o
-  host escolhe, e `0` significa "nenhum frame cabe" (ADR-0013).
+- A quota de memória é um **modelo em bytes RSUVM** (`frame_cost` e
+  `arg_buffer_cost`), não medição de RSS: frame `256 + slots × 24` e buffer
+  `args × 24`, saturados. `MemoryLimit` não é validado contra teto; o host
+  escolhe, e `0` significa "nada cabe" (ADR-0013, ADR-0016).
   valor conhece seu `Type` e não há conversão implícita.
 - `fuel` é `u64` sem validação extra; quem executa debita antes do despacho.
 

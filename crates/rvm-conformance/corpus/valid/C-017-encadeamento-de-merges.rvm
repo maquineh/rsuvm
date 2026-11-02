@@ -1,0 +1,23 @@
+; id: C-017
+; expect: value i64:7
+; args: bool:false
+; extra: encadeamento de merges (um merge alimenta outro merge)
+module c017 version 1
+entry escolhe
+
+fn escolhe(c: bool) -> i64 {
+  entry:
+    um = const_i64 1
+    dois = const_i64 2
+    cond_br c, entao(um), senao(dois)
+  entao(b0: i64):
+    br meio(b0)
+  senao(b1: i64):
+    br meio(b1)
+  meio(m: i64):
+    cinco = const_i64 5
+    somado = add_i64_checked m, cinco
+    br final(somado)
+  final(f: i64):
+    return f
+}

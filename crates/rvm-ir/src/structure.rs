@@ -722,4 +722,98 @@ mod tests {
         let value: ValueId = 0;
         assert_eq!(value, 0);
     }
+
+    #[test]
+    fn aceita_limite_estrutural_exato() {
+        // Fronteira inclusiva: `soma` tem 2 funções, 1 bloco por função, 2
+        // parâmetros em `soma`, 3 instruções no bloco de `main`, 3 valores por
+        // função e 2 argumentos de chamada. Todos os limites exatos passam.
+        let module = soma();
+        let limits = Limits {
+            max_functions: 2,
+            max_blocks_per_function: 1,
+            max_params: 2,
+            max_block_params: 0,
+            max_instrs_per_block: 3,
+            max_values_per_function: 3,
+            max_call_args: 2,
+            ..Limits::default()
+        };
+        assert!(
+            check(&module, &limits).is_ok(),
+            "módulo no limite exato deveria ser aceito"
+        );
+    }
+
+    #[test]
+    fn rejeita_parametros_de_funcao_acima_do_limite() {
+        let module = soma();
+        let limits = Limits {
+            max_params: 1,
+            ..Limits::default()
+        };
+        let error = check(&module, &limits).unwrap_err();
+        assert_eq!(error.code(), ErrorCode::InvalidModule);
+        assert!(error.detail().contains("parâmetros"));
+    }
+
+    #[test]
+    fn rejeita_parametros_de_bloco_acima_do_limite() {
+        let module = testing::com_merge();
+        let limits = Limits {
+            max_block_params: 0,
+            ..Limits::default()
+        };
+        let error = check(&module, &limits).unwrap_err();
+        assert_eq!(error.code(), ErrorCode::InvalidModule);
+        assert!(error.detail().contains("parâmetros de bloco"));
+    }
+
+    #[test]
+    fn rejeita_argumentos_de_chamada_acima_do_limite() {
+        let module = soma();
+        let limits = Limits {
+            max_call_args: 1,
+            ..Limits::default()
+        };
+        let error = check(&module, &limits).unwrap_err();
+        assert_eq!(error.code(), ErrorCode::InvalidModule);
+        assert!(error.detail().contains("argumentos de chamada"));
+    }
+
+    #[test]
+    fn rejeita_argumentos_de_desvio_acima_do_limite() {
+        let module = testing::com_merge();
+        let limits = Limits {
+            max_call_args: 0,
+            ..Limits::default()
+        };
+        let error = check(&module, &limits).unwrap_err();
+        assert_eq!(error.code(), ErrorCode::InvalidModule);
+        assert!(error.detail().contains("argumentos de desvio"));
+    }
+
+    #[test]
+    fn rejeita_blocos_acima_do_limite() {
+        let module = testing::com_merge();
+        let limits = Limits {
+            max_blocks_per_function: 1,
+            ..Limits::default()
+        };
+        let error = check(&module, &limits).unwrap_err();
+        assert_eq!(error.code(), ErrorCode::InvalidModule);
+        assert!(error.detail().contains("blocos"));
+    }
+
+    #[test]
+    fn rejeita_valores_acima_do_limite() {
+        let module = soma();
+        let limits = Limits {
+            max_values_per_function: 2,
+            ..Limits::default()
+        };
+        let error = check(&module, &limits).unwrap_err();
+        assert_eq!(error.code(), ErrorCode::InvalidModule);
+        assert!(error.detail().contains("valores"));
+    }
 }

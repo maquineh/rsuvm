@@ -41,14 +41,23 @@ pub const SLOT_BYTES: u64 = 24;
 /// Custo modelado de um frame com `slots` valores, em bytes.
 ///
 /// É um **modelo determinístico** de quota, não a medição de RSS do processo:
-/// `FRAME_BASE_BYTES + slots * SLOT_BYTES`, com saturação. Vetores transitórios
-/// de argumentos de chamada e de desvio não são contabilizados (lacuna
-/// documentada no ADR-0013).
+/// `FRAME_BASE_BYTES + slots * SLOT_BYTES`, com saturação.
 #[must_use]
 pub fn frame_cost(slots: u64) -> u64 {
     slots
         .saturating_mul(SLOT_BYTES)
         .saturating_add(FRAME_BASE_BYTES)
+}
+
+/// Custo modelado de um buffer transitório de `args` argumentos, em bytes.
+///
+/// Durante uma chamada ou um desvio, os argumentos são copiados para um buffer
+/// antes de serem gravados nos slots do destino. Esse buffer é memória viva
+/// enquanto existe e entra na quota de execução (ADR-0016). O custo é
+/// `args * SLOT_BYTES`, com saturação; um buffer vazio não custa nada.
+#[must_use]
+pub fn arg_buffer_cost(args: u64) -> u64 {
+    args.saturating_mul(SLOT_BYTES)
 }
 
 /// Limite de memória modelada de frames, em bytes.
@@ -430,6 +439,14 @@ mod tests {
         assert_eq!(frame_cost(0), FRAME_BASE_BYTES);
         assert_eq!(frame_cost(1), FRAME_BASE_BYTES + SLOT_BYTES);
         assert_eq!(frame_cost(u64::MAX), u64::MAX);
+    }
+
+    #[test]
+    fn custo_de_buffer_de_argumentos_e_modelado_e_satura() {
+        assert_eq!(arg_buffer_cost(0), 0);
+        assert_eq!(arg_buffer_cost(1), SLOT_BYTES);
+        assert_eq!(arg_buffer_cost(16), 16 * SLOT_BYTES);
+        assert_eq!(arg_buffer_cost(u64::MAX), u64::MAX);
     }
 
     #[test]

@@ -38,4 +38,4 @@ executor aceita.
   runtime e verify.
 - [rvm-cli](./rvm-cli/README.md) — binário `rsuvm` (`run`, `run-bc`, `check`,
   `fmt`, `encode`); não concede capabilities.
-- [rvm-conformance](./rvm-conformance/README.md) — corpus em dados (16 válidos, 19 inválidos) e testes de conformidade/propriedades.
+- [rvm-conformance](./rvm-conformance/README.md) — corpus em dados (19 válidos, 23 inválidos) e testes de conformidade/propriedades.

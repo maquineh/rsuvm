@@ -1,0 +1,21 @@
+; id: N-022
+; expect: error invalid_module
+; extra: parâmetros de bloco acima do máximo (9 > 8)
+module n022 version 1
+entry main
+
+fn main() -> i64 {
+  entry:
+    v0 = const_i64 1
+    v1 = const_i64 2
+    v2 = const_i64 3
+    v3 = const_i64 4
+    v4 = const_i64 5
+    v5 = const_i64 6
+    v6 = const_i64 7
+    v7 = const_i64 8
+    v8 = const_i64 9
+    br destino(v0, v1, v2, v3, v4, v5, v6, v7, v8)
+  destino(a0: i64, a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64):
+    return a0
+}

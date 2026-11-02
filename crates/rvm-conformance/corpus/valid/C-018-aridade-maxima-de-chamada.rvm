@@ -1,0 +1,47 @@
+; id: C-018
+; expect: value i64:136
+; extra: call_static com aridade máxima (16 parâmetros e 16 argumentos)
+module c018 version 1
+entry main
+
+fn main() -> i64 {
+  entry:
+    v0 = const_i64 1
+    v1 = const_i64 2
+    v2 = const_i64 3
+    v3 = const_i64 4
+    v4 = const_i64 5
+    v5 = const_i64 6
+    v6 = const_i64 7
+    v7 = const_i64 8
+    v8 = const_i64 9
+    v9 = const_i64 10
+    v10 = const_i64 11
+    v11 = const_i64 12
+    v12 = const_i64 13
+    v13 = const_i64 14
+    v14 = const_i64 15
+    v15 = const_i64 16
+    v16 = call_static soma16(v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15)
+    return v16
+}
+
+fn soma16(a0: i64, a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64, a10: i64, a11: i64, a12: i64, a13: i64, a14: i64, a15: i64) -> i64 {
+  entry:
+    v16 = add_i64_checked a0, a1
+    v17 = add_i64_checked v16, a2
+    v18 = add_i64_checked v17, a3
+    v19 = add_i64_checked v18, a4
+    v20 = add_i64_checked v19, a5
+    v21 = add_i64_checked v20, a6
+    v22 = add_i64_checked v21, a7
+    v23 = add_i64_checked v22, a8
+    v24 = add_i64_checked v23, a9
+    v25 = add_i64_checked v24, a10
+    v26 = add_i64_checked v25, a11
+    v27 = add_i64_checked v26, a12
+    v28 = add_i64_checked v27, a13
+    v29 = add_i64_checked v28, a14
+    v30 = add_i64_checked v29, a15
+    return v30
+}

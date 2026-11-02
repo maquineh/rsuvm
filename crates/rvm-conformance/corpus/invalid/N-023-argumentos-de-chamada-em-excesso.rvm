@@ -1,0 +1,33 @@
+; id: N-023
+; expect: error invalid_module
+; extra: argumentos de chamada acima do máximo (17 > 16)
+module n023 version 1
+entry main
+
+fn main() -> i64 {
+  entry:
+    v0 = const_i64 1
+    v1 = const_i64 2
+    v2 = const_i64 3
+    v3 = const_i64 4
+    v4 = const_i64 5
+    v5 = const_i64 6
+    v6 = const_i64 7
+    v7 = const_i64 8
+    v8 = const_i64 9
+    v9 = const_i64 10
+    v10 = const_i64 11
+    v11 = const_i64 12
+    v12 = const_i64 13
+    v13 = const_i64 14
+    v14 = const_i64 15
+    v15 = const_i64 16
+    v16 = const_i64 17
+    v17 = call_static alvo(v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16)
+    return v17
+}
+
+fn alvo(a0: i64, a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64, a8: i64, a9: i64, a10: i64, a11: i64, a12: i64, a13: i64, a14: i64, a15: i64) -> i64 {
+  entry:
+    return a0
+}

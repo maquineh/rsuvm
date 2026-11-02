@@ -120,19 +120,20 @@ frame de entrada: depth = 1
 antes_de_entrar_no_callee: se depth + 1 > max_call_depth { call_depth_exceeded }
 ~~~
 
-### Memória (ADR-0013)
+### Memória (ADR-0013, ADR-0016)
 
 ~~~text
 custo_do_frame  = 256 + slots_do_frame x 24 bytes
-cobranca        = antes de alocar os slots; conta memória VIVA, não cumulativa
-liberacao       = no retorno do frame
+custo_do_buffer = args x 24 bytes (buffer transitório de chamada/desvio)
+cobranca        = antes de alocar; conta memória VIVA, não cumulativa
+liberacao       = no retorno do frame / ao fim do desvio
 limite_padrao   = 16 MiB (MemoryLimit); 0 e aceito e nada cabe
 ~~~
 
 `slots_do_frame` e `Function::value_count()` (parâmetros + parâmetros de bloco +
 definições). Estouro produz `out_of_memory` com `Location::Function`. O modelo é
-determinístico e **não** mede RSS; vetores transitórios de argumentos não são
-contabilizados (ADR-0013).
+determinístico e **não** mede RSS; buffers transitórios de argumentos de
+chamada/desvio entram na conta enquanto existem (ADR-0016).
 
 `max_depth` no resultado é a maior profundidade observada. O teto
 `CallDepthLimit::HARD_MAX = 256` é aplicado sobre uma pilha de frames **na heap**

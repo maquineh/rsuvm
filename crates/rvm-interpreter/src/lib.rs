@@ -17,6 +17,9 @@
 //!   ausente, não inicializado ou de tipo divergente vira `invalid_module`
 //!   (defesa em profundidade: o verificador deveria impedir esses casos) —
 //!   nunca pânico.
+//! - A quota de memória modelada cobra o custo do frame **e** o buffer
+//!   transitório de argumentos de chamada/desvio enquanto ele existe
+//!   (ADR-0016); [`RunOutcome::memory_peak`] registra o pico observado.
 //! - `add/sub/mul_i64_checked` usam [`rvm_spec::BinOp::eval_i64`]; resultado fora
 //!   de `i64` produz o trap `integer_overflow`. Comparações usam
 //!   [`rvm_spec::CmpOp::eval_i64`] e produzem `bool`.
@@ -49,7 +52,7 @@
 )]
 
 use rvm_ir::{BlockId, FnId, Function, Module, Op, Terminator, ValueId};
-use rvm_runtime::{frame_cost, ExecConfig, Value};
+use rvm_runtime::{arg_buffer_cost, frame_cost, ExecConfig, Value};
 use rvm_spec::{ErrorCode, Location, RvmError};
 
 use rvm_verify::VerifiedModule;
@@ -63,7 +66,7 @@ pub struct RunOutcome {
     pub fuel_used: u64,
     /// Maior profundidade de chamadas observada (frame de entrada = 1).
     pub max_depth: u32,
-    /// Pico de memória modelada dos frames, em bytes.
+    /// Pico de memória modelada dos frames e buffers de argumentos, em bytes.
     pub memory_peak: u64,
 }
 
@@ -182,9 +185,6 @@ impl<'a> Interpreter<'a> {
     fn run(&mut self, function: &'a Function, args: &[Value]) -> Result<Value, RvmError> {
         let mut stack: Vec<Frame<'a>> = Vec::new();
         stack.push(self.new_frame(function, args, 1, None)?);
-        // Buffer reutilizado para avaliar argumentos de desvio sem alocar por
-        // iteração de loop.
-        let mut branch_args: Vec<Value> = Vec::new();
 
         loop {
             let top = match stack.len().checked_sub(1) {
@@ -281,14 +281,7 @@ impl<'a> Interpreter<'a> {
                         self.write_current(&mut stack, caller, return_slot, value, &block_site)?;
                     }
                     Terminator::Br(target) => {
-                        self.jump(
-                            &mut stack,
-                            top,
-                            target.target,
-                            &target.args,
-                            &mut branch_args,
-                            &block_site,
-                        )?;
+                        self.jump(&mut stack, top, target.target, &target.args, &block_site)?;
                     }
                     Terminator::CondBr {
                         cond,
@@ -297,14 +290,7 @@ impl<'a> Interpreter<'a> {
                     } => {
                         let condition = self.read_bool(&stack, top, *cond, &block_site)?;
                         let target = if condition { then_target } else { else_target };
-                        self.jump(
-                            &mut stack,
-                            top,
-                            target.target,
-                            &target.args,
-                            &mut branch_args,
-                            &block_site,
-                        )?;
+                        self.jump(&mut stack, top, target.target, &target.args, &block_site)?;
                     }
                 }
                 continue;
@@ -348,6 +334,10 @@ impl<'a> Interpreter<'a> {
                 }
                 Op::Call { callee, args } => {
                     let callee_function = self.callee(*callee, &site)?;
+                    // O buffer de argumentos é cobrado antes de alocar (falha
+                    // fechada) e liberado depois de consumido pelo callee.
+                    let arg_bytes = arg_buffer_cost(u64::try_from(args.len()).unwrap_or(u64::MAX));
+                    self.charge_memory(arg_bytes, &site)?;
                     let call_args = match stack.get(top) {
                         Some(frame) => collect_args(frame, args, &site)?,
                         None => {
@@ -365,6 +355,7 @@ impl<'a> Interpreter<'a> {
                     // no slot `instr.def` deste frame.
                     self.advance(&mut stack, top, &site)?;
                     stack.push(child);
+                    self.release_memory(arg_bytes);
                 }
             }
         }
@@ -453,13 +444,15 @@ impl<'a> Interpreter<'a> {
     }
 
     /// Copia argumentos para os parâmetros do bloco alvo e salta.
+    ///
+    /// O buffer de argumentos do desvio é memória viva durante o desvio e entra
+    /// na quota modelada (ADR-0016); é cobrado antes de alocar e liberado ao fim.
     fn jump(
         &mut self,
         stack: &mut Vec<Frame<'a>>,
         top: usize,
         target: BlockId,
         args: &[ValueId],
-        buffer: &mut Vec<Value>,
         site: &Site<'_>,
     ) -> Result<(), RvmError> {
         let function = match stack.get(top) {
@@ -494,7 +487,9 @@ impl<'a> Interpreter<'a> {
                 site,
             ));
         }
-        buffer.clear();
+        let arg_bytes = arg_buffer_cost(u64::try_from(args.len()).unwrap_or(u64::MAX));
+        self.charge_memory(arg_bytes, site)?;
+        let mut buffer: Vec<Value> = Vec::new();
         buffer.try_reserve_exact(args.len()).map_err(|_| {
             error_at(
                 ErrorCode::InvalidModule,
@@ -544,6 +539,7 @@ impl<'a> Interpreter<'a> {
         }
         frame.block = target;
         frame.instr_index = 0;
+        self.release_memory(arg_bytes);
         Ok(())
     }
 

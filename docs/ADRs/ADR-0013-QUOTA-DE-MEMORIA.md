@@ -47,9 +47,8 @@ reprodutível e testável em qualquer plataforma.
 - Positivas: limite determinístico, reprodutível e testável; fronteira exata
   verificada (custo e custo−1); pico observável; sem dependências novas.
 - Negativas: o modelo **não é** a memória real do processo (overhead de `Vec`,
-  alocador e capacidade reservada não são medidos); vetores transitórios de
-  argumentos de chamada/desvio não são contabilizados; um host que queira precisão
-  de RSS precisa de isolamento externo.
+  alocador e capacidade reservada não são medidos); a cobrança de buffers
+  transitórios de argumentos foi adicionada depois pelo ADR-0016.
 - Residual: `frame_cost` pode subestimar o consumo real; a quota protege contra
   crescimento descontrolado, não contra picos de alocador.
 

@@ -79,9 +79,11 @@ produz o trap `integer_overflow`. O comportamento é idêntico em debug e releas
   implementação era recursiva e estourou a pilha nativa de uma thread de teste
   com 256 frames (ADR-0012 registra o resultado e a correção); profundidade de
   chamadas não pode decidir o uso de pilha nativa do host.
-- **Memória modelada:** custo por frame = `256 + slots × 24` bytes; a cobrança
-  acontece antes de alocar, conta memória viva e libera no retorno; teto padrão de
-  16 MiB e `out_of_memory` ao exceder (ADR-0013). É modelo determinístico, não RSS.
+- **Memória modelada:** custo por frame = `256 + slots × 24` bytes e custo de
+  buffer transitório de argumentos = `args × 24` bytes; a cobrança acontece antes
+  de alocar, conta memória viva e libera ao fim; teto padrão de 16 MiB e
+  `out_of_memory` ao exceder (ADR-0013, ADR-0016). É modelo determinístico, não
+  RSS.
 
 ## 5. Erros
 
