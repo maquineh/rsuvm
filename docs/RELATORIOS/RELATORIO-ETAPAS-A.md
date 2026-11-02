@@ -491,8 +491,8 @@ corpus; fica nos testes dedicados.
 | Comando / run | Resultado |
 |---|---|
 | `cargo test --workspace` (Windows) | **174 passed, 0 failed**; corpus 62 válidos + 42 inválidos |
-| `cargo test --workspace` (Linux, CI) | **174 passed, 0 failed** (symlink `cfg(unix)`; junção só no Windows) |
-| `cargo test --release --workspace` (Linux, CI) | **174 passed, 0 failed** |
+| `cargo test --workspace` (Linux, CI run `41530594395`) | **174 passed, 0 failed** (symlink `cfg(unix)`; junção só no Windows) |
+| `cargo test --release --workspace` (Linux, CI run `41530594395`) | **174 passed, 0 failed** |
 | `cargo test --manifest-path frontends/lift-rir/Cargo.toml` | 43 passed, 0 failed (34 diferencial + 9 CLI) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | exit 0 |
 | `cargo fmt --all -- --check` | exit 0 |
