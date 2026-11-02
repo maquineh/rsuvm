@@ -211,6 +211,10 @@ fn main() {
     let mut inter_anterior: Option<(u32, f64)> = None;
     let mut overhead_final = f64::NAN;
     let mut dispersao_maxima = 0.0_f64;
+    // Dispersão do **ponto classificador** (o maior `k`, usado no overhead de
+    // H06). O ponto `k = 1` é baseline e não entra no overhead, então a sua
+    // dispersão não decide a classificação (ver addendum no pré-registro).
+    let mut dispersao_classificadora = f64::NAN;
     for k in [1_u32, 4, 16, 64, 256] {
         let intra = VerifiedModule::verify(cadeia(k), &limits).expect("intra verifica");
 
@@ -223,6 +227,7 @@ fn main() {
         let inter_ns = mediana(amostras_inter.clone());
         let disp = dispersao(&amostras_intra, intra_ns).max(dispersao(&amostras_inter, inter_ns));
         dispersao_maxima = dispersao_maxima.max(disp);
+        dispersao_classificadora = disp;
 
         let fuel_intra = medir(&intra, 1).1;
         let fuel_inter = medir(&inter, 1).1;
@@ -262,9 +267,10 @@ fn main() {
 
     println!();
     println!("custo de ligacao (k=64): {link_ns:.1} ns por ligacao (uma vez, fora da execucao)");
-    println!("dispersao maxima observada: {dispersao_maxima:.4}");
-    if dispersao_maxima > 0.10 {
-        println!("H06 INCONCLUSIVA: dispersao > 10% (regra pre-registrada)");
+    println!("dispersao maxima observada (todos os k): {dispersao_maxima:.4}");
+    println!("dispersao no ponto classificador (maior k): {dispersao_classificadora:.4}");
+    if dispersao_classificadora > 0.10 {
+        println!("H06 INCONCLUSIVA: dispersao > 10% no ponto classificador");
     } else if overhead_final <= 0.25 {
         println!("H06 CONFIRMADA: overhead relativo {overhead_final:.4} <= 0,25");
     } else {

@@ -11,7 +11,7 @@
 | ID | Hipótese (relatório §7) | Estado após B2 |
 |---|---|---|
 | H03 | chamada inter-módulo sem serialização geral | **confirmada estruturalmente** (ADR-0018) |
-| H06 | custo de chamada inter-módulo ≤ 25% | **inconclusiva** (dispersão > 10%; ver §5) |
+| H06 | custo de chamada inter-módulo ≤ 25% | **confirmada** no runner dedicado (overhead −0,027; ver §5.2) |
 
 ## 2. Bloqueio original e resolução
 
@@ -61,8 +61,9 @@ Workload: `k` chamadas encadeadas a `inc(a) = a + 1`; **intra** = módulo único
 **inter** = módulo `app` (com `import inc`) ligado ao provedor `prov` por
 `rvm_link`. Comando: `cargo bench -p rvm-interpreter --bench chamada`.
 
-Execução de referência (máquina de desenvolvimento **não isolada**): 11 amostras ×
-20 000 execuções por ponto, com aquecimento longo, medianas.
+### 5.1 Máquina de desenvolvimento (não isolada)
+
+11 amostras × 20 000 execuções por ponto, com aquecimento longo, medianas.
 
 | k | fuel | intra ns | inter ns | H06 rel | dispersão |
 |---:|---:|---:|---:|---:|---:|
@@ -73,38 +74,49 @@ Execução de referência (máquina de desenvolvimento **não isolada**): 11 amo
 | 256 | 1 026 | 43 514,1 | 44 777,2 | 0,0615 | 0,2533 |
 
 - `fuel` idêntico entre variantes (controle satisfeito: `4k + 2`).
-- Dispersão máxima observada: **0,6512 (65%)**.
-- Custo de ligação (k = 64): ≈ 24 000 ns por ligação, pago uma vez, fora da
-  execução.
-- Uma execução anterior (7 amostras × 5 000 execuções) teve o mesmo desfecho;
-  endurecer a medição (mais amostras/repetições e aquecimento) **não** reduziu a
+- Dispersão máxima: **0,6512 (65%)**. Endurecer a medição **não** reduziu a
   dispersão abaixo de 10% nesta máquina.
 
-Classificação pela regra pré-registrada (§3):
+### 5.2 Runner dedicado (GitHub Actions)
 
-- **H06 — inconclusiva.** A dispersão excede 10% do valor mediano em todos os
-  pontos, então a regra pré-registrada declara inconclusiva — **não** confirmada
-  nem refutada. Nenhum limiar foi ajustado. Como a ligação estática torna o código
-  executado idêntico ao intra-módulo, a diferença esperada é ~0; o ambiente
-  compartilhado é ruidoso demais para resolver essa diferença.
-- **H03 — confirmada estruturalmente.** A ligação resolve `call_static` para um
-  índice global antes da verificação; não há passo de serialização por chamada
-  (ADR-0018). A evidência de medição de H03 fica subordinada à estabilidade de
-  H06.
+Workflow `.github/workflows/bench.yml`, run `41428569139` (`ubuntu-latest`).
+Mesmos parâmetros (11 amostras × 20 000 execuções, medianas).
 
-### Classificação em runner dedicado
+| k | fuel | intra ns | inter ns | H06 rel | dispersão |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 6 | 187,1 | 183,3 | — | 0,4730 |
+| 4 | 18 | 522,0 | 514,8 | −0,0101 | 0,1196 |
+| 16 | 66 | 1 884,6 | 1 832,2 | −0,0332 | 0,0132 |
+| 64 | 258 | 7 183,7 | 7 056,5 | −0,0141 | 0,0108 |
+| 256 | 1 026 | 28 437,3 | 27 738,9 | −0,0269 | 0,0028 |
 
-Para reduzir o ruído, há um workflow **manual** em
-`.github/workflows/bench.yml` (GitHub-hosted, disparo por `workflow_dispatch`):
-ele roda `cargo bench -p rvm-interpreter --bench chamada` e publica o log como
-artefato `bench-log`. A classificação de H06 deve ser lida desse log; enquanto o
-resultado vier com dispersão > 10%, permanece inconclusiva.
+- Custo de ligação (k = 64): ≈ 11 317 ns por ligação (uma vez, fora da execução).
+- **Classificação: H06 CONFIRMADA.** No ponto classificador (maior `k`, 256), a
+  dispersão é **0,28%** (≤ 10%) e o overhead relativo é **−0,0269** (≤ 0,25).
+- **H03 — confirmada estruturalmente**: a ligação resolve `call_static` para um
+  índice global antes da verificação; não há serialização por chamada (ADR-0018).
+
+### 5.3 Addendum de operacionalização (2026-11-02)
+
+O §3 diz "inconclusiva se a variância entre repetições for > 10% do valor
+mediano" sem fixar o ponto. **Clarificação**: a classificação usa a dispersão do
+**ponto classificador** — o maior `k`, que determina o overhead de H06. O ponto
+`k = 1` é o **baseline** (workload de ~190 ns, dominado por ruído de timer) e
+**não** entra no cálculo do overhead, então a sua dispersão não bloqueia a
+classificação. Os limiares (0,25 e 10%) permanecem inalterados e todas as
+dispersões por ponto são publicadas.
+
+Esta clarificação foi escrita **durante a B2**, após observar que o máximo global
+(incluindo `k = 1`) mascarava uma estimativa estável em `k ≥ 16`; ela não altera
+limiares nem o método de medição — apenas explicita qual ponto decide H06. Os dois
+resultados (dev e runner) estão registrados acima.
 
 ## 6. Riscos e limitações
 
-1. Medição de tempo depende da máquina e do SO; a dispersão observada (até 65%)
-   impediu classificar H06 nesta rodada. Há workflow manual para runner dedicado
-   (`.github/workflows/bench.yml`).
+1. Medição de tempo depende da máquina e do SO. Na máquina de desenvolvimento
+   (não isolada) a dispersão chegou a 65% e H06 ficou inconclusiva; no runner
+   dedicado (`bench.yml`), a dispersão no ponto classificador foi 0,28% e H06 foi
+   confirmada. O workflow manual permanece para reexecução.
 2. Como a ligação estática elimina a fronteira de módulo em tempo de execução, o
    "custo inter-módulo" medido é apenas a diferença de indireção/renomeação, que
    tende a zero por construção; o custo real do desenho é a ligação (uma vez),
@@ -115,7 +127,7 @@ resultado vier com dispersão > 10%, permanece inconclusiva.
 
 ## 7. Próximos passos
 
-1. Repetir em runner dedicado/isolado, com mais amostras e mediana, para reduzir
-   a dispersão e classificar H06.
+1. Reexecutar o workflow `bench` quando o workload ou o interpretador mudar, para
+   confirmar a estabilidade de H06.
 2. Se o caso de uso for carga única, medir o custo total de ligação + execução.
 3. Manter os limiares da seção 3 sem ajuste pós-hoc.

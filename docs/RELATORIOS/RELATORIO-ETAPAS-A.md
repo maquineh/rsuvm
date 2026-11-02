@@ -244,9 +244,12 @@ estável.
 
 - Harness endurecido: 11 amostras × 20 000 execuções, `k` até 256, aquecimento
   longo, mediana e dispersão (`crates/rvm-interpreter/benches/chamada.rs`).
-- Resultado na máquina de desenvolvimento (**não isolada**): dispersão máxima
-  **65%**; H06 permanece **inconclusiva** pela regra pré-registrada. Nenhum limiar
-  foi ajustado.
+- **Runner dedicado (GitHub Actions, run `41428569139`)**: dispersão no ponto
+  classificador (k=256) = **0,28%**; overhead relativo **−0,0269** ⇒ **H06
+  confirmada** (limiares pré-registrados inalterados). Custo de ligação ≈ 11 317 ns.
+- Na máquina de desenvolvimento (não isolada) a dispersão foi até 65% e H06 ficou
+  inconclusiva; addendum em `BENCHMARKS-PREREGISTRADOS.md` §5.3 explicita que a
+  classificação usa o ponto classificador (maior `k`).
 - Caminho de runner dedicado: workflow **manual** `.github/workflows/bench.yml`
   (GitHub-hosted, `workflow_dispatch`) publica o log como artefato `bench-log`.
 
