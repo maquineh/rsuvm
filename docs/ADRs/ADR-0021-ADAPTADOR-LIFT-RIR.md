@@ -25,18 +25,19 @@ pode importar Lift: adaptadores ficam fora de `crates/`.
    permanece sem dependências externas.
 3. **Subconjunto** suportado: funções com parâmetros/retorno `int` (`i64`),
    `boolean` (`bool`) ou `void` (`unit`); `let`/`const`, **atribuição**, `return`,
-   `if/else` (inclusive **merge** e `if` sem `else`) e **`while`**; expressões
-   `int`/`boolean` literais, locais, `+ - * / %`, comparações `== != < <= > >=`,
-   negação unária `-x` e chamadas a funções do próprio programa.
+   `if`/`else if`/`else` (inclusive **merge** e `if` sem `else`) e **`while`**;
+   expressões `int`/`boolean` literais, locais, `+ - * / %`, comparações
+   `== != < <= > >=`, negação `-x`, lógica `!`/`&&`/`||` (**curto-circuito**) e
+   chamadas a funções do próprio programa.
 4. **Lowering CFG/SSA**: cada binding Lift (`BindingId`) é rastreado para o
    `ValueId` corrente; `if/else` e `while` viram blocos com **parâmetros de bloco**
    que carregam o ambiente (phi explícito) no merge do `if` e no cabeçalho do
    `while`; `+ - *` usam `*_i64_checked` (overflow vira trap), como no EXP-0.
-5. Fora do subconjunto (`else if`, `coalesce`, `f64`, strings, arrays, objetos,
-   closures, `console.log`, `import`, `not`, `and`, `or`, `struct`, statements de
-   topo) devolve [`AdapterError::Unsupported`], nunca um módulo incorreto.
-   Divisão/resto foram habilitadas pela **ADR-0022** (ops novas no núcleo); strings
-   exigiriam **tipo novo** no núcleo.
+5. Fora do subconjunto (`coalesce`, `f64`, strings, arrays, objetos, closures,
+   `console.log`, `import`, `struct`, statements de topo) devolve
+   [`AdapterError::Unsupported`], nunca um módulo incorreto. Divisão/resto foram
+   habilitadas pela **ADR-0022** (ops novas no núcleo); strings exigiriam **tipo
+   novo** no núcleo.
 6. **Teste diferencial**: o valor executado na RSUVM é comparado com o **oráculo do
    Lift** (mesmo programa rodado pelo compilador do Lift), registrado em
    `docs/RELATORIOS/ADAPTADOR-LIFT-RIR.md`.
@@ -71,11 +72,11 @@ pode importar Lift: adaptadores ficam fora de `crates/`.
 
 ## Validação
 
-- `cargo test --manifest-path frontends/lift-rir/Cargo.toml`: **22 testes**
-  (`tests/diferencial.rs`: 14; `tests/cli.rs`: 8) — inclui `while` + atribuição,
-  `if/else` com merge, `if` sem `else`, `while` aninhado em `if`, recursão `fib`,
-  `/` e `%`, o trap de divisão por zero, rejeição de `string` e os códigos de exit
-  do `lift-run` (0/2/3/4).
+- `cargo test --manifest-path frontends/lift-rir/Cargo.toml`: **26 testes**
+  (`tests/diferencial.rs`: 18; `tests/cli.rs`: 8) — inclui `while` + atribuição,
+  `if`/`else if`/`else` com merge, `if` sem `else`, `&&`/`||`/`!` com
+  curto-circuito, recursão `fib`, `/` e `%`, o trap de divisão por zero, rejeição
+  de `string` e os códigos de exit do `lift-run` (0/2/3/4).
 - **Diferencial**: `cargo run -p lift_cli -- run examples/rsuvm-oracle.lift` no
   Lift produz `30 5 7 9 3 true false 25 12 55 0`; `rsuvm-oracle2.lift` produz
   `15 0 7 0 1 2 10 3 6 0` — idênticos ao executado na RSUVM

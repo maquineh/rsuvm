@@ -8,25 +8,23 @@
 //!
 //! - funções com parâmetros/retorno em `int` (`i64`), `boolean` (`bool`) ou `void`
 //!   (`unit`);
-//! - `let`/`const`, **atribuição** a binding mutável, `return`, `if/else`
-//!   (inclusive com merge) e `while`;
+//! - `let`/`const`, **atribuição** a binding mutável, `return`, `if`/`else if`/
+//!   `else` (com merge) e `while`;
 //! - expressões: literais `int`/`boolean`, variáveis locais, `+ - * / %`,
-//!   comparações (`== != < <= > >=`), negação unária (`-x`) e chamadas a outras
-//!   funções do próprio programa.
+//!   comparações (`== != < <= > >=`), negação unária (`-x`) e lógica `!`, `&&`,
+//!   `||` (com **curto-circuito**), e chamadas a outras funções do programa.
 //!
-//! Fora do subconjunto (`else if`, `coalesce`, `f64`, strings, arrays, objetos,
-//! closures, `console.log`, `import`, `not`, `and`, `or`, `struct`, statements de
-//! topo): devolve [`AdapterError::Unsupported`]. Divisão/resto por zero e
-//! `i64::MIN / -1` produzem os traps `division_by_zero`/`integer_overflow`
-//! (ADR-0022), como no núcleo.
+//! Fora do subconjunto (`coalesce`, `f64`, strings, arrays, objetos, closures,
+//! `console.log`, `import`, `struct`, statements de topo): devolve
+//! [`AdapterError::Unsupported`]. Divisão/resto por zero e `i64::MIN / -1`
+//! produzem os traps `division_by_zero`/`integer_overflow` (ADR-0022).
 //!
 //! # Semântica (construção CFG/SSA)
 //!
 //! Cada binding Lift (`BindingId`) é rastreado para o `ValueId` corrente. `let`
-//! vira uma definição SSA; `if/else` e `while` viram blocos com **parâmetros de
-//! bloco** que carregam o ambiente (phi explícito): no merge do `if` e no cabeçalho
-//! do `while`, o ambiente é passado adiante. `+ - *` usam `*_i64_checked` (overflow
-//! vira trap), como no EXP-0.
+//! vira uma definição SSA; `if`/`else` e `while` viram blocos com **parâmetros de
+//! bloco** que carregam o ambiente (phi explícito). `&&`, `||` e `!` viram fluxo
+//! com merge de um `bool` (curto-circuito). `+ - *` usam `*_i64_checked`.
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
@@ -156,11 +154,12 @@ struct Cursor {
     instrs: Vec<Instr>,
 }
 
-/// Construtor de função (CFG/SSA).
+/// Construtor de função (CFG/SSA) com bloco corrente.
 struct FuncLower {
     blocks: Vec<Option<Block>>,
     next_value: ValueId,
     next_label: u32,
+    current: Option<Cursor>,
 }
 
 impl FuncLower {
@@ -169,6 +168,7 @@ impl FuncLower {
             blocks: Vec::new(),
             next_value: first_value,
             next_label: 0,
+            current: None,
         }
     }
 
@@ -208,6 +208,34 @@ impl FuncLower {
         }
     }
 
+    fn emit(&mut self, op: Op) -> Result<ValueId, AdapterError> {
+        let id = self.new_value()?;
+        let cursor = self
+            .current
+            .as_mut()
+            .ok_or_else(|| AdapterError::Unsupported("emit sem bloco corrente".to_string()))?;
+        cursor.instrs.push(Instr { def: id, op });
+        Ok(id)
+    }
+
+    fn terminate(&mut self, term: Terminator) -> Result<(), AdapterError> {
+        let cursor = self
+            .current
+            .take()
+            .ok_or_else(|| AdapterError::Unsupported("terminate sem bloco corrente".to_string()))?;
+        self.finish(cursor, term);
+        Ok(())
+    }
+
+    fn start(&mut self, block: BlockId, label: String, params: Vec<BlockParam>) {
+        self.current = Some(Cursor {
+            block,
+            label,
+            params,
+            instrs: Vec::new(),
+        });
+    }
+
     /// Cria parâmetros de bloco para todo o ambiente e devolve o ambiente do bloco.
     fn params_for(
         &mut self,
@@ -243,21 +271,24 @@ impl FuncLower {
         Ok(args)
     }
 
-    /// Loweriza uma lista de statements; devolve o cursor vivo (ou `None` se o
-    /// fluxo terminou em `return`) e o ambiente de saída.
+    /// Loweriza uma lista de statements no bloco corrente.
+    ///
+    /// Devolve `Some(env)` se o fluxo continua vivo e `None` se terminou em
+    /// `return` (ou num `if` terminal).
     fn lower_block(
         &mut self,
         names: &BTreeMap<String, FnId>,
         statements: &[HirStatement],
-        mut cursor: Cursor,
         mut env: Env,
-    ) -> Result<(Option<Cursor>, Env), AdapterError> {
+    ) -> Result<Option<Env>, AdapterError> {
         for statement in statements {
+            if self.current.is_none() {
+                break;
+            }
             match statement {
                 HirStatement::Variable(declaration) => {
                     let ty = map_type(&declaration.ty)?;
-                    let value =
-                        self.lower_expr(names, &declaration.initializer, &env, &mut cursor.instrs)?;
+                    let value = self.lower_expr(names, &declaration.initializer, &env)?;
                     env.insert(declaration.id, (value, ty));
                 }
                 HirStatement::Assignment(assignment) => {
@@ -272,175 +303,138 @@ impl FuncLower {
                     let ty = env.get(&binding).map(|(_, ty)| *ty).ok_or_else(|| {
                         AdapterError::Unsupported("atribuição a binding não mapeado".to_string())
                     })?;
-                    let value =
-                        self.lower_expr(names, &assignment.value, &env, &mut cursor.instrs)?;
+                    let value = self.lower_expr(names, &assignment.value, &env)?;
                     env.insert(binding, (value, ty));
                 }
                 HirStatement::Expression(statement) => {
-                    // Sem efeitos no subset: avalia (pode trapar) e descarta.
-                    let _ =
-                        self.lower_expr(names, &statement.expression, &env, &mut cursor.instrs)?;
+                    let _ = self.lower_expr(names, &statement.expression, &env)?;
                 }
                 HirStatement::Return(ret) => {
                     let value = match &ret.value {
-                        Some(expression) => {
-                            Some(self.lower_expr(names, expression, &env, &mut cursor.instrs)?)
-                        }
+                        Some(expression) => Some(self.lower_expr(names, expression, &env)?),
                         None => None,
                     };
-                    self.finish(cursor, Terminator::Return(value));
-                    return Ok((None, env));
+                    self.terminate(Terminator::Return(value))?;
+                    return Ok(None);
                 }
-                HirStatement::If(node) => match self.lower_if(names, node, cursor, env)? {
-                    Some((next, next_env)) => {
-                        cursor = next;
-                        env = next_env;
-                    }
-                    None => return Ok((None, BTreeMap::new())),
+                HirStatement::If(node) => match self.lower_if(names, node, env)? {
+                    Some(next_env) => env = next_env,
+                    None => return Ok(None),
                 },
                 HirStatement::While(node) => {
-                    let (next, next_env) = self.lower_while(names, node, cursor, env)?;
-                    cursor = next;
-                    env = next_env;
+                    env = self.lower_while(names, node, env)?;
                 }
             }
         }
-        Ok((Some(cursor), env))
+        Ok(if self.current.is_some() {
+            Some(env)
+        } else {
+            None
+        })
     }
 
-    /// Loweriza um `if/else`, com merge quando os ramos não terminam em `return`.
+    /// Loweriza `if`/`else if`/`else` com merge. `None` = fluxo terminou.
     fn lower_if(
         &mut self,
         names: &BTreeMap<String, FnId>,
         node: &HirIf,
-        mut cursor: Cursor,
         env: Env,
-    ) -> Result<Option<(Cursor, Env)>, AdapterError> {
-        let condition = self.lower_expr(names, &node.condition, &env, &mut cursor.instrs)?;
+    ) -> Result<Option<Env>, AdapterError> {
+        let condition = self.lower_expr(names, &node.condition, &env)?;
         let incoming = env;
 
         let then_id = self.alloc_block();
         let else_id = self.alloc_block();
         let (then_params, then_env) = self.params_for(&incoming, then_id)?;
         let (else_params, else_env) = self.params_for(&incoming, else_id)?;
-        let then_label = self.next_label("then");
-        let else_label = self.next_label("else");
         let args = Self::args_of(&incoming, &incoming)?;
-
-        self.finish(
-            cursor,
-            Terminator::CondBr {
-                cond: condition,
-                then_target: BranchTarget {
-                    target: then_id,
-                    args: args.clone(),
-                },
-                else_target: BranchTarget {
-                    target: else_id,
-                    args,
-                },
+        self.terminate(Terminator::CondBr {
+            cond: condition,
+            then_target: BranchTarget {
+                target: then_id,
+                args: args.clone(),
             },
-        );
+            else_target: BranchTarget {
+                target: else_id,
+                args,
+            },
+        })?;
 
-        let then_cursor = Cursor {
-            block: then_id,
-            label: then_label,
-            params: then_params,
-            instrs: Vec::new(),
+        let then_label = self.next_label("then");
+        self.start(then_id, then_label, then_params);
+        let then_out = self.lower_block(names, &node.then_branch.statements, then_env)?;
+        let then_saved = if then_out.is_some() {
+            self.current.take()
+        } else {
+            None
         };
-        let (then_out, then_env) =
-            self.lower_block(names, &node.then_branch.statements, then_cursor, then_env)?;
 
-        let else_cursor = Cursor {
-            block: else_id,
-            label: else_label,
-            params: else_params,
-            instrs: Vec::new(),
-        };
-        let (else_out, else_env) = match &node.else_branch {
+        let else_label = self.next_label("else");
+        self.start(else_id, else_label, else_params);
+        let else_out = match &node.else_branch {
             Some(HirElseBranch::Block(block)) => {
-                self.lower_block(names, &block.statements, else_cursor, else_env)?
+                self.lower_block(names, &block.statements, else_env)?
             }
-            Some(HirElseBranch::ElseIf(_)) => {
-                return Err(AdapterError::Unsupported("`else if`".to_string()))
-            }
-            // `if` sem `else`: o ramo vazio cai para o merge.
-            None => (Some(else_cursor), else_env),
+            Some(HirElseBranch::ElseIf(nested)) => self.lower_if(names, nested, else_env)?,
+            None => Some(else_env),
+        };
+        let else_saved = if else_out.is_some() {
+            self.current.take()
+        } else {
+            None
         };
 
-        if then_out.is_none() && else_out.is_none() {
-            // Ambos os ramos terminam em `return`: o `if` é terminal.
+        if then_saved.is_none() && else_saved.is_none() {
             return Ok(None);
         }
 
         let merge_id = self.alloc_block();
         let (merge_params, merge_env) = self.params_for(&incoming, merge_id)?;
         let merge_label = self.next_label("merge");
-
-        if let Some(then_out) = then_out {
-            let args = Self::args_of(&then_env, &incoming)?;
+        if let Some(cursor) = then_saved {
+            let env_then = then_out.expect("cursor vivo implica ambiente");
+            let args = Self::args_of(&env_then, &incoming)?;
             self.finish(
-                then_out,
+                cursor,
                 Terminator::Br(BranchTarget {
                     target: merge_id,
                     args,
                 }),
             );
         }
-        if let Some(else_out) = else_out {
-            let args = Self::args_of(&else_env, &incoming)?;
+        if let Some(cursor) = else_saved {
+            let env_else = else_out.expect("cursor vivo implica ambiente");
+            let args = Self::args_of(&env_else, &incoming)?;
             self.finish(
-                else_out,
+                cursor,
                 Terminator::Br(BranchTarget {
                     target: merge_id,
                     args,
                 }),
             );
         }
-
-        Ok(Some((
-            Cursor {
-                block: merge_id,
-                label: merge_label,
-                params: merge_params,
-                instrs: Vec::new(),
-            },
-            merge_env,
-        )))
+        self.start(merge_id, merge_label, merge_params);
+        Ok(Some(merge_env))
     }
 
-    /// Loweriza um `while`, com variáveis carregadas no cabeçalho (phi).
+    /// Loweriza `while`, com variáveis carregadas no cabeçalho (phi).
     fn lower_while(
         &mut self,
         names: &BTreeMap<String, FnId>,
         node: &HirWhile,
-        cursor: Cursor,
         env: Env,
-    ) -> Result<(Cursor, Env), AdapterError> {
+    ) -> Result<Env, AdapterError> {
         let header_id = self.alloc_block();
         let (header_params, header_env) = self.params_for(&env, header_id)?;
         let header_label = self.next_label("while");
         let entry_args = Self::args_of(&env, &env)?;
-        self.finish(
-            cursor,
-            Terminator::Br(BranchTarget {
-                target: header_id,
-                args: entry_args,
-            }),
-        );
+        self.terminate(Terminator::Br(BranchTarget {
+            target: header_id,
+            args: entry_args,
+        }))?;
 
-        let mut header_cursor = Cursor {
-            block: header_id,
-            label: header_label,
-            params: header_params,
-            instrs: Vec::new(),
-        };
-        let condition = self.lower_expr(
-            names,
-            &node.condition,
-            &header_env,
-            &mut header_cursor.instrs,
-        )?;
+        self.start(header_id, header_label, header_params);
+        let condition = self.lower_expr(names, &node.condition, &header_env)?;
 
         let body_id = self.alloc_block();
         let exit_id = self.alloc_block();
@@ -449,115 +443,211 @@ impl FuncLower {
         let body_label = self.next_label("do");
         let exit_label = self.next_label("done");
         let header_args = Self::args_of(&header_env, &header_env)?;
-
-        self.finish(
-            header_cursor,
-            Terminator::CondBr {
-                cond: condition,
-                then_target: BranchTarget {
-                    target: body_id,
-                    args: header_args.clone(),
-                },
-                else_target: BranchTarget {
-                    target: exit_id,
-                    args: header_args,
-                },
+        self.terminate(Terminator::CondBr {
+            cond: condition,
+            then_target: BranchTarget {
+                target: body_id,
+                args: header_args.clone(),
             },
-        );
+            else_target: BranchTarget {
+                target: exit_id,
+                args: header_args,
+            },
+        })?;
 
-        let body_cursor = Cursor {
-            block: body_id,
-            label: body_label,
-            params: body_params,
-            instrs: Vec::new(),
-        };
-        let (body_out, body_env_out) =
-            self.lower_block(names, &node.body.statements, body_cursor, body_env)?;
-        if let Some(body_out) = body_out {
+        self.start(body_id, body_label, body_params);
+        let body_out = self.lower_block(names, &node.body.statements, body_env)?;
+        if let Some(body_env_out) = body_out {
             let args = Self::args_of(&body_env_out, &header_env)?;
-            self.finish(
-                body_out,
-                Terminator::Br(BranchTarget {
-                    target: header_id,
-                    args,
-                }),
-            );
+            self.terminate(Terminator::Br(BranchTarget {
+                target: header_id,
+                args,
+            }))?;
         }
 
-        Ok((
-            Cursor {
-                block: exit_id,
-                label: exit_label,
-                params: exit_params,
-                instrs: Vec::new(),
-            },
-            exit_env,
-        ))
+        self.start(exit_id, exit_label, exit_params);
+        Ok(exit_env)
     }
 
-    /// Loweriza uma expressão, anexando as instruções ao bloco corrente.
+    /// `a && b` com curto-circuito: se `a` é falso, o resultado é `false`.
+    fn lower_and(
+        &mut self,
+        names: &BTreeMap<String, FnId>,
+        lhs: ValueId,
+        rhs: &HirExpr,
+        env: &Env,
+    ) -> Result<ValueId, AdapterError> {
+        self.lower_logical(names, lhs, rhs, env, false)
+    }
+
+    /// `a || b` com curto-circuito: se `a` é verdadeiro, o resultado é `true`.
+    fn lower_or(
+        &mut self,
+        names: &BTreeMap<String, FnId>,
+        lhs: ValueId,
+        rhs: &HirExpr,
+        env: &Env,
+    ) -> Result<ValueId, AdapterError> {
+        self.lower_logical(names, lhs, rhs, env, true)
+    }
+
+    fn lower_logical(
+        &mut self,
+        names: &BTreeMap<String, FnId>,
+        lhs: ValueId,
+        rhs: &HirExpr,
+        env: &Env,
+        short_when_true: bool,
+    ) -> Result<ValueId, AdapterError> {
+        let rhs_id = self.alloc_block();
+        let short_id = self.alloc_block();
+        let merge_id = self.alloc_block();
+        let (then_target, else_target) = if short_when_true {
+            (short_id, rhs_id)
+        } else {
+            (rhs_id, short_id)
+        };
+        self.terminate(Terminator::CondBr {
+            cond: lhs,
+            then_target: BranchTarget {
+                target: then_target,
+                args: Vec::new(),
+            },
+            else_target: BranchTarget {
+                target: else_target,
+                args: Vec::new(),
+            },
+        })?;
+
+        let rhs_label = self.next_label("rhs");
+        self.start(rhs_id, rhs_label, Vec::new());
+        let rhs_value = self.lower_expr(names, rhs, env)?;
+        self.terminate(Terminator::Br(BranchTarget {
+            target: merge_id,
+            args: vec![rhs_value],
+        }))?;
+
+        let short_label = self.next_label("short");
+        self.start(short_id, short_label, Vec::new());
+        let short_value = self.emit(Op::ConstBool(short_when_true))?;
+        self.terminate(Terminator::Br(BranchTarget {
+            target: merge_id,
+            args: vec![short_value],
+        }))?;
+
+        let merge_label = self.next_label("logic");
+        let result = self.new_value()?;
+        self.start(
+            merge_id,
+            merge_label,
+            vec![BlockParam {
+                value: result,
+                name: format!("logic{merge_id}"),
+                ty: Type::Bool,
+            }],
+        );
+        Ok(result)
+    }
+
+    /// `!b` como fluxo: se `b` é verdadeiro, `false`; senão, `true`.
+    fn lower_not(
+        &mut self,
+        names: &BTreeMap<String, FnId>,
+        operand: &HirExpr,
+        env: &Env,
+    ) -> Result<ValueId, AdapterError> {
+        let value = self.lower_expr(names, operand, env)?;
+        let then_id = self.alloc_block();
+        let else_id = self.alloc_block();
+        let merge_id = self.alloc_block();
+        self.terminate(Terminator::CondBr {
+            cond: value,
+            then_target: BranchTarget {
+                target: then_id,
+                args: Vec::new(),
+            },
+            else_target: BranchTarget {
+                target: else_id,
+                args: Vec::new(),
+            },
+        })?;
+
+        let then_label = self.next_label("not_then");
+        self.start(then_id, then_label, Vec::new());
+        let then_value = self.emit(Op::ConstBool(false))?;
+        self.terminate(Terminator::Br(BranchTarget {
+            target: merge_id,
+            args: vec![then_value],
+        }))?;
+
+        let else_label = self.next_label("not_else");
+        self.start(else_id, else_label, Vec::new());
+        let else_value = self.emit(Op::ConstBool(true))?;
+        self.terminate(Terminator::Br(BranchTarget {
+            target: merge_id,
+            args: vec![else_value],
+        }))?;
+
+        let merge_label = self.next_label("not");
+        let result = self.new_value()?;
+        self.start(
+            merge_id,
+            merge_label,
+            vec![BlockParam {
+                value: result,
+                name: format!("not{merge_id}"),
+                ty: Type::Bool,
+            }],
+        );
+        Ok(result)
+    }
+
+    /// Loweriza uma expressão no bloco corrente (pode criar blocos).
     fn lower_expr(
         &mut self,
         names: &BTreeMap<String, FnId>,
         expression: &HirExpr,
         env: &Env,
-        instrs: &mut Vec<Instr>,
     ) -> Result<ValueId, AdapterError> {
         match &expression.kind {
-            HirExprKind::IntegerLiteral(value) => {
-                let id = self.new_value()?;
-                instrs.push(Instr {
-                    def: id,
-                    op: Op::ConstI64(*value),
-                });
-                Ok(id)
-            }
-            HirExprKind::BooleanLiteral(value) => {
-                let id = self.new_value()?;
-                instrs.push(Instr {
-                    def: id,
-                    op: Op::ConstBool(*value),
-                });
-                Ok(id)
-            }
+            HirExprKind::IntegerLiteral(value) => self.emit(Op::ConstI64(*value)),
+            HirExprKind::BooleanLiteral(value) => self.emit(Op::ConstBool(*value)),
             HirExprKind::Local { id, name } => env
                 .get(id)
                 .map(|(value, _)| *value)
                 .ok_or_else(|| AdapterError::Unsupported(format!("local `{name}` não mapeado"))),
-            HirExprKind::Grouping(inner) => self.lower_expr(names, inner, env, instrs),
+            HirExprKind::Grouping(inner) => self.lower_expr(names, inner, env),
             HirExprKind::Move(inner)
             | HirExprKind::Clone {
                 expression: inner, ..
-            } => self.lower_expr(names, inner, env, instrs),
+            } => self.lower_expr(names, inner, env),
             HirExprKind::Unary { operator, operand } => match operator {
                 UnaryOperator::Negate => {
-                    let zero = self.new_value()?;
-                    instrs.push(Instr {
-                        def: zero,
-                        op: Op::ConstI64(0),
-                    });
-                    let value = self.lower_expr(names, operand, env, instrs)?;
-                    let id = self.new_value()?;
-                    instrs.push(Instr {
-                        def: id,
-                        op: Op::Bin {
-                            op: BinOp::SubI64Checked,
-                            lhs: zero,
-                            rhs: value,
-                        },
-                    });
-                    Ok(id)
+                    let zero = self.emit(Op::ConstI64(0))?;
+                    let value = self.lower_expr(names, operand, env)?;
+                    self.emit(Op::Bin {
+                        op: BinOp::SubI64Checked,
+                        lhs: zero,
+                        rhs: value,
+                    })
                 }
-                UnaryOperator::Not => Err(AdapterError::Unsupported("operador `not`".to_string())),
+                UnaryOperator::Not => self.lower_not(names, operand, env),
             },
             HirExprKind::Binary {
                 left,
                 operator,
                 right,
             } => {
-                let lhs = self.lower_expr(names, left, env, instrs)?;
-                let rhs = self.lower_expr(names, right, env, instrs)?;
-                let id = self.new_value()?;
+                if matches!(operator, BinaryOperator::And | BinaryOperator::Or) {
+                    let lhs = self.lower_expr(names, left, env)?;
+                    return if matches!(operator, BinaryOperator::And) {
+                        self.lower_and(names, lhs, right, env)
+                    } else {
+                        self.lower_or(names, lhs, right, env)
+                    };
+                }
+                let lhs = self.lower_expr(names, left, env)?;
+                let rhs = self.lower_expr(names, right, env)?;
                 let op = match operator {
                     BinaryOperator::Add => Op::Bin {
                         op: BinOp::AddI64Checked,
@@ -617,12 +707,9 @@ impl FuncLower {
                     BinaryOperator::Coalesce => {
                         return Err(AdapterError::Unsupported("coalesce".to_string()))
                     }
-                    BinaryOperator::And | BinaryOperator::Or => {
-                        return Err(AdapterError::Unsupported("`and`/`or`".to_string()))
-                    }
+                    BinaryOperator::And | BinaryOperator::Or => unreachable!("tratado acima"),
                 };
-                instrs.push(Instr { def: id, op });
-                Ok(id)
+                self.emit(op)
             }
             HirExprKind::Call {
                 function,
@@ -633,14 +720,9 @@ impl FuncLower {
                 })?;
                 let mut args: Vec<ValueId> = Vec::new();
                 for argument in arguments {
-                    args.push(self.lower_expr(names, &argument.expression, env, instrs)?);
+                    args.push(self.lower_expr(names, &argument.expression, env)?);
                 }
-                let id = self.new_value()?;
-                instrs.push(Instr {
-                    def: id,
-                    op: Op::Call { callee, args },
-                });
-                Ok(id)
+                self.emit(Op::Call { callee, args })
             }
             other => Err(AdapterError::Unsupported(format!("expressão {other:?}"))),
         }
@@ -676,20 +758,15 @@ fn lower_function(
         .map_err(|_| AdapterError::Unsupported("parâmetros demais".to_string()))?;
     let mut lower = FuncLower::new(first_value);
     let entry = lower.alloc_block();
-    let entry_cursor = Cursor {
-        block: entry,
-        label: "entry".to_string(),
-        params: Vec::new(),
-        instrs: Vec::new(),
-    };
-    let (cursor, _env) = lower.lower_block(names, &function.body.statements, entry_cursor, env)?;
-    if let Some(cursor) = cursor {
+    lower.start(entry, "entry".to_string(), Vec::new());
+    let out = lower.lower_block(names, &function.body.statements, env)?;
+    if out.is_some() {
         if ret != Type::Unit {
             return Err(AdapterError::Unsupported(
                 "função não retorna em todos os caminhos".to_string(),
             ));
         }
-        lower.finish(cursor, Terminator::Return(None));
+        lower.terminate(Terminator::Return(None))?;
     }
 
     let mut blocks: Vec<Block> = Vec::with_capacity(lower.blocks.len());

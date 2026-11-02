@@ -299,10 +299,11 @@ Primeiro frontend real do repositório: `frontends/lift-rir`, workspace **separa
 ### Entregue
 
 - `frontends/lift-rir/src/lib.rs` — `lower_source`/`lower` + `AdapterError`;
-  lowering CFG/SSA: `let`/atribuição, `if/else` (com merge), `while` (phi no
-  cabeçalho), `+ - * / %`/comparações/negação/chamadas.
-- `frontends/lift-rir/tests/diferencial.rs` — 14 testes rodando o pipeline completo
-  Lift→RIR→verificação→execução (inclui `while`/atribuição/merge e `/`/`%`).
+  lowering CFG/SSA: `let`/atribuição, `if`/`else if`/`else` (com merge), `while`
+  (phi no cabeçalho), `+ - * / %`/comparações/lógica curto-circuitada/chamadas.
+- `frontends/lift-rir/tests/diferencial.rs` — 18 testes rodando o pipeline completo
+  Lift→RIR→verificação→execução (inclui `while`, merge, `else if`, `&&`/`||`/`!` e
+  `/`/`%`).
 - Binário **`lift-run`** (`frontends/lift-rir/src/bin/lift_run.rs`): roda um
   `.lift` ponta a ponta na RVM, imprime o valor no formato do `rsuvm` e usa os
   mesmos códigos de exit (0/2/3/4/1). Testes em `tests/cli.rs` (8).
@@ -318,9 +319,9 @@ Oráculo do Lift: `cargo run -p lift_cli -- run examples/rsuvm-oracle.lift` →
 
 | Comando | Resultado |
 |---|---|
-| `cargo test --manifest-path frontends/lift-rir/Cargo.toml` | 22 passed, 0 failed (14 diferencial + 8 CLI) |
+| `cargo test --manifest-path frontends/lift-rir/Cargo.toml` | 26 passed, 0 failed (18 diferencial + 8 CLI) |
 | `cargo run --bin lift-run -- fib.lift fib --arg i64:10` | `i64:55` (exit 0) |
-| oráculo do Lift (`rsuvm-oracle*.lift`) | `30 5 7 9 3 true false 25 12 55 0` / `15 0 7 0 1 2 10 3 6 0` / `3 -3 2 -2` |
+| oráculo do Lift (`rsuvm-oracle*.lift`) | `30 5 7 9 3 true false 25 12 55 0` / `15 0 7 0 1 2 10 3 6 0` / `3 -3 2 -2` / `-1 0 1 true false false true false true false true true true` |
 | `cargo test --workspace` (núcleo) | verde; **não** compila `frontends/` |
 
 Limites: subconjunto estreito (sem `while`, divisão, strings, arrays, objetos,

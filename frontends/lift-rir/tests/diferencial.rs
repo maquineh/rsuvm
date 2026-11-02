@@ -183,6 +183,70 @@ fn divisao_e_resto() {
 }
 
 #[test]
+fn else_if_encadeado() {
+    let source = "function faixa(n: int): int { if n < 0 { return -1; } else if n == 0 { return 0; } else { return 1; } }";
+    assert_eq!(executar(source, "faixa", &[Value::I64(-5)]), Value::I64(-1));
+    assert_eq!(executar(source, "faixa", &[Value::I64(0)]), Value::I64(0));
+    assert_eq!(executar(source, "faixa", &[Value::I64(5)]), Value::I64(1));
+}
+
+#[test]
+fn logica_and_or_not() {
+    let source = "function ambos(a: boolean, b: boolean): boolean { return a && b; } function algum(a: boolean, b: boolean): boolean { return a || b; } function nega(a: boolean): boolean { return !a; }";
+    assert_eq!(
+        executar(source, "ambos", &[Value::Bool(true), Value::Bool(true)]),
+        Value::Bool(true)
+    );
+    assert_eq!(
+        executar(source, "ambos", &[Value::Bool(true), Value::Bool(false)]),
+        Value::Bool(false)
+    );
+    assert_eq!(
+        executar(source, "algum", &[Value::Bool(false), Value::Bool(false)]),
+        Value::Bool(false)
+    );
+    assert_eq!(
+        executar(source, "algum", &[Value::Bool(false), Value::Bool(true)]),
+        Value::Bool(true)
+    );
+    assert_eq!(
+        executar(source, "nega", &[Value::Bool(true)]),
+        Value::Bool(false)
+    );
+    assert_eq!(
+        executar(source, "nega", &[Value::Bool(false)]),
+        Value::Bool(true)
+    );
+}
+
+#[test]
+fn and_tem_curto_circuito_sobre_divisao() {
+    // Se `&&` não fosse curto-circuito, `a / b` com b = 0 trapava.
+    let source = "function seguro(a: int, b: int): boolean { return b != 0 && (a / b) > 0; }";
+    assert_eq!(
+        executar(source, "seguro", &[Value::I64(4), Value::I64(0)]),
+        Value::Bool(false)
+    );
+    assert_eq!(
+        executar(source, "seguro", &[Value::I64(4), Value::I64(2)]),
+        Value::Bool(true)
+    );
+}
+
+#[test]
+fn or_tem_curto_circuito_sobre_divisao() {
+    let source = "function seguro(a: int, b: int): boolean { return b == 0 || (a / b) > 0; }";
+    assert_eq!(
+        executar(source, "seguro", &[Value::I64(4), Value::I64(0)]),
+        Value::Bool(true)
+    );
+    assert_eq!(
+        executar(source, "seguro", &[Value::I64(4), Value::I64(2)]),
+        Value::Bool(true)
+    );
+}
+
+#[test]
 fn construto_fora_do_subconjunto_e_rejeitado() {
     // `string` não existe no núcleo EXP-0.
     let source = "function nome(): string { return \"x\"; }";

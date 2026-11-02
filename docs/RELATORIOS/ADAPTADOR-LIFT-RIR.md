@@ -5,7 +5,8 @@
 - **Lift de origem:** commit `5e59af55baba7af53f8763140d35c972399d2851`
   (`https://github.com/maquineh/lift`, licença `MIT OR Apache-2.0`)
 - **Escopo:** subconjunto de funções `int`/`boolean`/`void` com `let`/`const`,
-  **atribuição**, `return`, `if/else` (com merge) e **`while`** (ver ADR-0021)
+  **atribuição**, `return`, `if`/`else if`/`else` (com merge), **`while`** e lógica
+  `!`/`&&`/`||` com curto-circuito (ver ADR-0021)
 
 ## 1. Pipeline
 
@@ -108,8 +109,34 @@ Saída do Lift (oráculo): `3 -3 2 -2` (truncamento para zero).
 Divisão/resto por zero produz o trap `division_by_zero` (ADR-0022); o `lift-run`
 sai com código 3.
 
+### 2.3 `else if`, lógica e curto-circuito
+
+Quarto programa de referência (`rsuvm-oracle4.lift`):
+
+```bash
+cargo run -p lift_cli -- run examples/rsuvm-oracle4.lift
+```
+
+Saída do Lift (oráculo):
+`-1 0 1 true false false true false true false true true true`.
+
+| Caso (Lift) | Chamada | Oráculo Lift | RSUVM (RIR) | Igual? |
+|---|---|---|---|---|
+| `faixa` (`else if`) | `faixa(-5)` / `faixa(0)` / `faixa(5)` | -1 / 0 / 1 | `i64:-1` / `i64:0` / `i64:1` | sim |
+| `ambos` (`&&`) | `(true,true)` / `(true,false)` | true / false | `bool:true` / `bool:false` | sim |
+| `algum` (`\|\|`) | `(false,false)` / `(false,true)` | false / true | `bool:false` / `bool:true` | sim |
+| `nega` (`!`) | `(true)` / `(false)` | false / true | `bool:false` / `bool:true` | sim |
+| `seguro_and` (**curto-circuito**) | `(4,0)` | false | `bool:false` | sim |
+| `seguro_and` | `(4,2)` | true | `bool:true` | sim |
+| `seguro_or` (**curto-circuito**) | `(4,0)` | true | `bool:true` | sim |
+| `seguro_or` | `(4,2)` | true | `bool:true` | sim |
+
+O caso `seguro_and(4,0)` = `b != 0 && (a / b) > 0` prova o curto-circuito: se o
+Lift avaliasse `4 / 0`, o programa terminaria em erro; ambos os lados produzem
+`false` sem trap.
+
 Os testes automatizados vivem em `frontends/lift-rir/tests/diferencial.rs`
-(14 testes; cada um roda o pipeline completo Lift→RIR→verificação→execução).
+(18 testes; cada um roda o pipeline completo Lift→RIR→verificação→execução).
 
 Comando de verificação:
 
@@ -117,14 +144,14 @@ Comando de verificação:
 cargo test --manifest-path frontends/lift-rir/Cargo.toml
 ```
 
-Resultado: `14 passed` (diferencial) + `8 passed` (CLI) = **22 passed; 0 failed**.
+Resultado: `18 passed` (diferencial) + `8 passed` (CLI) = **26 passed; 0 failed**.
 
 ## 3. Limitações
 
-1. Subconjunto ainda estreito: **sem** `else if`, `coalesce`, `f64`, strings,
-   arrays, objetos, closures, `console.log`/`import` nem `not`/`and`/`or`. Fora
-   disso, `AdapterError::Unsupported`. Divisão/resto são suportadas (ADR-0022);
-   strings exigiriam um tipo novo no núcleo.
+1. Subconjunto ainda estreito: **sem** `coalesce`, `f64`, strings, arrays,
+   objetos, closures, `console.log`/`import`. Fora disso,
+   `AdapterError::Unsupported`. Divisão/resto e lógica curto-circuitada são
+   suportadas; strings exigiriam um tipo novo no núcleo.
 2. O adaptador é um **workspace separado** e depende do Lift por git fixado; o
    núcleo RSUVM continua sem dependências externas.
 3. O teste compara com o oráculo do Lift **registrado**; não invoca o compilador do
