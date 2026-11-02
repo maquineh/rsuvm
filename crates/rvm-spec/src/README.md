@@ -22,8 +22,9 @@ semântica de overflow independente do perfil de compilação: toda aritmética 
 - `Effect` — efeitos de host (`filesystem_read`, `filesystem_write`, `network`,
   `environment`, `clock`, `process`); `name`, `from_name`, `Display`
   (`lib.rs:Effect`).
-- `BuiltinHost` — ABI fechada do EXP-0: `ReadFile`, com `name`, `effect`, `code`
-  e `scope_arg` (`lib.rs:BuiltinHost`, ADR-0036).
+- `BuiltinHost` — ABI fechada do EXP-0: `ReadFile`, com `name`, `effect`, `code`,
+  `scope_arg` e `max_effect_bytes`; `MAX_HOST_READ_BYTES` é o teto de 1 MiB
+  (`lib.rs:BuiltinHost`, ADR-0036/ADR-0038).
 - `ErrorCategory` — `Decode`, `Verify`, `Trap`, `Resource`, `Capability`.
 - `ErrorClass` — `Module`, `Trap`, `ResourceLimit`, `Capability` (RF-05).
 - `ErrorCode::OutOfMemory` — quota de memória de frames excedida (classe

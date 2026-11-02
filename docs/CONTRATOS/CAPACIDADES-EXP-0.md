@@ -20,7 +20,10 @@ A ABI é **fechada** nesta rodada:
 | `read_file` | `(path: string, max_bytes: i64) -> result string string` | `filesystem_read` | argumento 0 (`path`) | `0` |
 
 - `path` é o caminho textual; `max_bytes` é o limite de bytes que o convidado
-  aceita ler (o host pode impor teto menor).
+  aceita ler. O teto rígido da ABI é 1 MiB (`MAX_HOST_READ_BYTES`); o host pode
+  impor teto menor. Antes de chamar o host, o intérprete **reserva** o pior caso
+  (`SLOT_BYTES + min(max_bytes, 1 MiB)`) na quota e falha com `out_of_memory` se
+  não couber (ADR-0038).
 - Sucesso devolve `ok(conteúdo)`; falha de IO, arquivo acima do limite ou conteúdo
   não-UTF-8 devolve `err(mensagem)`. Nenhum desses casos é trap.
 - O tipo de retorno (`result string string`) precisa existir na tabela de tipos do
@@ -32,14 +35,17 @@ A ABI é **fechada** nesta rodada:
 
 - `rvm_spec::Effect` enumera `filesystem_read`, `filesystem_write`, `network`,
   `environment`, `clock` e `process`. `rvm_spec::BuiltinHost` contém apenas
-  `ReadFile` e declara `effect()`, `code()` e `scope_arg()`.
+  `ReadFile` e declara `effect()`, `code()`, `scope_arg()` e
+  `max_effect_bytes()`.
 - `rvm_runtime::Capabilities` tem campo privado e construtores explícitos:
   `none()`, `grant(effect, scope)` e `with_grant(effect, scope)`.
   `allows(effect, scope)` compara o escopo por **componentes de caminho**
   (`Path::starts_with`); caminhos com componente `..` são negados; escopo vazio
   concede qualquer caminho sem `..`.
 - `rvm_runtime::Host` é o backend de efeitos: `capabilities()` e
-  `call(function, args, ret)`. `NoHost` nega toda chamada.
+  `call(function, args, ret)`. `NoHost` nega toda chamada. O intérprete reserva
+  `SLOT_BYTES + min(max_bytes, 1 MiB)` antes do IO; se não couber, o host não é
+  chamado (ADR-0038).
 - `rvm_interpreter::execute_with_host(module, entry, args, config, host)` consulta
   o host; `execute` usa `NoHost`. O intérprete confere a capability **antes** de
   chamar o backend e valida o tipo do valor devolvido.
@@ -71,8 +77,9 @@ A ABI é **fechada** nesta rodada:
 
 - Isolamento de processo/OS: quotas e verificação são in-process.
 - Ausência de DoS: fuel e profundidade limitam trabalho; a leitura é limitada por
-  `max_bytes`/1 MiB, mas não há limite de tempo nem de taxa. A string é lida antes
-  de ser cobrada na quota de memória; a quota limita a retenção, não o IO.
+  `max_bytes`/1 MiB e a reserva impede o IO quando o pior caso não cabe, mas não
+  há limite de tempo nem de taxa. O host ainda pode gastar IO antes de o
+  convidado usar o resultado; a reserva limita o pior caso, não o tempo.
 - Segurança do adaptador de arquivo: o CLI canonicaliza a raiz e o alvo e recusa
   symlink que resolva para fora, mas resta TOCTOU entre a canonicalização e a
   abertura; hard links não são distinguíveis por caminho; a comparação de

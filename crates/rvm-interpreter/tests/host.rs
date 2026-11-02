@@ -8,7 +8,7 @@
 
 use rvm_interpreter::{execute, execute_with_host};
 use rvm_ir::{Block, Function, Instr, Module, Op, Param, Terminator};
-use rvm_runtime::{CallDepthLimit, Capabilities, Effect, ExecConfig, Host, Value};
+use rvm_runtime::{CallDepthLimit, Capabilities, Effect, ExecConfig, Host, MemoryLimit, Value};
 use rvm_spec::{
     builtin_types, BuiltinHost, ErrorClass, ErrorCode, Limits, TypeDef, TypeId, IR_VERSION,
     TYPE_I64, TYPE_STR,
@@ -166,4 +166,45 @@ fn host_com_aridade_errada_e_invalid_type() {
     };
     let error = VerifiedModule::verify(module, &Limits::default()).expect_err("aridade");
     assert_eq!(error.code(), ErrorCode::InvalidType);
+}
+
+#[test]
+fn host_nao_e_chamado_quando_a_reserva_nao_cabe() {
+    let verified = VerifiedModule::verify(modulo_host(), &Limits::default()).expect("verifica");
+    let mut host = MockHost {
+        capabilities: Capabilities::grant(Effect::FilesystemRead, "/tmp"),
+        content: "conteudo".to_string(),
+        calls: 0,
+    };
+    let args = [Value::Str("/tmp/x".to_string()), Value::I64(1_048_576)];
+    let config = config().with_memory(MemoryLimit::new(500));
+    let error = execute_with_host(&verified, verified.entry(), &args, &config, &mut host)
+        .expect_err("reserva de 1 MiB não cabe em 500 bytes");
+    assert_eq!(error.code(), ErrorCode::OutOfMemory);
+    assert_eq!(error.class(), ErrorClass::ResourceLimit);
+    assert_eq!(
+        host.calls, 0,
+        "o host não pode ser chamado antes da reserva"
+    );
+}
+
+#[test]
+fn host_max_bytes_grande_e_limitado_ao_teto_da_abi() {
+    let verified = VerifiedModule::verify(modulo_host(), &Limits::default()).expect("verifica");
+    let mut host = MockHost {
+        capabilities: Capabilities::grant(Effect::FilesystemRead, "/tmp"),
+        content: "conteudo".to_string(),
+        calls: 0,
+    };
+    let args = [Value::Str("/tmp/x".to_string()), Value::I64(i64::MAX)];
+    let outcome = execute_with_host(&verified, verified.entry(), &args, &config(), &mut host)
+        .expect("reserva limitada ao teto da ABI deve caber");
+    assert_eq!(host.calls, 1);
+    assert_eq!(
+        outcome.value,
+        Value::Result {
+            ty: RESULT_TY,
+            value: Ok(Box::new(Value::Str("conteudo".to_string()))),
+        }
+    );
 }

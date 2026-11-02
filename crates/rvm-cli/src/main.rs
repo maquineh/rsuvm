@@ -19,7 +19,7 @@ use std::process::ExitCode;
 
 use rvm_ir::Module;
 use rvm_runtime::{CallDepthLimit, Capabilities, Effect, ExecConfig, Host, MemoryLimit, Value};
-use rvm_spec::{BuiltinHost, ErrorClass, ErrorCode, Limits, RvmError, TypeId};
+use rvm_spec::{BuiltinHost, ErrorClass, ErrorCode, Limits, RvmError, TypeId, MAX_HOST_READ_BYTES};
 
 const EXIT_USAGE: u8 = 1;
 const EXIT_MODULE: u8 = 2;
@@ -253,9 +253,6 @@ fn resolve_entry(module: &Module, requested: Option<&str>) -> Result<u32, Failur
     }
 }
 
-/// Teto de leitura do host do CLI (1 MiB).
-const HOST_READ_LIMIT: u64 = 1024 * 1024;
-
 /// Host do CLI: concede `filesystem_read` apenas sob o diretório indicado.
 ///
 /// O escopo é absoluto, não contém `..` e precisa existir; a raiz é
@@ -275,7 +272,7 @@ impl CliHost {
             return Ok(Self {
                 capabilities: Capabilities::none(),
                 canonical_root: None,
-                max_bytes: HOST_READ_LIMIT,
+                max_bytes: MAX_HOST_READ_BYTES,
             });
         };
         if !path.is_absolute() {
@@ -312,7 +309,7 @@ impl CliHost {
                 path.to_string_lossy().into_owned(),
             ),
             canonical_root: Some(canonical_root),
-            max_bytes: HOST_READ_LIMIT,
+            max_bytes: MAX_HOST_READ_BYTES,
         })
     }
 }
@@ -348,7 +345,10 @@ impl Host for CliHost {
                         "read_file: nenhuma raiz canônica concedida".to_string(),
                     ));
                 };
-                let limit = u64::try_from(requested).unwrap_or(0).min(self.max_bytes);
+                let limit = u64::try_from(requested)
+                    .unwrap_or(0)
+                    .min(self.max_bytes)
+                    .min(function.max_effect_bytes());
                 let failure = |message: String| Value::Result {
                     ty: ret,
                     value: Err(Box::new(Value::Str(message))),

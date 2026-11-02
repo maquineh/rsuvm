@@ -470,6 +470,34 @@ fn host_com_escopo_arquivo_e_erro_de_uso() {
     assert!(texto(&output.stderr).contains("diretório"));
 }
 
+#[test]
+fn host_com_memoria_insuficiente_para_reserva_sai_com_codigo_de_recurso() {
+    let dir = cenario_host("reserva");
+    let output = saida(
+        bin()
+            .arg("run")
+            .arg(dir.join("le.rvm"))
+            .args([
+                "--arg",
+                &format!("str:{}", dir.join("dentro.txt").display()),
+                "--arg",
+                "i64:1048576",
+                "--memory",
+                "2000",
+                "--allow-fs-read",
+            ])
+            .arg(&dir),
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(
+        output.status.code(),
+        Some(4),
+        "stderr: {}",
+        texto(&output.stderr)
+    );
+    assert!(texto(&output.stderr).contains("out_of_memory"));
+}
+
 #[cfg(unix)]
 #[test]
 fn host_com_flag_nega_symlink_para_fora_do_escopo() {
@@ -495,6 +523,44 @@ fn host_com_flag_nega_symlink_para_fora_do_escopo() {
     );
     let _ = std::fs::remove_dir_all(&dir);
     let _ = std::fs::remove_file(&fora);
+    assert_eq!(
+        output.status.code(),
+        Some(5),
+        "stderr: {}",
+        texto(&output.stderr)
+    );
+    assert!(texto(&output.stderr).contains("capability_denied"));
+}
+
+#[cfg(windows)]
+#[test]
+fn host_com_flag_nega_junction_para_fora_do_escopo() {
+    let dir = cenario_host("junction");
+    let link = dir.join("sub").join("link");
+    let status = std::process::Command::new("cmd")
+        .args(["/C", "mklink", "/J"])
+        .arg(&link)
+        .arg(&dir)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .expect("executar mklink /J");
+    assert!(status.success(), "mklink /J falhou");
+    let output = saida(
+        bin()
+            .arg("run")
+            .arg(dir.join("le.rvm"))
+            .args([
+                "--arg",
+                &format!("str:{}", link.join("fora.txt").display()),
+                "--arg",
+                "i64:100",
+                "--allow-fs-read",
+            ])
+            .arg(dir.join("sub")),
+    );
+    let _ = std::fs::remove_dir(&link);
+    let _ = std::fs::remove_dir_all(&dir);
     assert_eq!(
         output.status.code(),
         Some(5),

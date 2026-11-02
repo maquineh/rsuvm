@@ -178,6 +178,10 @@ impl fmt::Display for Effect {
     }
 }
 
+/// Teto absoluto de bytes que uma função de host pode devolver em uma leitura
+/// (ADR-0038). Todo host da ABI deve respeitar este limite.
+pub const MAX_HOST_READ_BYTES: u64 = 1024 * 1024;
+
 /// Função de host embutida na ABI mínima do EXP-0 (ADR-0036).
 ///
 /// A ABI é um conjunto **fechado** nesta rodada: qualquer extensão exige ADR e
@@ -228,6 +232,14 @@ impl BuiltinHost {
     pub const fn scope_arg(self) -> Option<usize> {
         match self {
             BuiltinHost::ReadFile => Some(0),
+        }
+    }
+
+    /// Teto de bytes que o host pode devolver para esta função (ADR-0038).
+    #[must_use]
+    pub const fn max_effect_bytes(self) -> u64 {
+        match self {
+            BuiltinHost::ReadFile => MAX_HOST_READ_BYTES,
         }
     }
 }

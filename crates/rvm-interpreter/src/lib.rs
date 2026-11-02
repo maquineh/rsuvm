@@ -1143,6 +1143,10 @@ impl<'a> Interpreter<'a> {
                             &site,
                         ));
                     }
+                    // Reserva o pior caso antes do IO: se o resultado máximo não
+                    // cabe na quota, o host não é chamado (ADR-0038).
+                    let reserve = host_effect_reserve(*function, &host_args, &site)?;
+                    self.ensure_memory(reserve, &site)?;
                     let ret = host_ret_type(self.module, *function, &site)?;
                     let value = self.host.call(*function, &host_args, ret)?;
                     self.release_memory(arg_bytes);
@@ -1619,6 +1623,30 @@ fn host_ret_type(
                     site,
                 )
             }),
+    }
+}
+
+/// Reserva de memória para o pior caso de uma chamada de host (ADR-0038).
+///
+/// Para `read_file`, o resultado custa `SLOT_BYTES` (wrapper do `result`) mais o
+/// conteúdo, limitado pelo `max_bytes` pedido e pelo teto da ABI.
+fn host_effect_reserve(
+    function: BuiltinHost,
+    args: &[Value],
+    site: &Site<'_>,
+) -> Result<u64, RvmError> {
+    match function {
+        BuiltinHost::ReadFile => {
+            let requested = args.get(1).and_then(Value::as_i64).ok_or_else(|| {
+                error_at(
+                    ErrorCode::InvalidModule,
+                    "host `read_file` exige `max_bytes: i64`".to_string(),
+                    site,
+                )
+            })?;
+            let requested = u64::try_from(requested).unwrap_or(0);
+            Ok(SLOT_BYTES.saturating_add(requested.min(function.max_effect_bytes())))
+        }
     }
 }
 

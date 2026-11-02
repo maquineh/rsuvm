@@ -6,7 +6,8 @@ Log gerado por `scripts/gerar-evidencias.ps1`, com captura literal de stdout/std
 
 ```text
 $ cargo.exe build --workspace --all-targets
-[stderr]     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.16s
+[stderr]    Compiling rvm-interpreter v0.1.0 (H:\projetos\rsuvm\crates\rvm-interpreter)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.33s
 exit: 0
 ```
 
@@ -48,7 +49,7 @@ running 0 tests
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
 
-running 23 tests
+running 25 tests
 test argumento_malformado_e_erro_de_uso ... ok
 test arquivo_inexistente_e_erro_de_io ... ok
 test check_aceita_modulo_valido ... ok
@@ -58,22 +59,24 @@ test host_com_escopo_arquivo_e_erro_de_uso ... ok
 test host_com_escopo_inexistente_e_erro_de_uso ... ok
 test host_com_escopo_relativo_e_erro_de_uso ... ok
 test host_com_escopo_vazio_e_erro_de_uso ... ok
+test encode_e_run_bc_preservam_host_read_file ... ok
 test encode_e_run_bc_preservam_o_resultado ... ok
 test host_com_flag_le_dentro_do_escopo ... ok
-test encode_e_run_bc_preservam_host_read_file ... ok
 test host_com_flag_nega_arquivo_fora_do_escopo ... ok
 test host_com_flag_nega_escapada_com_parent_dir ... ok
+test host_com_memoria_insuficiente_para_reserva_sai_com_codigo_de_recurso ... ok
 test host_com_parent_dir_no_escopo_e_erro_de_uso ... ok
 test host_sem_flag_e_capability_denied ... ok
 test opcao_de_capability_nao_existe ... ok
 test overflow_sai_com_codigo_de_trap ... ok
 test run_bc_truncado_sai_com_codigo_de_modulo ... ok
+test host_com_flag_nega_junction_para_fora_do_escopo ... ok
 test run_soma_imprime_valor_e_sai_com_zero ... ok
 test tipo_invalido_sai_com_codigo_de_modulo ... ok
 test profundidade_invalida_e_erro_de_uso ... ok
 test version_e_help_saem_com_zero ... ok
 
-test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.39s
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.50s
 
 
 running 3 tests
@@ -81,7 +84,7 @@ test memoria_insuficiente_sai_com_codigo_de_recurso ... ok
 test memoria_malformada_e_erro_de_uso ... ok
 test memoria_suficiente_executa ... ok
 
-test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
 
 
 running 0 tests
@@ -101,7 +104,7 @@ running 2 tests
 test corpus_invalido_cobre_os_codigos_de_erro_centrais ... ok
 test corpus_valido_cobre_todas_as_operacoes_do_subset ... ok
 
-test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 
 
 running 4 tests
@@ -110,15 +113,15 @@ test campanha_verificador_nao_causa_panico ... ok
 test campanha_texto_nao_causa_panico ... ok
 test campanha_linker_nao_causa_panico ... ok
 
-test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.18s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.30s
 
 
 running 6 tests
-test externa_sem_provedor_falha_com_invalid_module ... ok
 test chamada_inter_modulo_e_linkada_verificada_e_executada ... ok
+test externa_sem_provedor_falha_com_invalid_module ... ok
 test modulo_linkado_sobrevive_ao_diferencial_de_bytecode ... ok
-test nome_de_modulo_duplicado_falha ... ok
 test provedor_ambiguo_falha_com_invalid_module ... ok
+test nome_de_modulo_duplicado_falha ... ok
 test verificador_rejeita_modulo_com_externa_nao_linkada ... ok
 
 test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
@@ -128,9 +131,9 @@ running 8 tests
 test capabilities_sao_negadas_em_todos_os_efeitos ... ok
 test fuel_e_debitado_antes_do_despacho_e_nao_reseta_em_chamada ... ok
 test limite_de_entrada_e_aplicado_antes_do_parse ... ok
-test unidade_e_comparacao_tem_tipos_estaveis ... ok
-test reexecucao_repetida_nao_compartilha_estado ... ok
 test bytecode_truncado_em_qualquer_prefixo_falha_sem_panico ... ok
+test reexecucao_repetida_nao_compartilha_estado ... ok
+test unidade_e_comparacao_tem_tipos_estaveis ... ok
 test mutacao_de_bytes_nao_causa_panico ... ok
 test mutacao_textual_nao_causa_panico ... ok
 
@@ -161,14 +164,16 @@ test unidade_retorna_unit_com_fuel_um ... ok
 test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 
 
-running 5 tests
+running 7 tests
 test execute_sem_host_nega_qualquer_chamada ... ok
 test host_com_aridade_errada_e_invalid_type ... ok
 test host_com_capability_e_escopo_correto_executa ... ok
-test host_sem_capability_e_negado_antes_do_backend ... ok
 test host_com_escopo_fora_da_concessao_e_negado ... ok
+test host_max_bytes_grande_e_limitado_ao_teto_da_abi ... ok
+test host_nao_e_chamado_quando_a_reserva_nao_cabe ... ok
+test host_sem_capability_e_negado_antes_do_backend ... ok
 
-test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 
 
 running 6 tests
@@ -212,7 +217,7 @@ test structure::tests::respeita_limite_de_instrucoes_por_bloco ... ok
 test tests::ids_novos_sao_densos_e_unicos ... ok
 test tests::modulo_de_teste_passa_pela_checagem_estrutural ... ok
 
-test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
 
 
 running 0 tests
@@ -287,7 +292,7 @@ test tests::rejeita_tipo_de_retorno_divergente ... ok
 test tests::rejeita_uso_antes_da_definicao_no_mesmo_bloco ... ok
 test tests::rejeita_valor_de_bloco_nao_dominante ... ok
 
-test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 
 
 running 0 tests
@@ -327,13 +332,13 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 
 running 0 tests
 
-test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
 
 running 0 tests
 
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
-[stderr]     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.06s
+[stderr]     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.05s
      Running unittests src\lib.rs (target\debug\deps\rvm_bytecode-d86c05318e01b21a.exe)
      Running tests\hostile.rs (target\debug\deps\hostile-6e56be861074a7c3.exe)
      Running unittests src\main.rs (target\debug\deps\rsuvm-d936d5c9516154d8.exe)
@@ -371,7 +376,7 @@ exit: 0
 
 ```text
 $ cargo.exe clippy --workspace --all-targets -- -D warnings
-[stderr]     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.21s
+[stderr]     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.17s
 exit: 0
 ```
 
@@ -382,7 +387,7 @@ $ cargo.exe fmt --all -- --check
 exit: 0
 ```
 
-Soma de testes verdes nos alvos: **170** (doc-tests inclusos, 0 neles).
+Soma de testes verdes nos alvos: **174** (doc-tests inclusos, 0 neles).
 
 ## Corpus de conformidade
 
@@ -422,7 +427,7 @@ exit: 4
 
 ```text
 $ rsuvm encode examples/soma.rvm ARQUIVO_TEMP.bin
-111 bytes em C:\Users\rapin\AppData\Local\Temp\rsuvm-evidencia-29492.bin
+111 bytes em C:\Users\rapin\AppData\Local\Temp\rsuvm-evidencia-48716.bin
 exit: 0
 
 $ rsuvm run-bc ARQUIVO_TEMP.bin --arg i64:7 --arg i64:35

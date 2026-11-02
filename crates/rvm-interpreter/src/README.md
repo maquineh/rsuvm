@@ -14,7 +14,8 @@ Efeitos de host só existem quando o chamador fornece um `Host` explícito a
 - `execute(module: &VerifiedModule, entry: FnId, args: &[Value], config: &ExecConfig)
   -> Result<RunOutcome, RvmError>` (`lib.rs:execute`); usa `NoHost`.
 - `execute_with_host(module, entry, args, config, host: &mut dyn Host)`
-  (`lib.rs:execute_with_host`): consulta o host apenas em `host_read_file`.
+  (`lib.rs:execute_with_host`): consulta o host apenas em `host_read_file` e
+  reserva o pior caso na quota antes do IO (ADR-0038).
 - `RunOutcome` — `value: Value`, `fuel_used: u64`, `max_depth: u32`,
   `memory_peak: u64` (`lib.rs:RunOutcome`).
 

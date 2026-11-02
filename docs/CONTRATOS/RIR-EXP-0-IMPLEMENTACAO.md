@@ -196,7 +196,9 @@ terminador por último. O primeiro erro vence.
   extraem o payload e produzem o trap `unwrap_error` sobre a variante errada.
 - `host_read_file` é a única chamada de host do EXP-0 (ADR-0036): exige a
   capability `filesystem_read` para o escopo do argumento `path` **antes** de
-  chamar o backend; sem concessão ⇒ `capability_denied`. O host devolve
+  chamar o backend; sem concessão ⇒ `capability_denied`. Antes do IO, o
+  intérprete reserva `SLOT_BYTES + min(max_bytes, 1 MiB)` e falha com
+  `out_of_memory` se não couber (ADR-0038). O host devolve
   `result string string` e o tipo do valor é conferido pelo intérprete
   (`invalid_type` se divergir). A string devolvida entra na quota de memória ao
   ser gravada (ADR-0035).

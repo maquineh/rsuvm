@@ -22,6 +22,7 @@ pequena, explícita e sem caminho de escape.
    - assinatura `read_file(path: string, max_bytes: i64) -> result string string`;
    - efeito `filesystem_read`;
    - escopo no argumento 0 (`path`);
+   - teto rígido de 1 MiB e reserva de quota antes do IO (ADR-0038);
    - código estável `0` no bytecode.
    Nenhuma outra função de host é aceita; extensão exige novo ADR e revisão do
    modelo de ameaças.
@@ -77,11 +78,12 @@ pequena, explícita e sem caminho de escape.
   handle nem streaming; a leitura é bloqueante; a comparação de escopo não
   canonicaliza symlinks, então um link dentro do escopo pode apontar para fora
   (`..` é negado, mas symlinks não); o host confia no caminho textual recebido.
-- **Residual:** symlinks/TOCTOU, autorização por usuário, isolamento de SO,
-  limites de tempo, auditoria de arquivos lidos. A comparação de escopo é
-  sensível a caixa em componentes normais (no Windows, `C:\Temp` não cobre
-  `c:\temp`). A string é lida **antes** de ser cobrada: a quota de memória limita
-  a retenção, não o IO do host. **Não é sandbox.**
+- **Residual:** symlinks/TOCTOU (mitigados no ADR-0037 pela canonicalização no
+  host, não eliminados), autorização por usuário, isolamento de SO, limites de
+  tempo, auditoria de arquivos lidos. A comparação de escopo é sensível a caixa
+  em componentes normais (no Windows, `C:\Temp` não cobre `c:\temp`). A leitura
+  era feita **antes** da cobrança; o ADR-0038 passou a reservar o pior caso antes
+  do IO. **Não é sandbox.**
 
 ## Validação
 

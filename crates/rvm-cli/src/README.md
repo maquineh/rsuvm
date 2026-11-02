@@ -43,7 +43,8 @@ traduz `ErrorClass`/`ErrorCode` em códigos de saída estáveis
   `filesystem_read` para caminhos sob `dir` (comparação por componentes; `..` é
   negado; escopo vazio/relativo/inexistente é erro de uso). O host canonicaliza a
   raiz e o alvo, recusa alvo canônico fora da raiz (symlink para fora ⇒ exit 5),
-  aceita apenas arquivo regular e limita a leitura a 1 MiB (ADR-0037). Caminho
+  aceita apenas arquivo regular e limita a leitura a 1 MiB; o intérprete reserva
+  o pior caso na quota antes do IO (ADR-0038). Caminho
   fora do escopo ⇒ exit 5 (testes `host_com_flag_nega_arquivo_fora_do_escopo` e
   `host_com_flag_nega_escapada_com_parent_dir`).
 - `--allow-fs-read` é a única flag de concessão; qualquer outro `--allow-*` é

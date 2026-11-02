@@ -478,20 +478,21 @@ A ABI mínima fechada é `read_file(path: string, max_bytes: i64) -> result stri
 string`, com efeito `filesystem_read`, escopo no argumento 0 e código `0`/opcode
 `54` no bytecode (ADR-0036). `execute` sem host nega toda chamada; o intérprete
 confere a capability **antes** de chamar o backend e revalida o tipo do retorno.
-O CLI concede com `--allow-fs-read <dir>` (absoluto, existente, canonicalizado;
-leitura limitada a 1 MiB) e sai com 5 sem a flag, fora do escopo, com `..` ou
-symlink para fora (ADR-0037). Testes: 5 em `rvm-interpreter/tests/host.rs`, 10 no
-CLI (9 no Windows; o de symlink é `cfg(unix)`), round-trip de texto e o caso de
-corpus `C-062` (verifica + nega sem host). A leitura concedida não é executada
-pelo corpus; fica nos testes dedicados.
+O teto da leitura é 1 MiB e o intérprete reserva o pior caso na quota antes do IO
+(ADR-0038). O CLI concede com `--allow-fs-read <dir>` (absoluto, existente,
+canonicalizado; leitura limitada a 1 MiB) e sai com 5 sem a flag, fora do escopo,
+com `..`, symlink (Unix) ou junção (Windows) para fora (ADR-0037). Testes: 7 em
+`rvm-interpreter/tests/host.rs`, 25 no CLI, round-trip de texto e o caso de corpus
+`C-062` (verifica + nega sem host). A leitura concedida não é executada pelo
+corpus; fica nos testes dedicados.
 
 ### Verificação (Resultado)
 
-| Comando | Resultado |
+| Comando / run | Resultado |
 |---|---|
-| `cargo test --workspace` (Windows) | **170 passed, 0 failed**; corpus 62 válidos + 42 inválidos |
-| `cargo test --workspace` (Linux, CI run `41521985158`) | **171 passed, 0 failed** (inclui o teste de symlink `cfg(unix)`) |
-| `cargo test --release --workspace` (CI run `41521985158`) | **171 passed, 0 failed** |
+| `cargo test --workspace` (Windows) | **174 passed, 0 failed**; corpus 62 válidos + 42 inválidos |
+| `cargo test --workspace` (Linux, CI) | **174 passed, 0 failed** (symlink `cfg(unix)`; junção só no Windows) |
+| `cargo test --release --workspace` (Linux, CI) | **174 passed, 0 failed** |
 | `cargo test --manifest-path frontends/lift-rir/Cargo.toml` | 43 passed, 0 failed (34 diferencial + 9 CLI) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | exit 0 |
 | `cargo fmt --all -- --check` | exit 0 |

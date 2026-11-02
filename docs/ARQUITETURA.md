@@ -110,10 +110,12 @@ zero → `inf`/`NaN`, ADR-0026). O comportamento é idêntico em debug e release
   slot cobra o valor novo e libera o anterior, e o retorno do frame libera os
   slots (ADR-0035). Teto padrão de 16 MiB e `out_of_memory` ao exceder
   (ADR-0013, ADR-0016, ADR-0035). É modelo determinístico, não RSS.
-- **Quota por efeito (host):** `read_file` exige `max_bytes` e o host pode impor
-  teto menor (1 MiB no CLI); a string devolvida entra na quota de memória ao ser
-  gravada. A capability é conferida **antes** do efeito; sem concessão ⇒
-  `capability_denied` (ADR-0036).
+- **Quota por efeito (host):** `read_file` exige `max_bytes` e a ABI impõe teto de
+  1 MiB; o host pode impor teto menor. Antes do IO, o intérprete reserva
+  `SLOT_BYTES + min(max_bytes, 1 MiB)` e falha com `out_of_memory` se não couber;
+  a string devolvida é cobrada ao ser gravada (ADR-0038). A capability é
+  conferida antes da reserva e do efeito; sem concessão ⇒ `capability_denied`
+  (ADR-0036).
 
 ## 5. Erros
 
