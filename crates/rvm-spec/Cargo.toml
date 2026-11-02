@@ -4,6 +4,7 @@ description = "Núcleo semântico experimental da RSUVM: tipos, operações, có
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
 publish = false
 
 [dependencies]

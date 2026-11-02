@@ -15,6 +15,8 @@ memória/transferência, integração Lift e integração Rio).
 | [0011](ADR-0011-BYTECODE-ESPELHO-LINEAR.md) | Protótipo de bytecode espelho da RIR | Proposto (ADR-0004 aberto) |
 | [0012](ADR-0012-TETO-DE-PROFUNDIDADE.md) | Teto de profundidade e frames explícitos | Aceito experimentalmente (revisado após teste) |
 | [0013](ADR-0013-QUOTA-DE-MEMORIA.md) | Quota de memória modelada para frames | Aceito experimentalmente |
+| [0014](ADR-0014-LICENCA-DO-REPOSITORIO.md) | Licença dupla `MIT OR Apache-2.0` do repositório | Aceito experimentalmente |
+| [0015](ADR-0015-POLITICA-DE-REUSO-DO-RIO.md) | Política de reuso do Rio (referência comportamental) | Aceito experimentalmente |
 
 Estados usados: `Proposto`, `Aceito experimentalmente`, `Validado no escopo`,
 `Rejeitado`, `Substituído`. "Validado no escopo" exige critério e evidência

@@ -4,6 +4,7 @@ description = "Corpus e testes de conformidade independentes da implementação 
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
 publish = false
 
 [dependencies]

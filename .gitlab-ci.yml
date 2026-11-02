@@ -14,6 +14,11 @@ default:
     - rustup component add rustfmt clippy
   timeout: 30m
 
+build:
+  stage: validate
+  script:
+    - cargo build --workspace --all-targets
+
 format:
   stage: validate
   script:

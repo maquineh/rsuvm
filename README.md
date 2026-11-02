@@ -109,3 +109,12 @@ cargo run -p rvm-cli -- check examples/soma.rvm
   foram executados.
 - Integração Lift/Rio está bloqueada com evidência: ver
   [BASELINE-RIO](./docs/RELATORIOS/BASELINE-RIO.md).
+
+## Licença
+
+Dupla **`MIT OR Apache-2.0`** ([ADR-0014](./docs/ADRs/ADR-0014-LICENCA-DO-REPOSITORIO.md)):
+o reuso pode escolher uma das duas. Textos integrais em
+[LICENSE-MIT](./LICENSE-MIT) e [LICENSE-APACHE](./LICENSE-APACHE). A política de
+reuso do Rio está em
+[ADR-0015](./docs/ADRs/ADR-0015-POLITICA-DE-REUSO-DO-RIO.md). A licença autoriza
+reuso de código; não é alegação de segurança nem substitui assessoria jurídica.

@@ -25,6 +25,8 @@ members = [
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.75"
+# Licença do repositório decidida em ADR-0014: dupla MIT OR Apache-2.0.
+license = "MIT OR Apache-2.0"
 publish = false
 
 [workspace.dependencies]

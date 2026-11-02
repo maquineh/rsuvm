@@ -4,6 +4,7 @@ description = "Verificador experimental de RIR da RSUVM: tipos, fluxo de control
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
 publish = false
 
 [dependencies]

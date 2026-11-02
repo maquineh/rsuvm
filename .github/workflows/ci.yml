@@ -17,6 +17,8 @@ jobs:
           rustup component add rustfmt clippy
           rustc --version
           cargo --version
+      - name: Build
+        run: cargo build --workspace --all-targets
       - name: Format
         run: cargo fmt --all -- --check
       - name: Clippy

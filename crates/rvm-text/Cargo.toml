@@ -4,6 +4,7 @@ description = "Parser e impressão canônica do formato textual experimental da 
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
 publish = false
 
 [dependencies]

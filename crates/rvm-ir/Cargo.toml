@@ -4,6 +4,7 @@ description = "Modelo de RIR experimental (EXP-0) e invariantes estruturais da R
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
 publish = false
 
 [features]

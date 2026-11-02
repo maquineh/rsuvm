@@ -4,6 +4,7 @@ description = "Valores, quotas de execução e capabilities deny-by-default da R
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
 publish = false
 
 [dependencies]
