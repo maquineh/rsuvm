@@ -1,0 +1,27 @@
+# Bench manual em runner dedicado (GitHub-hosted) para classificar H06.
+#
+# Não roda em push/PR: benchmarks são sensíveis a ruído e não devem gate o CI.
+# Dispare manualmente (Actions → bench → Run workflow) e baixe o artefato
+# `bench-log`. Método e limiares: docs/RELATORIOS/BENCHMARKS-PREREGISTRADOS.md.
+name: bench
+
+on:
+  workflow_dispatch:
+
+jobs:
+  chamada:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: |
+          rustc --version
+          cargo --version
+      - name: Bench (intra e inter-modulo)
+        run: cargo bench -p rvm-interpreter --bench chamada 2>&1 | tee bench.log
+      - name: Upload log
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-log
+          path: bench.log

@@ -193,8 +193,12 @@ fn amostrar(module: &VerifiedModule, reps: u32, n: usize) -> Vec<f64> {
 
 fn main() {
     let limits = Limits::default();
-    let reps: u32 = 5_000;
-    let n: usize = 7;
+    let reps: u32 = 20_000;
+    let n: usize = 11;
+
+    // Aquecimento longo para estabilizar frequência de CPU antes de medir.
+    let aquecimento = VerifiedModule::verify(cadeia(64), &limits).expect("aquecimento");
+    let _ = medir(&aquecimento, 100_000);
 
     println!("benchmark pre-registrado de chamada (docs/RELATORIOS/BENCHMARKS-PREREGISTRADOS.md)");
     println!("reps por amostra: {reps}; amostras por ponto: {n}");
@@ -207,7 +211,7 @@ fn main() {
     let mut inter_anterior: Option<(u32, f64)> = None;
     let mut overhead_final = f64::NAN;
     let mut dispersao_maxima = 0.0_f64;
-    for k in [1_u32, 4, 16, 64] {
+    for k in [1_u32, 4, 16, 64, 256] {
         let intra = VerifiedModule::verify(cadeia(k), &limits).expect("intra verifica");
 
         let linked = rvm_link::link(&[app_externo(k), prov()], 0, 0, &limits).expect("ligação");

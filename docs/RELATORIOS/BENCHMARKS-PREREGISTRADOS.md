@@ -61,36 +61,50 @@ Workload: `k` chamadas encadeadas a `inc(a) = a + 1`; **intra** = módulo único
 **inter** = módulo `app` (com `import inc`) ligado ao provedor `prov` por
 `rvm_link`. Comando: `cargo bench -p rvm-interpreter --bench chamada`.
 
-Medianas de 7 amostras × 5 000 execuções por ponto:
+Execução de referência (máquina de desenvolvimento **não isolada**): 11 amostras ×
+20 000 execuções por ponto, com aquecimento longo, medianas.
 
 | k | fuel | intra ns | inter ns | H06 rel | dispersão |
 |---:|---:|---:|---:|---:|---:|
-| 1 | 6 | 301,4 | 300,3 | — | 0,1460 |
-| 4 | 18 | 799,2 | 806,0 | 0,0159 | 0,0487 |
-| 16 | 66 | 2 967,8 | 2 775,3 | −0,0919 | 0,1834 |
-| 64 | 258 | 10 966,8 | 10 983,9 | 0,0262 | 0,3884 |
+| 1 | 6 | 320,2 | 339,6 | — | 0,2133 |
+| 4 | 18 | 837,7 | 930,7 | 0,1423 | 0,6512 |
+| 16 | 66 | 2 949,6 | 3 225,4 | 0,0865 | 0,2419 |
+| 64 | 258 | 11 663,4 | 10 966,7 | −0,1116 | 0,1220 |
+| 256 | 1 026 | 43 514,1 | 44 777,2 | 0,0615 | 0,2533 |
 
 - `fuel` idêntico entre variantes (controle satisfeito: `4k + 2`).
-- Dispersão máxima observada: **0,3884 (38,8%)**.
-- Custo de ligação (k = 64): **≈ 46 420 ns por ligação**, pago uma vez, fora da
+- Dispersão máxima observada: **0,6512 (65%)**.
+- Custo de ligação (k = 64): ≈ 24 000 ns por ligação, pago uma vez, fora da
   execução.
+- Uma execução anterior (7 amostras × 5 000 execuções) teve o mesmo desfecho;
+  endurecer a medição (mais amostras/repetições e aquecimento) **não** reduziu a
+  dispersão abaixo de 10% nesta máquina.
 
 Classificação pela regra pré-registrada (§3):
 
-- **H06 — inconclusiva.** A dispersão excede 10% do valor mediano, então a regra
-  pré-registrada declara inconclusiva, e **não** confirmada nem refutada. O
-  overhead relativo oscila dentro do ruído; como a ligação estática torna o código
-  executado idêntico ao intra-módulo, a diferença esperada é ~0, mas a medição
-  nesta máquina não é estável o bastante para decidir dentro de 10%.
+- **H06 — inconclusiva.** A dispersão excede 10% do valor mediano em todos os
+  pontos, então a regra pré-registrada declara inconclusiva — **não** confirmada
+  nem refutada. Nenhum limiar foi ajustado. Como a ligação estática torna o código
+  executado idêntico ao intra-módulo, a diferença esperada é ~0; o ambiente
+  compartilhado é ruidoso demais para resolver essa diferença.
 - **H03 — confirmada estruturalmente.** A ligação resolve `call_static` para um
   índice global antes da verificação; não há passo de serialização por chamada
   (ADR-0018). A evidência de medição de H03 fica subordinada à estabilidade de
   H06.
 
+### Classificação em runner dedicado
+
+Para reduzir o ruído, há um workflow **manual** em
+`.github/workflows/bench.yml` (GitHub-hosted, disparo por `workflow_dispatch`):
+ele roda `cargo bench -p rvm-interpreter --bench chamada` e publica o log como
+artefato `bench-log`. A classificação de H06 deve ser lida desse log; enquanto o
+resultado vier com dispersão > 10%, permanece inconclusiva.
+
 ## 6. Riscos e limitações
 
-1. Medição de tempo depende da máquina e do SO; a dispersão observada (até 38%)
-   impediu classificar H06 nesta rodada.
+1. Medição de tempo depende da máquina e do SO; a dispersão observada (até 65%)
+   impediu classificar H06 nesta rodada. Há workflow manual para runner dedicado
+   (`.github/workflows/bench.yml`).
 2. Como a ligação estática elimina a fronteira de módulo em tempo de execução, o
    "custo inter-módulo" medido é apenas a diferença de indireção/renomeação, que
    tende a zero por construção; o custo real do desenho é a ligação (uma vez),
