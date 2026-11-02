@@ -98,9 +98,74 @@ fn recursao_com_if_terminal_fibonacci() {
 }
 
 #[test]
+fn while_com_atribuicao_soma_ate_n() {
+    let source = "function soma_ate(n: int): int { let acc = 0; let i = 1; while i <= n { acc = acc + i; i = i + 1; } return acc; }";
+    assert_eq!(
+        executar(source, "soma_ate", &[Value::I64(5)]),
+        Value::I64(15)
+    );
+    assert_eq!(
+        executar(source, "soma_ate", &[Value::I64(0)]),
+        Value::I64(0)
+    );
+}
+
+#[test]
+fn while_conta_ate_n() {
+    let source = "function conta(n: int): int { let i = 0; while i < n { i = i + 1; } return i; }";
+    assert_eq!(executar(source, "conta", &[Value::I64(7)]), Value::I64(7));
+    assert_eq!(executar(source, "conta", &[Value::I64(0)]), Value::I64(0));
+}
+
+#[test]
+fn if_com_merge_de_variavel() {
+    let source = "function classifica(a: int): int { let r = 0; if a > 0 { r = 1; } else { r = 2; } return r; }";
+    assert_eq!(
+        executar(source, "classifica", &[Value::I64(5)]),
+        Value::I64(1)
+    );
+    assert_eq!(
+        executar(source, "classifica", &[Value::I64(-5)]),
+        Value::I64(2)
+    );
+}
+
+#[test]
+fn if_sem_else_usa_valor_anterior() {
+    let source = "function limita(a: int): int { let r = a; if a > 10 { r = 10; } return r; }";
+    assert_eq!(
+        executar(source, "limita", &[Value::I64(20)]),
+        Value::I64(10)
+    );
+    assert_eq!(executar(source, "limita", &[Value::I64(3)]), Value::I64(3));
+}
+
+#[test]
+fn while_aninhado_em_if() {
+    let source = "function soma_condicional(n: int, liga: boolean): int { let acc = 0; if liga { let i = 0; while i < n { acc = acc + i; i = i + 1; } } return acc; }";
+    assert_eq!(
+        executar(
+            source,
+            "soma_condicional",
+            &[Value::I64(4), Value::Bool(true)]
+        ),
+        Value::I64(6)
+    );
+    assert_eq!(
+        executar(
+            source,
+            "soma_condicional",
+            &[Value::I64(4), Value::Bool(false)]
+        ),
+        Value::I64(0)
+    );
+}
+
+#[test]
 fn construto_fora_do_subconjunto_e_rejeitado() {
-    let source = "function conta(n: int): int { while n > 0 { return n; } return 0; }";
-    let error = lower_source(source, "conta").expect_err("`while` está fora do subconjunto");
+    // Divisão não existe no núcleo EXP-0; exige ADR próprio.
+    let source = "function metade(a: int): int { return a / 2; }";
+    let error = lower_source(source, "metade").expect_err("divisão está fora do subconjunto");
     assert!(
         matches!(error, AdapterError::Unsupported(_)),
         "erro inesperado: {error:?}"

@@ -58,12 +58,22 @@ fn comparacao_imprime_boolean() {
 }
 
 #[test]
-fn construto_fora_do_subconjunto_sai_com_codigo_de_modulo() {
+fn while_executa_e_imprime() {
     let file = temp_lift(
-        "while",
-        "function conta(n: int): int { while n > 0 { return n; } return 0; }",
+        "soma_ate",
+        "function soma_ate(n: int): int { let acc = 0; let i = 1; while i <= n { acc = acc + i; i = i + 1; } return acc; }",
     );
-    let result = run(&[file.to_str().unwrap(), "conta", "--arg", "i64:3"]);
+    let result = run(&[file.to_str().unwrap(), "soma_ate", "--arg", "i64:5"]);
+    assert_eq!(result.code, Some(0));
+    assert_eq!(result.stdout.trim(), "i64:15");
+    let _ = fs::remove_file(file);
+}
+
+#[test]
+fn construto_fora_do_subconjunto_sai_com_codigo_de_modulo() {
+    // Divisão não existe no núcleo EXP-0.
+    let file = temp_lift("divisao", "function metade(a: int): int { return a / 2; }");
+    let result = run(&[file.to_str().unwrap(), "metade", "--arg", "i64:10"]);
     assert_eq!(result.code, Some(2), "esperava exit 2 (módulo)");
     let _ = fs::remove_file(file);
 }

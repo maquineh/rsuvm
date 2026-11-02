@@ -22,12 +22,13 @@ workspace separado (ADR-0021).
 
 ## Invariants
 
-- **Subconjunto explícito**: só funções puras `int`/`boolean`/`void`, `let`/`const`
-  e `return`, um `if/else` **terminal** (ambos os ramos retornam), `+ - *`,
-  comparações, negação unária e chamadas internas. Qualquer outra construção é
-  `AdapterError::Unsupported` — nunca um módulo incorreto.
-- **Sem phi de junção**: o `if/else` terminal passa o ambiente como parâmetros de
-  bloco para os dois ramos; como ambos retornam, não há merge.
+- **Subconjunto explícito**: funções `int`/`boolean`/`void`, `let`/`const`,
+  **atribuição**, `return`, `if/else` (com merge e `if` sem `else`) e **`while`**;
+  `+ - *`, comparações, negação unária e chamadas internas. Qualquer outra
+  construção é `AdapterError::Unsupported` — nunca um módulo incorreto.
+- **CFG/SSA com phi explícito**: cada `BindingId` é rastreado para o `ValueId`
+  corrente; `if/else` e `while` passam o ambiente como **parâmetros de bloco** (no
+  merge e no cabeçalho do laço).
 - **Overflow é trap**: `+ - *` viram `*_i64_checked`, como no EXP-0.
 - **Determinismo**: a ordem das declarações define os `FnId`; sem `HashMap`,
   relógio ou ambiente.

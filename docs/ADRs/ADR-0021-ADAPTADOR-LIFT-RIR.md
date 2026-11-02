@@ -24,18 +24,19 @@ pode importar Lift: adaptadores ficam fora de `crates/`.
    `lift_parser`, `lift_sema`) e de `rvm-spec`/`rvm-ir` por path. O **núcleo**
    permanece sem dependências externas.
 3. **Subconjunto** suportado: funções com parâmetros/retorno `int` (`i64`),
-   `boolean` (`bool`) ou `void` (`unit`); corpo com `let`/`const` e `return` e um
-   `if/else` **terminal** (ambos os ramos retornam); expressões `int`/`boolean`
-   literais, locais, `+ - *`, comparações `== != < <= > >=`, negação unária `-x` e
-   chamadas a funções do próprio programa.
-4. **Lowering estrutural**: cada `let` vira uma definição SSA; `if/else` terminal
-   vira `cond_br` para dois blocos que recebem o ambiente atual como **parâmetros
-   de bloco** (sem phi de junção, pois os ramos retornam); `+ - *` usam
-   `*_i64_checked` (overflow vira trap), como no EXP-0.
-5. Fora do subconjunto (`while`, atribuição, `else if`, divisão/resto/coalesce,
-   `f64`, strings, arrays, objetos, closures, `console.log`, `import`, `not`,
-   `and`, `or`, `struct`, statements de topo) devolve
-   [`AdapterError::Unsupported`], nunca um módulo incorreto.
+   `boolean` (`bool`) ou `void` (`unit`); `let`/`const`, **atribuição**, `return`,
+   `if/else` (inclusive **merge** e `if` sem `else`) e **`while`**; expressões
+   `int`/`boolean` literais, locais, `+ - *`, comparações `== != < <= > >=`,
+   negação unária `-x` e chamadas a funções do próprio programa.
+4. **Lowering CFG/SSA**: cada binding Lift (`BindingId`) é rastreado para o
+   `ValueId` corrente; `if/else` e `while` viram blocos com **parâmetros de bloco**
+   que carregam o ambiente (phi explícito) no merge do `if` e no cabeçalho do
+   `while`; `+ - *` usam `*_i64_checked` (overflow vira trap), como no EXP-0.
+5. Fora do subconjunto (`else if`, divisão/resto/coalesce, `f64`, strings, arrays,
+   objetos, closures, `console.log`, `import`, `not`, `and`, `or`, `struct`,
+   statements de topo) devolve [`AdapterError::Unsupported`], nunca um módulo
+   incorreto. Divisão/resto exigiriam **op nova no núcleo** (ADR próprio); strings
+   exigiriam **tipo novo** no núcleo — ambos fora desta rodada.
 6. **Teste diferencial**: o valor executado na RSUVM é comparado com o **oráculo do
    Lift** (mesmo programa rodado pelo compilador do Lift), registrado em
    `docs/RELATORIOS/ADAPTADOR-LIFT-RIR.md`.
@@ -62,20 +63,21 @@ pode importar Lift: adaptadores ficam fora de `crates/`.
 
 - Positivas: demonstra a rota frontend→RIR com um frontend real; roda um
   subconjunto Lift na RSUVM; o núcleo permanece puro e sem dependências.
-- Negativas: cobre só funções puras `int`/`boolean` (sem efeitos, strings, arrays,
-  objetos, `while`, divisão); o adaptador carrega as dependências do Lift
-  (`logos`, `serde`, …) no **seu** workspace; depende de um commit fixado do Lift.
+- Negativas: cobre só `int`/`boolean`/`void` (sem efeitos, strings, arrays,
+  objetos, divisão); o adaptador carrega as dependências do Lift (`logos`,
+  `serde`, …) no **seu** workspace; depende de um commit fixado do Lift.
 - Residual: a HIR do Lift é rica; ampliar o subconjunto (divisão, `while`,
   strings) exige decisões e testes próprios. Não há codegen reverso (RIR→Lift).
 
 ## Validação
 
-- `cargo test --manifest-path frontends/lift-rir/Cargo.toml`: **13 testes**
-  (`tests/diferencial.rs`: 8; `tests/cli.rs`: 5) — soma, `if/else` terminal,
-  comparação→`boolean`, `let`, chamadas encadeadas, recursão `fib`, rejeição de
-  `while`, e códigos de exit do `lift-run` (0/2/3/4).
+- `cargo test --manifest-path frontends/lift-rir/Cargo.toml`: **19 testes**
+  (`tests/diferencial.rs`: 13; `tests/cli.rs`: 6) — inclui `while` + atribuição,
+  `if/else` com merge, `if` sem `else`, `while` aninhado em `if`, recursão `fib`,
+  rejeição de divisão e os códigos de exit do `lift-run` (0/2/3/4).
 - **Diferencial**: `cargo run -p lift_cli -- run examples/rsuvm-oracle.lift` no
-  Lift produz `30 5 7 9 3 true false 25 12 55 0`, idêntico ao executado na RSUVM
+  Lift produz `30 5 7 9 3 true false 25 12 55 0`; `rsuvm-oracle2.lift` produz
+  `15 0 7 0 1 2 10 3 6 0` — idênticos ao executado na RSUVM
   (`docs/RELATORIOS/ADAPTADOR-LIFT-RIR.md`).
 - `cargo test --workspace` e `cargo build --workspace --all-targets` (núcleo)
   seguem verdes e **não** compilam `frontends/`.

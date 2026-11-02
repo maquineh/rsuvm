@@ -4,10 +4,11 @@
 
 Protótipo do adaptador **Lift → RIR** (ADR-0021). Consome a **HIR pública** do Lift
 (`lift_sema::analyze` → `HirProgram`) e emite um `rvm_ir::Module` para um
-subconjunto de funções puras `int`/`boolean`/`void`. É um **workspace Cargo
-separado**: depende do Lift por git fixado (`5e59af5`) e não entra no build/CI do
-núcleo. O teste diferencial compara o resultado executado na RSUVM com o oráculo
-do compilador do Lift.
+subconjunto de funções `int`/`boolean`/`void` com `let`/const, **atribuição**,
+`if/else` (com merge) e **`while`**. É um **workspace Cargo separado**: depende do
+Lift por git fixado (`5e59af5`) e não entra no build/CI do núcleo. O teste
+diferencial compara o resultado executado na RSUVM com o oráculo do compilador do
+Lift.
 
 ## Subdirectories & Boundaries
 
