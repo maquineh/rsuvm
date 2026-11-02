@@ -113,6 +113,8 @@ terminator:
 | 43 | `option_is_some` | `u32 value` |
 | 44 | `option_unwrap` | `u32 value` |
 | 45 | `coalesce` | `u32 option`, `u32 fallback` |
+| 46 | `option_eq` | `u32 lhs`, `u32 rhs` |
+| 47 | `option_ne` | `u32 lhs`, `u32 rhs` |
 
 Código desconhecido ⇒ `unknown_opcode`.
 

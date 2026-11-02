@@ -448,12 +448,33 @@ fn option_fallback_avaliado_quando_none_trapa() {
 }
 
 #[test]
-fn comparacao_com_null_e_rejeitada() {
-    let source = "function f(): boolean { const x: int? = null; return x == null; }";
-    let error = lower_source(source, "f").expect_err("== null está fora do subconjunto");
-    assert!(
-        matches!(error, AdapterError::Unsupported(_)),
-        "erro inesperado: {error:?}"
+fn comparacao_com_null() {
+    // Oráculo do Lift (`rsuvm-oracle13.lift`): `true false true false`.
+    let source = "function eh_nulo(x: int?): boolean { return x == null; } \
+        function nao_nulo(x: int?): boolean { return x != null; }";
+    let none = Value::Option {
+        elem: rvm_spec::OptionalElem::I64,
+        value: None,
+    };
+    let some = Value::Option {
+        elem: rvm_spec::OptionalElem::I64,
+        value: Some(Box::new(Value::I64(1))),
+    };
+    assert_eq!(
+        executar(source, "eh_nulo", std::slice::from_ref(&none)),
+        Value::Bool(true)
+    );
+    assert_eq!(
+        executar(source, "eh_nulo", std::slice::from_ref(&some)),
+        Value::Bool(false)
+    );
+    assert_eq!(
+        executar(source, "nao_nulo", std::slice::from_ref(&some)),
+        Value::Bool(true)
+    );
+    assert_eq!(
+        executar(source, "nao_nulo", std::slice::from_ref(&none)),
+        Value::Bool(false)
     );
 }
 

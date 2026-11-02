@@ -370,6 +370,18 @@ fn print_op(module: &Module, function: &Function, op: &Op, out: &mut String) {
             out.push_str(", ");
             print_value(function, *fallback, out);
         }
+        Op::OptionEq { lhs, rhs } => {
+            out.push_str("option_eq ");
+            print_value(function, *lhs, out);
+            out.push_str(", ");
+            print_value(function, *rhs, out);
+        }
+        Op::OptionNe { lhs, rhs } => {
+            out.push_str("option_ne ");
+            print_value(function, *lhs, out);
+            out.push_str(", ");
+            print_value(function, *rhs, out);
+        }
         Op::Bin { op, lhs, rhs } => {
             out.push_str(op.name());
             out.push(' ');
@@ -764,6 +776,8 @@ enum RawOp {
     OptionIsSome(String),
     OptionUnwrap(String),
     Coalesce(String, String),
+    OptionEq(String, String),
+    OptionNe(String, String),
     Call(String, Vec<String>),
 }
 
@@ -1277,6 +1291,18 @@ impl Parser {
                 let fallback = self.expect_ident("fallback")?;
                 RawOp::Coalesce(option, fallback)
             }
+            "option_eq" => {
+                let lhs = self.expect_ident("operando esquerdo")?;
+                self.expect_token(Token::Comma, "`,` entre operandos")?;
+                let rhs = self.expect_ident("operando direito")?;
+                RawOp::OptionEq(lhs, rhs)
+            }
+            "option_ne" => {
+                let lhs = self.expect_ident("operando esquerdo")?;
+                self.expect_token(Token::Comma, "`,` entre operandos")?;
+                let rhs = self.expect_ident("operando direito")?;
+                RawOp::OptionNe(lhs, rhs)
+            }
             "call_static" => {
                 let callee = self.expect_ident("nome da função chamada")?;
                 self.expect_token(Token::LParen, "`(` na chamada")?;
@@ -1715,6 +1741,14 @@ fn lower_op(
         RawOp::Coalesce(option, fallback) => Op::Coalesce {
             option: value(option)?,
             fallback: value(fallback)?,
+        },
+        RawOp::OptionEq(lhs, rhs) => Op::OptionEq {
+            lhs: value(lhs)?,
+            rhs: value(rhs)?,
+        },
+        RawOp::OptionNe(lhs, rhs) => Op::OptionNe {
+            lhs: value(lhs)?,
+            rhs: value(rhs)?,
         },
         RawOp::Bin(op, lhs, rhs) => Op::Bin {
             op: *op,

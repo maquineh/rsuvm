@@ -271,15 +271,33 @@ fora (`Unsupported`).
 
 Resultado: `31 passed` (diferencial) + `9 passed` (CLI) = **40 passed; 0 failed**.
 
+### 2.10 `== null`/`!= null`
+
+Décimo-segundo programa de referência (`rsuvm-oracle13.lift`):
+
+```bash
+cargo run -p lift_cli -- run examples/rsuvm-oracle13.lift
+```
+
+Saída do Lift (oráculo): `true false true false`.
+
+| Caso (Lift) | Chamada | Oráculo Lift | RSUVM (RIR) | Igual? |
+|---|---|---|---|---|
+| `eh_nulo` (`x == null`) | `(null)` / `(some 1)` | true / false | `bool:true` / `bool:false` | sim |
+| `nao_nulo` (`x != null`) | `(some 1)` / `(null)` | true / false | `bool:true` / `bool:false` | sim |
+
+`==`/`!=` com qualquer operando `option` vira `option_eq`/`option_ne` (ADR-0031);
+outros operadores sobre `option` continuam `Unsupported`.
+
 ## 3. Limitações
 
 1. Subconjunto ainda estreito: **sem** closures, `console.log`/`import`. Fora
    disso, `AdapterError::Unsupported`. Divisão/resto, `string` (com concatenação),
    `f64` (`number`), arrays (literal, índice e `xs[i] = v`), structs (`interface`,
    literal e `obj.campo`) e opcionais (`null`, `option.some`/`is_some`/`unwrap`,
-   `??`) são suportados; a atribuição a elemento exige que o array seja um local
-   não-aliasado (ADR-0028); structs só aceitam campos escalares (ADR-0029) e
-   `x == null`/`x != null` ficam fora (ADR-0030).
+   `??`, `== null`/`!= null`) são suportados; a atribuição a elemento exige que o
+   array seja um local não-aliasado (ADR-0028); structs só aceitam campos escalares
+   (ADR-0029).
 2. O adaptador é um **workspace separado** e depende do Lift por git fixado; o
    núcleo RSUVM continua sem dependências externas.
 3. O teste compara com o oráculo do Lift **registrado**; não invoca o compilador do

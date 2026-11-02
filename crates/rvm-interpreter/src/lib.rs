@@ -809,6 +809,38 @@ impl<'a> Interpreter<'a> {
                     self.write_current(&mut stack, top, instr.def, result, &site)?;
                     self.advance(&mut stack, top, &site)?;
                 }
+                Op::OptionEq { lhs, rhs } => {
+                    let equal = {
+                        let frame = stack.get(top).ok_or_else(|| {
+                            error_at(
+                                ErrorCode::InvalidModule,
+                                "frame ausente ao comparar option",
+                                &site,
+                            )
+                        })?;
+                        let left = read_slot(frame, *lhs, &site)?;
+                        let right = read_slot(frame, *rhs, &site)?;
+                        left == right
+                    };
+                    self.write_current(&mut stack, top, instr.def, Value::Bool(equal), &site)?;
+                    self.advance(&mut stack, top, &site)?;
+                }
+                Op::OptionNe { lhs, rhs } => {
+                    let different = {
+                        let frame = stack.get(top).ok_or_else(|| {
+                            error_at(
+                                ErrorCode::InvalidModule,
+                                "frame ausente ao comparar option",
+                                &site,
+                            )
+                        })?;
+                        let left = read_slot(frame, *lhs, &site)?;
+                        let right = read_slot(frame, *rhs, &site)?;
+                        left != right
+                    };
+                    self.write_current(&mut stack, top, instr.def, Value::Bool(different), &site)?;
+                    self.advance(&mut stack, top, &site)?;
+                }
                 Op::Call { callee, args } => {
                     let callee_function = self.callee(*callee, &site)?;
                     // O buffer de argumentos é cobrado antes de alocar (falha

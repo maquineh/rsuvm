@@ -1,0 +1,12 @@
+; id: N-038
+; expect: error invalid_type
+; extra: option_eq exige operandos option (ADR-0031)
+module n038 version 1
+entry f
+
+fn f() -> bool {
+  entry:
+    v0 = const_i64 1
+    v1 = option_eq v0, v0
+    return v1
+}

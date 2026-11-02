@@ -14,12 +14,12 @@
 //! - expressões: literais `int`/`boolean`/`string`/`number`, **literais de array**
 //!   `[...]`, **indexação** `xs[i]`, **literais de struct** `{ campo: valor }`,
 //!   **acesso a campo** `obj.campo`, `null`, `option.some`/`is_some`/`unwrap`, `??`,
-//!   variáveis locais, `+ - * / %`, comparações
+//!   `== null`/`!= null`, variáveis locais, `+ - * / %`, comparações
 //!   (`== != < <= > >=`; `==`/`!=` de `string` por conteúdo), negação `-x`, lógica
 //!   `!`/`&&`/`||` (**curto-circuito**) e chamadas a outras funções do programa.
 //!
-//! Fora do subconjunto (closures, `console.log`, `import`, statements de topo,
-//! `x == null`): devolve [`AdapterError::Unsupported`].
+//! Fora do subconjunto (closures, `console.log`, `import`, statements de topo):
+//! devolve [`AdapterError::Unsupported`].
 //! Divisão/resto por zero e `i64::MIN / -1` produzem os traps
 //! `division_by_zero`/`integer_overflow` (ADR-0022). `xs[i] = v` só é baixado
 //! quando `xs` é um array local **não-aliasado** (ADR-0028); structs aceitam
@@ -930,9 +930,15 @@ impl FuncLower {
                 if matches!(left.ty, ResolvedType::Optional(_))
                     || matches!(right.ty, ResolvedType::Optional(_))
                 {
-                    return Err(AdapterError::Unsupported(
-                        "comparação de option (`== null`)".to_string(),
-                    ));
+                    let lhs = self.lower_expr(names, left, env)?;
+                    let rhs = self.lower_expr(names, right, env)?;
+                    return match operator {
+                        BinaryOperator::Equal => self.emit(Op::OptionEq { lhs, rhs }),
+                        BinaryOperator::NotEqual => self.emit(Op::OptionNe { lhs, rhs }),
+                        _ => Err(AdapterError::Unsupported(
+                            "operação de option não suportada".to_string(),
+                        )),
+                    };
                 }
                 let lhs = self.lower_expr(names, left, env)?;
                 let rhs = self.lower_expr(names, right, env)?;

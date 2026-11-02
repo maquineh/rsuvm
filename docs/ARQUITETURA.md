@@ -66,7 +66,7 @@ linguagem (ADR-0009).
   `concat_str`, `add_f64`, `sub_f64`, `mul_f64`, `div_f64`, `eq_f64`, `ne_f64`,
   `lt_f64`, `le_f64`, `gt_f64`, `ge_f64`, `array`, `array_len`, `array_get`,
   `array_set`, `struct_new`, `field_get`, `option_none`, `option_some`,
-  `option_is_some`, `option_unwrap`, `coalesce`,
+  `option_is_some`, `option_unwrap`, `coalesce`, `option_eq`, `option_ne`,
   `call_static`.
 - Terminadores: `return`, `br`, `cond_br`.
 - Merge por parâmetros de bloco (phi explícito).
@@ -75,8 +75,8 @@ linguagem (ADR-0009).
   com atualização **funcional** por `array_set` (ADR-0028, sem referências), sem
   mutação in-place, sem slicing e sem arrays aninhados; structs existem com
   **campos escalares** (ADR-0029), sem mutação de campo nem aninhamento;
-  `option` existe com **payload escalar** (ADR-0030), sem `option` aninhado nem
-  `==`/`!=` de opcionais; `f64`
+  `option` existe com **payload escalar** (ADR-0030), sem `option` aninhado; com
+  igualdade `option_eq`/`option_ne` (ADR-0031); `f64`
   existe (ADR-0026) sem `%`/`pow`/conversões;
   concatenação de `string` existe (ADR-0025), sem slicing.
 

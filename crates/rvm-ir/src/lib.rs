@@ -304,6 +304,20 @@ pub enum Op {
         /// Fallback (mesmo payload, ou o próprio `option`).
         fallback: ValueId,
     },
+    /// Igualdade de dois `option` de mesmo payload (`option_eq`), ADR-0031.
+    OptionEq {
+        /// Operando esquerdo.
+        lhs: ValueId,
+        /// Operando direito.
+        rhs: ValueId,
+    },
+    /// Desigualdade de dois `option` de mesmo payload (`option_ne`), ADR-0031.
+    OptionNe {
+        /// Operando esquerdo.
+        lhs: ValueId,
+        /// Operando direito.
+        rhs: ValueId,
+    },
     /// Chama estaticamente uma função do mesmo módulo (`call_static`).
     Call {
         /// Função chamada; resolvida estaticamente pelo verificador.
@@ -345,6 +359,7 @@ impl Op {
             // Resolvidos pelo verificador a partir do `option`.
             Op::OptionUnwrap { .. } => Type::I64,
             Op::Coalesce { .. } => Type::I64,
+            Op::OptionEq { .. } | Op::OptionNe { .. } => Type::Bool,
             Op::Call { .. } => Type::I64, // substituído pelo tipo de retorno no verificador
         }
     }
@@ -379,6 +394,7 @@ impl Op {
                 vec![*value]
             }
             Op::Coalesce { option, fallback } => vec![*option, *fallback],
+            Op::OptionEq { lhs, rhs } | Op::OptionNe { lhs, rhs } => vec![*lhs, *rhs],
             Op::Call { args, .. } => args.clone(),
         }
     }

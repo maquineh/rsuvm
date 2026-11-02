@@ -102,6 +102,8 @@ const OP_OPTION_SOME: u8 = 42;
 const OP_OPTION_IS_SOME: u8 = 43;
 const OP_OPTION_UNWRAP: u8 = 44;
 const OP_COALESCE: u8 = 45;
+const OP_OPTION_EQ: u8 = 46;
+const OP_OPTION_NE: u8 = 47;
 
 // Tipos de terminador (tabela de `BYTECODE-EXP-0-IMPLEMENTACAO.md` §1).
 const TERM_RETURN: u8 = 0;
@@ -380,6 +382,16 @@ fn encode_instr(out: &mut Vec<u8>, instr: &Instr) {
             push_u32(out, *option);
             push_u32(out, *fallback);
         }
+        Op::OptionEq { lhs, rhs } => {
+            push_u8(out, OP_OPTION_EQ);
+            push_u32(out, *lhs);
+            push_u32(out, *rhs);
+        }
+        Op::OptionNe { lhs, rhs } => {
+            push_u8(out, OP_OPTION_NE);
+            push_u32(out, *lhs);
+            push_u32(out, *rhs);
+        }
         Op::Bin { op, lhs, rhs } => {
             push_u8(out, bin_opcode(*op));
             push_u32(out, *lhs);
@@ -616,6 +628,14 @@ fn read_instr(reader: &mut Reader<'_>, limits: &Limits) -> Result<Instr, RvmErro
         OP_COALESCE => Op::Coalesce {
             option: reader.read_u32("operando option de coalesce")?,
             fallback: reader.read_u32("fallback de coalesce")?,
+        },
+        OP_OPTION_EQ => Op::OptionEq {
+            lhs: reader.read_u32("operando esquerdo de option_eq")?,
+            rhs: reader.read_u32("operando direito de option_eq")?,
+        },
+        OP_OPTION_NE => Op::OptionNe {
+            lhs: reader.read_u32("operando esquerdo de option_ne")?,
+            rhs: reader.read_u32("operando direito de option_ne")?,
         },
         OP_ADD_I64_CHECKED => read_bin_operands(reader, BinOp::AddI64Checked)?,
         OP_SUB_I64_CHECKED => read_bin_operands(reader, BinOp::SubI64Checked)?,

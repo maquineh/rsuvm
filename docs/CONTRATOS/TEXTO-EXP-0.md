@@ -43,6 +43,8 @@ operação   = "const_i64" inteiro
            | "option_is_some" valor
            | "option_unwrap" valor
            | "coalesce" valor "," valor
+           | "option_eq" valor "," valor
+           | "option_ne" valor "," valor
            | "call_static" ident "(" [valores] ")" ;
 op_binário = "add_i64_checked" | "sub_i64_checked" | "mul_i64_checked"
            | "div_i64_checked" | "rem_i64_checked"

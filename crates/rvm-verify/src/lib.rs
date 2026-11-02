@@ -364,6 +364,21 @@ impl<'a> FunctionFacts<'a> {
                 }
                 Ok(())
             }
+            Op::OptionEq { lhs, rhs } | Op::OptionNe { lhs, rhs } => {
+                self.check_use(block_index, instr_index, *lhs, location)?;
+                self.check_use(block_index, instr_index, *rhs, location)?;
+                let lhs_ty = self.type_of_value(*lhs, location)?;
+                if !matches!(lhs_ty, Type::Optional(_)) {
+                    return Err(invalid(
+                        ErrorCode::InvalidType,
+                        format!(
+                            "option_eq/option_ne sobre valor de tipo {lhs_ty}, esperado option"
+                        ),
+                        location.clone(),
+                    ));
+                }
+                self.check_operand_type(*rhs, lhs_ty, location)
+            }
             Op::Call { callee, args } => {
                 let target = self.module.function(*callee).ok_or_else(|| {
                     invalid(
@@ -1106,6 +1121,7 @@ fn operation_type(module: &Module, op: &Op, location: &Location) -> Result<Type,
         Op::OptionIsSome { .. } => Ok(Type::Bool),
         Op::OptionUnwrap { .. } => Ok(Type::I64),
         Op::Coalesce { .. } => Ok(Type::I64),
+        Op::OptionEq { .. } | Op::OptionNe { .. } => Ok(Type::Bool),
         Op::Call { callee, .. } => module
             .function(*callee)
             .map(|target| target.ret)

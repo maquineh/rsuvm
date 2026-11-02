@@ -1,0 +1,13 @@
+; id: C-047
+; expect: value bool:true
+; extra: option_eq de dois none é true (ADR-0031)
+module c047 version 1
+entry f
+
+fn f() -> bool {
+  entry:
+    v0 = option_none i64
+    v1 = option_none i64
+    v2 = option_eq v0, v1
+    return v2
+}

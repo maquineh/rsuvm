@@ -53,6 +53,8 @@ com valor esperado, e cada terminador em pelo menos um caso válido. A verifica�
 | `option_is_some` | C-044 |
 | `option_unwrap` | C-045, C-046 |
 | `coalesce` | C-042, C-043 |
+| `option_eq` | C-047, C-049 |
+| `option_ne` | C-048 |
 | `eq_i64` | C-002 |
 | `ne_i64` | C-012 |
 | `lt_i64` | C-008 |
@@ -75,7 +77,7 @@ com a expectativa declarada. A verificação é executada por
 
 | Código | Caso(s) inválido(s) |
 |---|---|
-| `invalid_type` | N-001, N-002, N-007, N-015, N-017, N-031, N-032, N-033, N-034, N-036, N-037 |
+| `invalid_type` | N-001, N-002, N-007, N-015, N-017, N-031, N-032, N-033, N-034, N-036, N-037, N-038 |
 | `invalid_module` | N-003, N-004, N-022, N-023 |
 | `invalid_control_flow` | N-005, N-006, N-013, N-016, N-018 |
 | `unknown_opcode` | N-008 |

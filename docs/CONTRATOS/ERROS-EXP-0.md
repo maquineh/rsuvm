@@ -90,6 +90,7 @@ aparecem durante a execução de um `VerifiedModule`.
 | N-035 `option_unwrap` de `none` | `unwrap_none` | execução (trap) |
 | N-036 `option_is_some` de não-option | `invalid_type` | verificação |
 | N-037 `option_some` de não-escalar | `invalid_type` | verificação |
+| N-038 `option_eq` de não-option | `invalid_type` | verificação |
 
 `invalid_module` também cobre limite estrutural excedido: a distinção entre
 "estrutura inválida" e "quota de execução" é feita por `class`, não pelo texto.

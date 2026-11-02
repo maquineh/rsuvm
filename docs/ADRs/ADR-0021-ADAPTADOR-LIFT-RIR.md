@@ -32,7 +32,8 @@ pode importar Lift: adaptadores ficam fora de `crates/`.
    **merge** e `if` sem `else`) e **`while`**;
    expressões `int`/`boolean`/`string`/`number` literais, **literais de array**
    `[...]`, **indexação** `xs[i]`, **literais de struct** `{ campo: valor }`,
-   **acesso a campo** `obj.campo`, `null`, `option.some`/`is_some`/`unwrap` e `??`,
+   **acesso a campo** `obj.campo`, `null`, `option.some`/`is_some`/`unwrap`, `??` e
+   `== null`/`!= null`,
    locais, `+ - * / %`, comparações `== != < <= >
    >=` (`==`/`!=` de `string` por conteúdo; `+` de `string` é concatenação; `f64`
    usa IEEE-754), negação `-x`, lógica `!`/`&&`/`||` (**curto-circuito**) e chamadas
@@ -48,8 +49,8 @@ pode importar Lift: adaptadores ficam fora de `crates/`.
    foram habilitadas por tipos/ops novos no núcleo. Arrays do adaptador cobrem
    literais, indexação e **atribuição a elemento** `xs[i] = v` (só quando `xs` é um
    local não-aliasado); structs cobrem `interface`, literal e `obj.campo` (campos
-   escalares); opcionais cobrem `null`, `option.some`/`is_some`/`unwrap` e `??`
-   (fallback preguiçoso; `== null` fica fora).
+   escalares); opcionais cobrem `null`, `option.some`/`is_some`/`unwrap`, `??`
+   (fallback preguiçoso) e `== null`/`!= null` (ADR-0030/0031).
 6. **Teste diferencial**: o valor executado na RSUVM é comparado com o **oráculo do
    Lift** (mesmo programa rodado pelo compilador do Lift), registrado em
    `docs/RELATORIOS/ADAPTADOR-LIFT-RIR.md`.
@@ -90,7 +91,7 @@ pode importar Lift: adaptadores ficam fora de `crates/`.
   `if`/`else if`/`else` com merge, `&&`/`||`/`!` com curto-circuito, recursão
   `fib`, `/` e `%`, `string`, `f64` (`number`), arrays (literal, índice e
   `xs[i] = v` com rejeição de alias), structs (`interface`, literal e campo),
-  opcionais (`??` preguiçoso, `option.some`/`is_some`/`unwrap`), os
+  opcionais (`??` preguiçoso, `option.some`/`is_some`/`unwrap`, `== null`/`!= null`), os
   traps de divisão por zero, de índice fora dos limites e de `unwrap` de `none`,
   rejeição de `console.log` e os códigos de exit do `lift-run` (0/2/3/4).
 - **Diferencial**: `cargo run -p lift_cli -- run examples/rsuvm-oracle.lift` no
