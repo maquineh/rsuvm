@@ -3,7 +3,10 @@
 - **Data:** 2026-11-02
 - **Objetivo:** registrar que a definição de licença de Rio e Lift **não** é um
   pedido a terceiros, mas uma decisão do próprio mantenedor, e o que isso destrava.
-- **Estado:** pendente de decisão do mantenedor. Nada foi copiado de Rio ou Lift.
+- **Estado:** **`MIT OR Apache-2.0` declarado pelo mantenedor em 2026-11-02.**
+  Lift: publicado (commit `5e59af5` em `main`). Rio: commit `fb1a310` na branch
+  `chore/licenca-mit-apache` do clone local; **push pendente** (a rede
+  `git.prodam.am.gov.br` não resolve fora da Prodam).
 
 ## 1. Fato: os três projetos têm o mesmo autor
 
@@ -39,10 +42,11 @@ não uma barreira de terceiros.
 
 ## 4. Ação
 
-- **Responsável:** mantenedor (titular dos direitos).
-- **Se decidir declarar licença:** adicionar `LICENSE`/campo `license` em Rio e
-  Lift; atualizar `RIO-BASELINE-001`/`LIFT-BASELINE-001`; reabrir/substituir
-  ADR-0015 e ADR-0017.
-- **Se decidir manter:** nenhuma ação; o estado atual permanece.
-- Este documento substitui o antigo `PEDIDO-LICENCA-RIO-LIFT.md`, que pressupunha
-  terceiros.
+- **Lift:** concluído. `LICENSE-MIT`, `LICENSE-APACHE` e campo `license` em todos
+  os manifestos; commit `5e59af5` publicado em `main`.
+- **Rio:** commit `fb1a310` pronto na branch `chore/licenca-mit-apache` do clone
+  local (`H:\projetos\rio-lang`). Falta apenas publicar da rede interna:
+  `git -C H:\projetos\rio-lang push origin chore/licenca-mit-apache` (e abrir o
+  merge para `main`).
+- **RSUVM:** baselines e ADR-0015/ADR-0017 atualizados; a política de reuso deixa
+  de ser bloqueada por licença.

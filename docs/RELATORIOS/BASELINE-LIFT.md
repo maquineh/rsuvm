@@ -8,10 +8,12 @@
 - **Commit auditado:** `691c344880ac85056bc4bc85bf1e513654769bb1`
   (`refs/heads/main`, `HEAD` no momento do clone; `git ls-remote` confirmou o
   mesmo hash)
-- **Licença:** **desconhecida** — não há `LICENSE`/`COPYING`/`NOTICE` em nenhum
-  diretório e nenhum `Cargo.toml` declara campo `license`
-- **Veredito:** disponível para leitura e mapeamento semântico; **bloqueado para
-  reutilização de código** (licença ausente) e **não integrado** nesta entrega
+- **Licença:** **`MIT OR Apache-2.0`** — na auditoria original (commit `691c344`)
+  era **desconhecida**; foi **declarada pelo mantenedor em 2026-11-02** (commit
+  `5e59af5`), com `LICENSE-MIT`, `LICENSE-APACHE` e campo `license` em todos os
+  manifestos
+- **Veredito:** disponível para leitura, mapeamento semântico e **reuso sob
+  `MIT OR Apache-2.0`**; **não integrado** nesta entrega (ver §5, demais bloqueios)
 
 > Todos os itens abaixo são **evidência documental** (declaração do arquivo) ou
 > fato de inspeção estática. Nenhum é resultado de execução do Lift.
@@ -28,10 +30,9 @@
 | CI GitHub Actions: `frontend-fuzz`, `notes-contract`, `release-acceptance`, `vscode-extension` | `.github/workflows/` |
 | `fuzz/` com alvo `frontend` e corpus `core.lift`/`malformed.lift`/`template.lift` | `fuzz/fuzz_targets/frontend.rs`, `fuzz/corpus/frontend/` |
 
-**Bloqueio de licença:** sem `LICENSE` e sem campo `license`. Copiar código, criar
-obra derivada ou distribuir exige decisão do mantenedor. Este relatório não
-presume autorização. A política de reuso do Rio (ADR-0015) **não** cobre o Lift;
-aplica-se o mesmo raciocínio por analogia, mas a decisão formal é o ADR-0017.
+**Licença:** declarada pelo mantenedor em 2026-11-02 (`MIT OR Apache-2.0`,
+commit `5e59af5`). Na auditoria original não havia `LICENSE` nem campo `license`;
+o bloqueio de licença foi **resolvido** pelo próprio titular dos direitos.
 
 ## 2. Estrutura e dependências
 
@@ -75,8 +76,8 @@ Cargo**, não RIR nem bytecode.
 
 ## 5. Bloqueios e riscos para um adaptador Lift→RIR
 
-1. **Licença desconhecida.** Sem `LICENSE`, sem campo `license`. Reutilização e
-   obra derivada bloqueadas até decisão do mantenedor.
+1. **Licença — resolvida.** Declarada `MIT OR Apache-2.0` pelo mantenedor
+   (commit `5e59af5`); o reuso passa a ser permitido sob esses termos.
 2. **Modelo é compilação nativa + Cargo.** `emit_rust` produz Rust; a execução
    usa `rustc`/Cargo. Não é um backend de trap/VM nem permite impostar
    fuel/profundidade como o intérprete da RSUVM.
@@ -103,8 +104,8 @@ Cargo**, não RIR nem bytecode.
 ## 7. Conclusão
 
 A auditoria do item 7 foi **executada** (commit imutável e licença verificados).
-O resultado fecha a pergunta para este repositório: a integração Lift permanece
-**bloqueada** por licença desconhecida, modelo de execução não-VM, dependências
-externas e descompasso de subset. Decisão em
+A **licença foi resolvida** (o mantenedor declarou `MIT OR Apache-2.0`, commit
+`5e59af5`), mas a integração Lift permanece **fora de escopo** por modelo de
+execução não-VM, dependências externas e descompasso de subset. Decisão em
 `docs/ADRs/ADR-0017-INTEGRACAO-LIFT-BLOQUEADA.md`. Nenhum código do Lift foi
 copiado para este repositório.

@@ -66,3 +66,16 @@ política precisa dizer o que é permitido **sem** presumir autorização.
   apenas citações de evidência.
 - A política está registrada e o índice de ADRs a referencia.
 - ADR-0008 da fundação permanece byte a byte inalterado.
+
+## Atualização (2026-11-02)
+
+O **mantenedor declarou `MIT OR Apache-2.0`** para o Rio (commit `fb1a310`, branch
+`chore/licenca-mit-apache`; push pendente na rede interna). Com isso, o **bloqueio
+de licença** que motivava a proibição de reuso **deixou de existir**: copiar,
+adaptar e distribuir passam a ser permitidos sob `MIT OR Apache-2.0`.
+
+Permanecem como prática padrão: usar o Rio preferencialmente como **referência
+comportamental** (sem duplicar lexer/parser) e **não** linká-lo ao núcleo
+(zero dependências). Um adaptador Rio→RIR continua exigindo **novo ADR**
+(ADR-0008 da fundação segue aberto) e a API pública do Rio (`compile()`) segue
+limitada à emissão de Rust.

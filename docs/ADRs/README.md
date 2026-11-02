@@ -16,9 +16,9 @@ memória/transferência, integração Lift e integração Rio).
 | [0012](ADR-0012-TETO-DE-PROFUNDIDADE.md) | Teto de profundidade e frames explícitos | Aceito experimentalmente (revisado após teste) |
 | [0013](ADR-0013-QUOTA-DE-MEMORIA.md) | Quota de memória modelada para frames | Aceito experimentalmente |
 | [0014](ADR-0014-LICENCA-DO-REPOSITORIO.md) | Licença dupla `MIT OR Apache-2.0` do repositório | Aceito experimentalmente |
-| [0015](ADR-0015-POLITICA-DE-REUSO-DO-RIO.md) | Política de reuso do Rio (referência comportamental) | Aceito experimentalmente |
+| [0015](ADR-0015-POLITICA-DE-REUSO-DO-RIO.md) | Política de reuso do Rio (licença declarada `MIT OR Apache-2.0`) | Aceito experimentalmente |
 | [0016](ADR-0016-MEMORIA-DE-BUFFERS-DE-ARGUMENTOS.md) | Buffers transitórios de argumentos na quota de memória | Aceito experimentalmente |
-| [0017](ADR-0017-INTEGRACAO-LIFT-BLOQUEADA.md) | Integração Lift bloqueada com evidência (LIFT-BASELINE-001) | Aceito experimentalmente |
+| [0017](ADR-0017-INTEGRACAO-LIFT-BLOQUEADA.md) | Integração Lift fora de escopo (licença resolvida; bloqueios técnicos) | Aceito experimentalmente |
 | [0018](ADR-0018-LIGACAO-ESTATICA-INTER-MODULO.md) | Ligação estática inter-módulo (crate `rvm-link`) | Aceito experimentalmente |
 | [0019](ADR-0019-ESTRATEGIA-DE-FUZZING.md) | Estratégia de fuzzing (determinística; cobertura adiada) | Aceito experimentalmente |
 | [0020](ADR-0020-FUZZING-GUIADO-POR-COBERTURA.md) | Fuzzing guiado por cobertura (dependência de dev) | Aceito experimentalmente |

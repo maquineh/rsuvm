@@ -9,11 +9,11 @@
 - **Commit auditado:** `5566f4f2e3993b7ba6d5e54bf7d25bf2f2095d01` (branch
   `codex/documentacao-linguagem`), que contém `d71da1a6ea5422235d5b7038d4c84a6726363fd1`
   (`refs/heads/main` remoto) mais três commits de documentação
-- **Licença:** **desconhecida** — não há `LICENSE`/`COPYING` na raiz e o
-  `Cargo.toml` não declara campo `license`
-- **Veredito do baseline:** disponível para leitura e mapeamento semântico;
-  **bloqueado para reutilização de código** (licença ausente e AST/parser não
-  públicos) e **não integrado** nesta entrega
+- **Licença:** **`MIT OR Apache-2.0`** — na auditoria original era **desconhecida**
+  (sem `LICENSE`/`COPYING` na raiz e sem campo `license`); foi **declarada pelo
+  mantenedor em 2026-11-02** (commit `fb1a310`, branch `chore/licenca-mit-apache`)
+- **Veredito do baseline:** disponível para leitura, mapeamento semântico e
+  **reuso sob `MIT OR Apache-2.0`**; **não integrado** nesta entrega
 
 > Todos os itens abaixo são **evidência documental** (declaração do arquivo) ou
 > fato de inspeção estática. Nenhum é resultado de execução do Rio.
@@ -33,9 +33,11 @@
 | Documentação extensa: `README.md` 94.870 B, `DESIGN.md` 65.093 B, `VALIDATION.md` 123.268 B, `CHANGELOG.md` 34.410 B | raiz |
 | Nenhum `unsafe` em `src/*.rs` (0 ocorrências) | contagem por `Select-String -Pattern '\bunsafe\b'` |
 
-**Bloqueio de licença:** sem `LICENSE`, sem campo `license` no manifesto e
-`publish = false`. Copiar código, criar obra derivada ou distribuir exige decisão
-do mantenedor. Este relatório não presume autorização.
+**Licença:** declarada pelo mantenedor em 2026-11-02 (`MIT OR Apache-2.0`,
+commit `fb1a310` na branch `chore/licenca-mit-apache`). O push para o remoto
+interno (`git.prodam.am.gov.br`) ficou pendente — a rede não resolve fora da
+Prodam. Na auditoria original a licença era desconhecida; o bloqueio de licença
+foi **resolvido** pelo titular dos direitos.
 
 ## 2. Estrutura e dependências
 
@@ -130,8 +132,9 @@ clone local.
    tipos de `ast.rs` são `pub(super)` (`lib.rs:7-25`, `ast.rs:1-6`). A única
    entrada pública é `compile()` → `String` (Rust). Um adaptador dentro do crate
    `rsuvm` não consegue consumir a AST sem alterar o Rio ou duplicar lexer/parser.
-2. **Licença desconhecida.** Sem `LICENSE`, sem campo `license`, `publish = false`.
-   Reutilização/derivação bloqueada até decisão do mantenedor.
+2. **Licença — resolvida.** Declarada `MIT OR Apache-2.0` pelo mantenedor
+   (commit `fb1a310`); o reuso passa a ser permitido sob esses termos. Resta
+   apenas publicar a branch no remoto interno.
 3. **Modelo de execução é compilação nativa + processo.** `run` compila com
    `rustc` e executa o binário (`main.rs:115-125, 226-271`). Isso não é sandbox, não
    é trap de VM e não permite impostar fuel/profundidade: um adaptador não pode
@@ -158,12 +161,14 @@ clone local.
 - Semântica exata de recursão, escaping e ordem de avaliação no analisador.
 - Contagem e nomes exatos de testes (não executados).
 - Número de dependências efetivamente linkadas no binário `rio`.
-- Se há permissão/licença para reutilizar código.
+- Se há permissão/licença para reutilizar código — **resolvido**: `MIT OR
+  Apache-2.0` declarada pelo mantenedor (commit `fb1a310`).
 - Desempenho, alocação e comportamento em entradas adversariais.
 
 ## 8. Próximos passos recomendados (sem implementar)
 
-1. Decidir licença e política de reutilização com o mantenedor do Rio.
+1. Licença **declarada** `MIT OR Apache-2.0` pelo mantenedor (commit `fb1a310`);
+   publicar a branch no remoto interno.
 2. Solicitar ao Rio uma API pública mínima — `parse(source) -> AST` serializada ou
    um dump JSON estável — em vez de duplicar o parser.
 3. Fixar commit imutável (`d71da1a6` ou outro) para o adaptador e registrar hash.

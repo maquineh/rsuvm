@@ -110,9 +110,10 @@ cargo run -p rvm-cli -- check examples/soma.rvm
 - "Zero panic no corpus" descreve a rodada de testes, não ausência de
   vulnerabilidade. Fuzzing de campanha, benchmark e auditoria independente **não**
   foram executados.
-- Integração Lift/Rio está bloqueada com evidência: ver
+- Integração Lift/Rio **não** foi feita: bloqueios técnicos registrados em
   [BASELINE-RIO](./docs/RELATORIOS/BASELINE-RIO.md) e
-  [BASELINE-LIFT](./docs/RELATORIOS/BASELINE-LIFT.md).
+  [BASELINE-LIFT](./docs/RELATORIOS/BASELINE-LIFT.md). As licenças de Rio e Lift
+  foram declaradas `MIT OR Apache-2.0` pelo mantenedor.
 
 ## Licença
 

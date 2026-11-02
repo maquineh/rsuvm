@@ -74,3 +74,13 @@ A auditoria foi executada (inspeção estática; ver
 - ADR-0007 da fundação permanece byte a byte inalterado.
 - `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D
   warnings` e `cargo fmt --all -- --check` seguem verdes.
+
+## Atualização (2026-11-02)
+
+O **mantenedor declarou `MIT OR Apache-2.0`** para o Lift (commit `5e59af5`,
+publicado em `https://github.com/maquineh/lift`). O **bloqueio de licença** caiu;
+os outros três motivos **permanecem**: modelo de execução por compilação nativa +
+Cargo (não VM/trap), dependências externas incompatíveis com a política de zero
+dependências e descompasso de subset (HIR rica × `unit|bool|i64`). A decisão de
+**não integrar** segue válida por esses motivos; um adaptador futuro continua
+exigindo ADR próprio.

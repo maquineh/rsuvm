@@ -269,13 +269,17 @@ estável.
   4 499 017, `decoder` 8 440 896, `verificador` 4 267 947 execuções; **0 crashes**
   em 120 s por alvo (≈17,2 M execuções).
 
-### 3. Licença de Rio e Lift (decisão do mantenedor)
+### 3. Licença de Rio e Lift (declarada)
 
-- `docs/RELATORIOS/LICENSEAMENTO-RIO-LIFT.md` (substitui o antigo pedido): os três
-  projetos têm o **mesmo autor**, então não há terceiro a consultar — a licença de
-  Rio e Lift é decisão do titular. O bloqueio é **formal** (falta declarar), não de
-  terceiros.
-- Estado inalterado até o mantenedor decidir; ADR-0015/ADR-0017 permanecem.
+- `docs/RELATORIOS/LICENSEAMENTO-RIO-LIFT.md`: os três projetos têm o **mesmo
+  autor**, então a licença é decisão do titular. O mantenedor **declarou
+  `MIT OR Apache-2.0`** em 2026-11-02.
+- **Lift**: `LICENSE-MIT`, `LICENSE-APACHE` e campo `license` em todos os
+  manifestos; commit `5e59af5` publicado em `main`.
+- **Rio**: commit `fb1a310` na branch local `chore/licenca-mit-apache` (push
+  pendente — rede interna indisponível daqui).
+- ADR-0015/ADR-0017 atualizados: o bloqueio de **licença** caiu; os demais
+  bloqueios técnicos (modelo não-VM, deps externas, subset) permanecem.
 
 ### Verificação (Resultado)
 
