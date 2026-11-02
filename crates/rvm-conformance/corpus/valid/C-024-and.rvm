@@ -1,0 +1,12 @@
+; id: C-024
+; expect: value i64:8
+; args: i64:12, i64:10
+; extra: E bit a bit (and_i64, ADR-0023)
+module c024 version 1
+entry combina
+
+fn combina(a: i64, b: i64) -> i64 {
+  entry:
+    v2 = and_i64 a, b
+    return v2
+}

@@ -21,6 +21,11 @@ com valor esperado, e cada terminador em pelo menos um caso válido. A verifica�
 | `mul_i64_checked` | C-011 |
 | `div_i64_checked` | C-020 |
 | `rem_i64_checked` | C-021 |
+| `shl_i64_checked` | C-022 |
+| `shr_i64_checked` | C-023 |
+| `and_i64` | C-024 |
+| `or_i64` | C-025 |
+| `xor_i64` | C-026 |
 | `eq_i64` | C-002 |
 | `ne_i64` | C-012 |
 | `lt_i64` | C-008 |
@@ -50,6 +55,7 @@ com a expectativa declarada. A verificação é executada por
 | `unsupported_version` | N-014 |
 | `integer_overflow` | N-009, N-019, N-020, N-026 |
 | `division_by_zero` | N-025 |
+| `invalid_shift` | N-027 |
 | `out_of_fuel` | N-010 |
 | `call_depth_exceeded` | N-011 |
 | `out_of_memory` | N-021, N-024 |

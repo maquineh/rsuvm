@@ -348,6 +348,7 @@ fn corpus_valido_executa_e_reproduz() {
     );
     for required in [
         "C-001", "C-006", "C-010", "C-011", "C-016", "C-017", "C-018", "C-019", "C-020", "C-021",
+        "C-022", "C-023", "C-024", "C-025", "C-026",
     ] {
         assert!(
             ids.contains(required),
@@ -365,7 +366,7 @@ fn corpus_invalido_e_rejeitado_antes_da_execucao() {
     );
     for required in [
         "N-001", "N-007", "N-009", "N-010", "N-011", "N-019", "N-020", "N-021", "N-022", "N-023",
-        "N-024", "N-025", "N-026",
+        "N-024", "N-025", "N-026", "N-027",
     ] {
         assert!(
             ids.contains(required),

@@ -1,0 +1,12 @@
+; id: C-023
+; expect: value i64:-4
+; args: i64:-16, i64:2
+; extra: deslocamento aritmético à direita (shr_i64_checked, ADR-0023)
+module c023 version 1
+entry desloca
+
+fn desloca(a: i64, b: i64) -> i64 {
+  entry:
+    v2 = shr_i64_checked a, b
+    return v2
+}

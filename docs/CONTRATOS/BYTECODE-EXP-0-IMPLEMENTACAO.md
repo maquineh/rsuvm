@@ -69,6 +69,11 @@ terminator:
 | 11 | `call_static` | `u32 callee`, `u16 argc`, `u32 args[argc]` |
 | 12 | `div_i64_checked` | `u32 lhs`, `u32 rhs` |
 | 13 | `rem_i64_checked` | `u32 lhs`, `u32 rhs` |
+| 14 | `shl_i64_checked` | `u32 lhs`, `u32 rhs` |
+| 15 | `shr_i64_checked` | `u32 lhs`, `u32 rhs` |
+| 16 | `and_i64` | `u32 lhs`, `u32 rhs` |
+| 17 | `or_i64` | `u32 lhs`, `u32 rhs` |
+| 18 | `xor_i64` | `u32 lhs`, `u32 rhs` |
 
 Código desconhecido ⇒ `unknown_opcode`.
 

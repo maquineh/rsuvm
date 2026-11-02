@@ -1,0 +1,12 @@
+; id: N-027
+; expect: trap invalid_shift
+; args: i64:1, i64:64
+; extra: deslocamento fora de 0..=63 produz trap invalid_shift (ADR-0023)
+module n027 version 1
+entry desloca
+
+fn desloca(a: i64, b: i64) -> i64 {
+  entry:
+    v2 = shl_i64_checked a, b
+    return v2
+}

@@ -97,6 +97,18 @@ pub enum BinOp {
     /// Resto inteiro com verificação (`rem_i64_checked`). Resto por zero e
     /// `i64::MIN % -1` devolvem [`None`] (ADR-0022).
     RemI64Checked,
+    /// Deslocamento à esquerda com verificação (`shl_i64_checked`). Quantidade
+    /// fora de `0..=63` devolve [`None`] (ADR-0023).
+    ShlI64Checked,
+    /// Deslocamento aritmético à direita com verificação (`shr_i64_checked`).
+    /// Quantidade fora de `0..=63` devolve [`None`] (ADR-0023).
+    ShrI64Checked,
+    /// E bit a bit (`and_i64`), sem trap (ADR-0023).
+    AndI64,
+    /// Ou bit a bit (`or_i64`), sem trap (ADR-0023).
+    OrI64,
+    /// Ou exclusivo bit a bit (`xor_i64`), sem trap (ADR-0023).
+    XorI64,
 }
 
 impl BinOp {
@@ -109,6 +121,11 @@ impl BinOp {
             BinOp::MulI64Checked => "mul_i64_checked",
             BinOp::DivI64Checked => "div_i64_checked",
             BinOp::RemI64Checked => "rem_i64_checked",
+            BinOp::ShlI64Checked => "shl_i64_checked",
+            BinOp::ShrI64Checked => "shr_i64_checked",
+            BinOp::AndI64 => "and_i64",
+            BinOp::OrI64 => "or_i64",
+            BinOp::XorI64 => "xor_i64",
         }
     }
 
@@ -124,6 +141,11 @@ impl BinOp {
             "mul_i64_checked" => Some(BinOp::MulI64Checked),
             "div_i64_checked" => Some(BinOp::DivI64Checked),
             "rem_i64_checked" => Some(BinOp::RemI64Checked),
+            "shl_i64_checked" => Some(BinOp::ShlI64Checked),
+            "shr_i64_checked" => Some(BinOp::ShrI64Checked),
+            "and_i64" => Some(BinOp::AndI64),
+            "or_i64" => Some(BinOp::OrI64),
+            "xor_i64" => Some(BinOp::XorI64),
             _ => None,
         }
     }
@@ -154,6 +176,15 @@ impl BinOp {
             BinOp::MulI64Checked => lhs.checked_mul(rhs),
             BinOp::DivI64Checked => lhs.checked_div(rhs),
             BinOp::RemI64Checked => lhs.checked_rem(rhs),
+            BinOp::ShlI64Checked => u32::try_from(rhs)
+                .ok()
+                .and_then(|amount| lhs.checked_shl(amount)),
+            BinOp::ShrI64Checked => u32::try_from(rhs)
+                .ok()
+                .and_then(|amount| lhs.checked_shr(amount)),
+            BinOp::AndI64 => Some(lhs & rhs),
+            BinOp::OrI64 => Some(lhs | rhs),
+            BinOp::XorI64 => Some(lhs ^ rhs),
         }
     }
 }
@@ -353,6 +384,9 @@ pub enum ErrorCode {
     IntegerOverflow,
     /// Trap aritmético: divisão ou resto por zero (`division_by_zero`, ADR-0022).
     DivisionByZero,
+    /// Trap aritmético: deslocamento com quantidade fora de `0..=63`
+    /// (`invalid_shift`, ADR-0023).
+    InvalidShift,
     /// Fuel esgotado antes do despacho.
     OutOfFuel,
     /// Profundidade máxima de chamadas excedida.
@@ -381,6 +415,7 @@ impl ErrorCode {
             ErrorCode::UnsupportedFeature => "unsupported_feature",
             ErrorCode::IntegerOverflow => "integer_overflow",
             ErrorCode::DivisionByZero => "division_by_zero",
+            ErrorCode::InvalidShift => "invalid_shift",
             ErrorCode::OutOfFuel => "out_of_fuel",
             ErrorCode::CallDepthExceeded => "call_depth_exceeded",
             ErrorCode::OutOfMemory => "out_of_memory",
@@ -407,6 +442,7 @@ impl ErrorCode {
             "unsupported_feature" => Some(ErrorCode::UnsupportedFeature),
             "integer_overflow" => Some(ErrorCode::IntegerOverflow),
             "division_by_zero" => Some(ErrorCode::DivisionByZero),
+            "invalid_shift" => Some(ErrorCode::InvalidShift),
             "out_of_fuel" => Some(ErrorCode::OutOfFuel),
             "call_depth_exceeded" => Some(ErrorCode::CallDepthExceeded),
             "out_of_memory" => Some(ErrorCode::OutOfMemory),
@@ -430,7 +466,9 @@ impl ErrorCode {
             | ErrorCode::InvalidType
             | ErrorCode::InvalidControlFlow
             | ErrorCode::UnsupportedFeature => ErrorCategory::Verify,
-            ErrorCode::IntegerOverflow | ErrorCode::DivisionByZero => ErrorCategory::Trap,
+            ErrorCode::IntegerOverflow | ErrorCode::DivisionByZero | ErrorCode::InvalidShift => {
+                ErrorCategory::Trap
+            }
             ErrorCode::OutOfFuel | ErrorCode::CallDepthExceeded | ErrorCode::OutOfMemory => {
                 ErrorCategory::Resource
             }
@@ -652,6 +690,15 @@ mod tests {
         assert_eq!(BinOp::RemI64Checked.eval_i64(-20, 6), Some(-2));
         assert_eq!(BinOp::RemI64Checked.eval_i64(1, 0), None);
         assert_eq!(BinOp::RemI64Checked.eval_i64(i64::MIN, -1), None);
+        // Deslocamentos e bit a bit (ADR-0023).
+        assert_eq!(BinOp::ShlI64Checked.eval_i64(1, 4), Some(16));
+        assert_eq!(BinOp::ShlI64Checked.eval_i64(1, 64), None);
+        assert_eq!(BinOp::ShlI64Checked.eval_i64(1, -1), None);
+        assert_eq!(BinOp::ShrI64Checked.eval_i64(-16, 2), Some(-4));
+        assert_eq!(BinOp::ShrI64Checked.eval_i64(1, 64), None);
+        assert_eq!(BinOp::AndI64.eval_i64(0b1100, 0b1010), Some(0b1000));
+        assert_eq!(BinOp::OrI64.eval_i64(0b1100, 0b1010), Some(0b1110));
+        assert_eq!(BinOp::XorI64.eval_i64(0b1100, 0b1010), Some(0b0110));
     }
 
     #[test]
@@ -674,6 +721,11 @@ mod tests {
             BinOp::MulI64Checked,
             BinOp::DivI64Checked,
             BinOp::RemI64Checked,
+            BinOp::ShlI64Checked,
+            BinOp::ShrI64Checked,
+            BinOp::AndI64,
+            BinOp::OrI64,
+            BinOp::XorI64,
         ] {
             assert_eq!(BinOp::from_name(op.name()), Some(op));
         }
@@ -709,6 +761,7 @@ mod tests {
             ErrorCode::UnsupportedFeature,
             ErrorCode::IntegerOverflow,
             ErrorCode::DivisionByZero,
+            ErrorCode::InvalidShift,
             ErrorCode::OutOfFuel,
             ErrorCode::CallDepthExceeded,
             ErrorCode::CapabilityDenied,

@@ -20,9 +20,11 @@
 //! - A quota de memória modelada cobra o custo do frame **e** o buffer
 //!   transitório de argumentos de chamada/desvio enquanto ele existe
 //!   (ADR-0016); [`RunOutcome::memory_peak`] registra o pico observado.
-//! - `add/sub/mul/div/rem_i64_checked` usam [`rvm_spec::BinOp::eval_i64`];
-//!   resultado fora de `i64` produz o trap `integer_overflow`, e divisão/resto por
-//!   zero produz `division_by_zero` (ADR-0022). Comparações usam
+//! - `add/sub/mul/div/rem_i64_checked` e os bit a bit `and/or/xor_i64` e
+//!   deslocamentos `shl/shr_i64_checked` usam [`rvm_spec::BinOp::eval_i64`];
+//!   resultado fora de `i64` produz o trap `integer_overflow`, divisão/resto por
+//!   zero produz `division_by_zero` (ADR-0022) e deslocamento fora de `0..=63`
+//!   produz `invalid_shift` (ADR-0023). Comparações usam
 //!   [`rvm_spec::CmpOp::eval_i64`] e produzem `bool`.
 //! - `br`/`cond_br` copiam os argumentos para os slots dos parâmetros do bloco
 //!   alvo antes do salto (phi explícito); `return` sem valor produz
@@ -314,18 +316,19 @@ impl<'a> Interpreter<'a> {
                     let result = match op.eval_i64(left, right) {
                         Some(value) => value,
                         None => {
-                            let (code, detail) = if right == 0
-                                && matches!(op, BinOp::DivI64Checked | BinOp::RemI64Checked)
-                            {
-                                (
+                            let (code, detail) = match op {
+                                BinOp::DivI64Checked | BinOp::RemI64Checked if right == 0 => (
                                     ErrorCode::DivisionByZero,
                                     format!("`{op}` com divisor zero"),
-                                )
-                            } else {
-                                (
+                                ),
+                                BinOp::ShlI64Checked | BinOp::ShrI64Checked => (
+                                    ErrorCode::InvalidShift,
+                                    format!("`{op}` com quantidade {right} fora de 0..=63"),
+                                ),
+                                _ => (
                                     ErrorCode::IntegerOverflow,
                                     format!("`{op}` transbordou com os operandos {left} e {right}"),
-                                )
+                                ),
                             };
                             return Err(error_at(code, detail, &site));
                         }

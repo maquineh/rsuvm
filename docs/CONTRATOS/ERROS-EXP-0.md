@@ -36,6 +36,7 @@ humanas nunca são contrato.
 | `unsupported_feature` | verify | module | imports, capability concedida sem executor, recurso fora do EXP-0 | `rvm-ir`, `rvm-verify`, `rvm-text`, `rvm-runtime` |
 | `integer_overflow` | trap | trap | soma/subtração/multiplicação fora de `i64`; `i64::MIN / -1` e `i64::MIN % -1` | `rvm-interpreter` |
 | `division_by_zero` | trap | trap | divisão ou resto por zero (ADR-0022) | `rvm-interpreter` |
+| `invalid_shift` | trap | trap | deslocamento com quantidade fora de `0..=63` (ADR-0023) | `rvm-interpreter` |
 | `out_of_fuel` | resource | resource_limit | saldo de fuel insuficiente antes do despacho | `rvm-interpreter` |
 | `call_depth_exceeded` | resource | resource_limit | profundidade de chamadas excederia o limite | `rvm-interpreter` |
 | `out_of_memory` | resource | resource_limit | quota de memória modelada de frames excedida | `rvm-interpreter` |
@@ -75,6 +76,7 @@ aparecem durante a execução de um `VerifiedModule`.
 | N-021 quota de memória | `out_of_memory` | execução (limite) |
 | N-025 divisão por zero | `division_by_zero` | execução (trap) |
 | N-026 `i64::MIN / -1` | `integer_overflow` | execução (trap) |
+| N-027 deslocamento fora de `0..=63` | `invalid_shift` | execução (trap) |
 
 `invalid_module` também cobre limite estrutural excedido: a distinção entre
 "estrutura inválida" e "quota de execução" é feita por `class`, não pelo texto.

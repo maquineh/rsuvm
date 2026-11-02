@@ -64,6 +64,11 @@ const OP_GE_I64: u8 = 10;
 const OP_CALL_STATIC: u8 = 11;
 const OP_DIV_I64_CHECKED: u8 = 12;
 const OP_REM_I64_CHECKED: u8 = 13;
+const OP_SHL_I64_CHECKED: u8 = 14;
+const OP_SHR_I64_CHECKED: u8 = 15;
+const OP_AND_I64: u8 = 16;
+const OP_OR_I64: u8 = 17;
+const OP_XOR_I64: u8 = 18;
 
 // Tipos de terminador (tabela de `BYTECODE-EXP-0-IMPLEMENTACAO.md` §1).
 const TERM_RETURN: u8 = 0;
@@ -378,6 +383,11 @@ fn read_instr(reader: &mut Reader<'_>, limits: &Limits) -> Result<Instr, RvmErro
         OP_MUL_I64_CHECKED => read_bin_operands(reader, BinOp::MulI64Checked)?,
         OP_DIV_I64_CHECKED => read_bin_operands(reader, BinOp::DivI64Checked)?,
         OP_REM_I64_CHECKED => read_bin_operands(reader, BinOp::RemI64Checked)?,
+        OP_SHL_I64_CHECKED => read_bin_operands(reader, BinOp::ShlI64Checked)?,
+        OP_SHR_I64_CHECKED => read_bin_operands(reader, BinOp::ShrI64Checked)?,
+        OP_AND_I64 => read_bin_operands(reader, BinOp::AndI64)?,
+        OP_OR_I64 => read_bin_operands(reader, BinOp::OrI64)?,
+        OP_XOR_I64 => read_bin_operands(reader, BinOp::XorI64)?,
         OP_EQ_I64 => read_cmp_operands(reader, CmpOp::Eq)?,
         OP_NE_I64 => read_cmp_operands(reader, CmpOp::Ne)?,
         OP_LT_I64 => read_cmp_operands(reader, CmpOp::Lt)?,
@@ -482,6 +492,11 @@ const fn bin_opcode(op: BinOp) -> u8 {
         BinOp::MulI64Checked => OP_MUL_I64_CHECKED,
         BinOp::DivI64Checked => OP_DIV_I64_CHECKED,
         BinOp::RemI64Checked => OP_REM_I64_CHECKED,
+        BinOp::ShlI64Checked => OP_SHL_I64_CHECKED,
+        BinOp::ShrI64Checked => OP_SHR_I64_CHECKED,
+        BinOp::AndI64 => OP_AND_I64,
+        BinOp::OrI64 => OP_OR_I64,
+        BinOp::XorI64 => OP_XOR_I64,
     }
 }
 
