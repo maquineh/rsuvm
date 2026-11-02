@@ -247,10 +247,43 @@ fn or_tem_curto_circuito_sobre_divisao() {
 }
 
 #[test]
+fn string_literal_e_igualdade() {
+    let source = "function saudacao(): string { return \"ola\"; } function igual(a: string, b: string): boolean { return a == b; } function diferente(a: string, b: string): boolean { return a != b; }";
+    assert_eq!(
+        executar(source, "saudacao", &[]),
+        Value::Str("ola".to_string())
+    );
+    assert_eq!(
+        executar(
+            source,
+            "igual",
+            &[Value::Str("x".into()), Value::Str("x".into())]
+        ),
+        Value::Bool(true)
+    );
+    assert_eq!(
+        executar(
+            source,
+            "igual",
+            &[Value::Str("x".into()), Value::Str("y".into())]
+        ),
+        Value::Bool(false)
+    );
+    assert_eq!(
+        executar(
+            source,
+            "diferente",
+            &[Value::Str("x".into()), Value::Str("y".into())]
+        ),
+        Value::Bool(true)
+    );
+}
+
+#[test]
 fn construto_fora_do_subconjunto_e_rejeitado() {
-    // `string` não existe no núcleo EXP-0.
-    let source = "function nome(): string { return \"x\"; }";
-    let error = lower_source(source, "nome").expect_err("string está fora do subconjunto");
+    // `number` (f64) ainda não existe no núcleo EXP-0.
+    let source = "function metade(a: number): number { return a / 2.0; }";
+    let error = lower_source(source, "metade").expect_err("`number` está fora do subconjunto");
     assert!(
         matches!(error, AdapterError::Unsupported(_)),
         "erro inesperado: {error:?}"

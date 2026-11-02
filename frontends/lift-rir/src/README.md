@@ -22,11 +22,11 @@ workspace separado (ADR-0021).
 
 ## Invariants
 
-- **Subconjunto explícito**: funções `int`/`boolean`/`void`, `let`/`const`,
+- **Subconjunto explícito**: funções `int`/`boolean`/`string`/`void`, `let`/`const`,
   **atribuição**, `return`, `if`/`else if`/`else` (com merge e `if` sem `else`) e
-  **`while`**; `+ - * / %`, comparações, negação, lógica `!`/`&&`/`||`
-  (curto-circuito) e chamadas internas. Qualquer outra construção é
-  `AdapterError::Unsupported` — nunca um módulo incorreto.
+  **`while`**; `+ - * / %`, comparações (`==`/`!=` de `string` por conteúdo),
+  negação, lógica `!`/`&&`/`||` (curto-circuito) e chamadas internas. Qualquer
+  outra construção é `AdapterError::Unsupported` — nunca um módulo incorreto.
 - **CFG/SSA com phi explícito**: cada `BindingId` é rastreado para o `ValueId`
   corrente; `if`/`else` e `while` passam o ambiente como **parâmetros de bloco** (no
   merge e no cabeçalho do laço); `&&`/`||`/`!` viram fluxo com merge de um `bool`.

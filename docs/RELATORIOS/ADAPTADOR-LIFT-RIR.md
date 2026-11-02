@@ -136,7 +136,24 @@ Lift avaliasse `4 / 0`, o programa terminaria em erro; ambos os lados produzem
 `false` sem trap.
 
 Os testes automatizados vivem em `frontends/lift-rir/tests/diferencial.rs`
-(18 testes; cada um roda o pipeline completo Lift→RIR→verificação→execução).
+(19 testes; cada um roda o pipeline completo Lift→RIR→verificação→execução).
+
+### 2.4 `string`
+
+Quinto programa de referência (`rsuvm-oracle5.lift`):
+
+```bash
+cargo run -p lift_cli -- run examples/rsuvm-oracle5.lift
+```
+
+Saída do Lift (oráculo): `ola true false true`.
+
+| Caso (Lift) | Chamada | Oráculo Lift | RSUVM (RIR) | Igual? |
+|---|---|---|---|---|
+| `saudacao` (literal `string`) | `saudacao()` | ola | `str:ola` | sim |
+| `igual` (`==` de string) | `("x","x")` | true | `bool:true` | sim |
+| `igual` | `("x","y")` | false | `bool:false` | sim |
+| `diferente` (`!=` de string) | `("x","y")` | true | `bool:true` | sim |
 
 Comando de verificação:
 
@@ -144,7 +161,7 @@ Comando de verificação:
 cargo test --manifest-path frontends/lift-rir/Cargo.toml
 ```
 
-Resultado: `18 passed` (diferencial) + `8 passed` (CLI) = **26 passed; 0 failed**.
+Resultado: `19 passed` (diferencial) + `9 passed` (CLI) = **28 passed; 0 failed**.
 
 ## 3. Limitações
 

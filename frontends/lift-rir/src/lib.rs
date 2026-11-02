@@ -6,13 +6,14 @@
 //!
 //! # Subconjunto suportado
 //!
-//! - funções com parâmetros/retorno em `int` (`i64`), `boolean` (`bool`) ou `void`
-//!   (`unit`);
+//! - funções com parâmetros/retorno em `int` (`i64`), `boolean` (`bool`),
+//!   `string` (`string`) ou `void` (`unit`);
 //! - `let`/`const`, **atribuição** a binding mutável, `return`, `if`/`else if`/
 //!   `else` (com merge) e `while`;
-//! - expressões: literais `int`/`boolean`, variáveis locais, `+ - * / %`,
-//!   comparações (`== != < <= > >=`), negação unária (`-x`) e lógica `!`, `&&`,
-//!   `||` (com **curto-circuito**), e chamadas a outras funções do programa.
+//! - expressões: literais `int`/`boolean`/`string`, variáveis locais, `+ - * / %`,
+//!   comparações (`== != < <= > >=`; `==`/`!=` de `string` por conteúdo),
+//!   negação `-x`, lógica `!`/`&&`/`||` (**curto-circuito**) e chamadas a outras
+//!   funções do programa.
 //!
 //! Fora do subconjunto (`coalesce`, `f64`, strings, arrays, objetos, closures,
 //! `console.log`, `import`, `struct`, statements de topo): devolve
@@ -139,6 +140,7 @@ fn map_type(ty: &ResolvedType) -> Result<Type, AdapterError> {
         ResolvedType::Int => Ok(Type::I64),
         ResolvedType::Boolean => Ok(Type::Bool),
         ResolvedType::Void => Ok(Type::Unit),
+        ResolvedType::String => Ok(Type::Str),
         other => Err(AdapterError::Unsupported(format!("tipo `{other}`"))),
     }
 }
@@ -612,6 +614,7 @@ impl FuncLower {
         match &expression.kind {
             HirExprKind::IntegerLiteral(value) => self.emit(Op::ConstI64(*value)),
             HirExprKind::BooleanLiteral(value) => self.emit(Op::ConstBool(*value)),
+            HirExprKind::StringLiteral(text) => self.emit(Op::ConstStr(text.clone())),
             HirExprKind::Local { id, name } => env
                 .get(id)
                 .map(|(value, _)| *value)
@@ -648,6 +651,7 @@ impl FuncLower {
                 }
                 let lhs = self.lower_expr(names, left, env)?;
                 let rhs = self.lower_expr(names, right, env)?;
+                let string_operands = matches!(left.ty, ResolvedType::String);
                 let op = match operator {
                     BinaryOperator::Add => Op::Bin {
                         op: BinOp::AddI64Checked,
@@ -674,6 +678,8 @@ impl FuncLower {
                         lhs,
                         rhs,
                     },
+                    BinaryOperator::Equal if string_operands => Op::StrEq { lhs, rhs },
+                    BinaryOperator::NotEqual if string_operands => Op::StrNe { lhs, rhs },
                     BinaryOperator::Equal => Op::Cmp {
                         op: CmpOp::Eq,
                         lhs,

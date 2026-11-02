@@ -111,10 +111,25 @@ fn divisao_por_zero_sai_com_codigo_de_trap() {
 }
 
 #[test]
+fn string_executa_e_imprime() {
+    let file = temp_lift(
+        "saudacao",
+        "function saudacao(): string { return \"ola\"; }",
+    );
+    let result = run(&[file.to_str().unwrap(), "saudacao"]);
+    assert_eq!(result.code, Some(0));
+    assert_eq!(result.stdout.trim(), "str:ola");
+    let _ = fs::remove_file(file);
+}
+
+#[test]
 fn construto_fora_do_subconjunto_sai_com_codigo_de_modulo() {
-    // `string` não existe no núcleo EXP-0.
-    let file = temp_lift("texto", "function nome(): string { return \"x\"; }");
-    let result = run(&[file.to_str().unwrap(), "nome"]);
+    // `number` (f64) ainda não existe no núcleo EXP-0.
+    let file = temp_lift(
+        "numero",
+        "function metade(a: number): number { return a / 2; }",
+    );
+    let result = run(&[file.to_str().unwrap(), "metade", "--arg", "i64:10"]);
     assert_eq!(result.code, Some(2), "esperava exit 2 (módulo)");
     let _ = fs::remove_file(file);
 }

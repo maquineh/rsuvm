@@ -319,9 +319,9 @@ Oráculo do Lift: `cargo run -p lift_cli -- run examples/rsuvm-oracle.lift` →
 
 | Comando | Resultado |
 |---|---|
-| `cargo test --manifest-path frontends/lift-rir/Cargo.toml` | 26 passed, 0 failed (18 diferencial + 8 CLI) |
+| `cargo test --manifest-path frontends/lift-rir/Cargo.toml` | 28 passed, 0 failed (19 diferencial + 9 CLI) |
 | `cargo run --bin lift-run -- fib.lift fib --arg i64:10` | `i64:55` (exit 0) |
-| oráculo do Lift (`rsuvm-oracle*.lift`) | `30 5 7 9 3 true false 25 12 55 0` / `15 0 7 0 1 2 10 3 6 0` / `3 -3 2 -2` / `-1 0 1 true false false true false true false true true true` |
+| oráculo do Lift (`rsuvm-oracle*.lift`) | `30 5 7 9 3 true false 25 12 55 0` / `15 0 7 0 1 2 10 3 6 0` / `3 -3 2 -2` / `-1 0 1 true false false true false true false true true true` / `ola true false true` |
 | `cargo test --workspace` (núcleo) | verde; **não** compila `frontends/` |
 
 Limites: o subconjunto do adaptador ainda **não** cobre strings/arrays/objetos,
@@ -330,12 +330,15 @@ adaptador; sem codegen reverso.
 
 ## Ampliações pós-adaptador (ADRs 0022–0024)
 
-### `else if`, lógica e curto-circuito (ADR-0021)
+### `else if`, lógica, curto-circuito e `string` (ADR-0021)
 
 Adaptador refatorado para um construtor **CFG/SSA stateful**: `if`/`else if`/`else`,
 `&&`/`||` (curto-circuito) e `!`. Oráculo do Lift (`rsuvm-oracle4.lift`):
 `-1 0 1 true false false true false true false true true true` — bate com a RSUVM
 (inclui curto-circuito sobre divisão).
+
+`string` do Lift é mapeado (literal, `==`/`!=` por conteúdo, parâmetros/retorno).
+Oráculo (`rsuvm-oracle5.lift`): `ola true false true` — bate.
 
 ### Divisão, resto e bit a bit (ADRs 0022–0023)
 
@@ -355,6 +358,6 @@ Núcleo ganhou `string` (literais `"..."` com escapes), `const_str`, `str_eq`,
 | Comando | Resultado |
 |---|---|
 | `cargo test --workspace` | **146 passed, 0 failed**; corpus 30 válidos + 26 inválidos |
-| `cargo test --manifest-path frontends/lift-rir/Cargo.toml` | 26 passed, 0 failed |
+| `cargo test --manifest-path frontends/lift-rir/Cargo.toml` | 28 passed, 0 failed (19 diferencial + 9 CLI) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | exit 0 |
 | `cargo fmt --all -- --check` | exit 0 |
