@@ -6,19 +6,23 @@ público; itens marcados “bloqueante” impedem a tag.
 ## 1. Escopo e promessa
 
 - [ ] README declara: experimental, single-tenant, **não** sandbox, **não**
-      produção.
-- [ ] `SECURITY.md` com escopo, limitações conhecidas e canal privado.
-- [ ] `docs/COMPATIBILIDADE.md` com versionamento, formatos e plataformas.
+      produção (versões EN e PT-BR).
+- [ ] `SECURITY.md`/`SECURITY.pt-BR.md` com escopo, limitações conhecidas e canal
+      privado.
+- [ ] `docs/COMPATIBILITY.md`/`docs/COMPATIBILIDADE.md` com versionamento,
+      formatos e plataformas.
+- [ ] `docs/IMPLEMENTATION.md` reflete o estado implementado.
 - [ ] Nenhuma alegação de multi-tenant, isolamento de SO ou “seguro” sem
       qualificador.
 
 ## 2. Versão e documentação
 
 - [ ] `Cargo.toml` com a versão do release (ex.: `0.1.0-alpha.1`).
-- [ ] `CHANGELOG.md` atualizado com a data e os destaques.
-- [ ] `docs/GUIA-USUARIO.md` cobre instalação, comandos, opções, códigos de
-      saída, `--allow-fs-read` e limites.
-- [ ] `docs/INCORPORACAO.md` cobre `execute`/`execute_with_host`.
+- [ ] `CHANGELOG.md` e `CHANGELOG.pt-BR.md` atualizados com a data e os destaques.
+- [ ] `docs/USER-GUIDE.md` e `docs/GUIA-USUARIO.md` cobrem instalação, comandos,
+      opções, códigos de saída, `--allow-fs-read` e limites.
+- [ ] `docs/EMBEDDING.md` e `docs/INCORPORACAO.md` cobrem
+      `execute`/`execute_with_host`.
 - [ ] `docs/RELEASE-NOTES.md` atualizado para a versão.
 - [ ] Exemplos (`examples/*.rvm`) verificam e os que não usam host executam com
       a saída esperada.
@@ -43,7 +47,7 @@ público; itens marcados “bloqueante” impedem a tag.
 - [ ] Fuzzing executado por orçamento declarado; resultados registrados.
 - [ ] Auditoria independente: executada ou explicitamente ausente.
 - [ ] Nenhum segredo, token, caminho pessoal ou dado sensível nos artefatos.
-- [ ] `SECURITY.md` com canal de reporte ativo.
+- [ ] `SECURITY.md`/`SECURITY.pt-BR.md` com canal de reporte ativo.
 
 ## 5. Artefatos
 

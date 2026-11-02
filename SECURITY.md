@@ -1,87 +1,91 @@
-# Política de segurança — RSUVM
+# Security Policy — RSUVM
 
-## Estado do projeto
+**English** | [Português (BR)](./SECURITY.pt-BR.md)
 
-A RSUVM é um **protótipo experimental de pesquisa** (EXP-0). Não é um sandbox
-validado, não é autorização para produção e não deve ser usado para executar
-código mutuamente desconfiado.
+## Project status
 
-O modelo suportado é **single-tenant**: um processo do host executa um módulo
-confiável ou de um único dono. O runtime não implementa isolamento de processo/OS,
-não separa tenants e não é uma fronteira de segurança contra código hostil.
+RSUVM is an **experimental research prototype** (EXP-0). It is not a validated
+sandbox, not an authorization for production, and must not be used to execute
+mutually untrusted code.
 
-## Versões suportadas
+The supported model is **single-tenant**: one host process executes one trusted
+module or a module owned by a single party. The runtime does not implement
+process/OS isolation, does not separate tenants, and is not a security boundary
+against hostile code.
 
-| Versão | Suporte |
+## Supported versions
+
+| Version | Support |
 |---|---|
-| `0.1.x` (alpha) | Apenas a última versão publicada; correções de segurança na melhor capacidade |
-| Versões anteriores | Sem suporte |
+| `0.1.x` (alpha) | Latest published version only; security fixes on a best-effort basis |
+| Older versions | Unsupported |
 
-Não há LTS nem promessa de compatibilidade entre versões do formato textual,
-bytecode, RIR ou API Rust. Ver `docs/COMPATIBILIDADE.md`.
+There is no LTS and no compatibility promise across versions of the textual
+format, bytecode, RIR, or Rust API. See `docs/COMPATIBILITY.md`.
 
-## Como reportar
+## How to report
 
-**Não abra issue pública para vulnerabilidade.** Use o canal privado:
+**Do not open a public issue for a vulnerability.** Use the private channel:
 
-- GitHub Security Advisories: <https://github.com/maquineh/rsuvm/security/advisories/new>
+- GitHub Security Advisories:
+  <https://github.com/maquineh/rsuvm/security/advisories/new>
 
-Inclua, se possível:
+Include, if possible:
 
-- versão/commit e sistema operacional;
-- comando e módulo `.rvm`/bytecode que reproduz;
-- comportamento esperado e observado;
-- impacto (negação de serviço, leitura indevida, bypass de verificação etc.);
-- se o achado depende de configuração específica (`--allow-fs-read`, host
-  customizado, sistema de arquivos com symlink/hard link).
+- version/commit and operating system;
+- command and `.rvm`/bytecode module that reproduces it;
+- expected and observed behavior;
+- impact (denial of service, unauthorized read, verification bypass, etc.);
+- whether the finding depends on specific configuration (`--allow-fs-read`, a
+  custom host, a filesystem with symlinks/hard links).
 
-Não envie segredos, dados pessoais ou conteúdo de arquivos sensíveis. Se o
-reproduzir exigir um arquivo sensível, descreva a estrutura em vez do conteúdo.
+Do not send secrets, personal data, or the contents of sensitive files. If
+reproduction requires a sensitive file, describe its structure instead of its
+contents.
 
-## Escopo
+## Scope
 
-Dentro do escopo:
+In scope:
 
-- verificador (`rvm-verify`), checagem estrutural (`rvm-ir`) e decoder
+- verifier (`rvm-verify`), structural check (`rvm-ir`), and decoder
   (`rvm-bytecode`);
-- intérprete e quotas (`rvm-interpreter`, `rvm-runtime`);
-- ABI de host e checagem de capability (`BuiltinHost`, `Capabilities`, `Host`);
-- CLI `rsuvm` e seu host de arquivo (`CliHost`);
-- parser/impressão textual (`rvm-text`);
+- interpreter and quotas (`rvm-interpreter`, `rvm-runtime`);
+- host ABI and capability checks (`BuiltinHost`, `Capabilities`, `Host`);
+- CLI `rsuvm` and its file host (`CliHost`);
+- textual parser/printer (`rvm-text`);
 - linker (`rvm-link`).
 
-Fora do escopo (e frequentemente configuração do operador):
+Out of scope (and frequently operator configuration):
 
-- isolamento multi-tenant, containers, VMs, seccomp, cgroups/Job Objects;
-- escopo amplo, gravável ou com hard links para arquivos sensíveis;
-- TOCTOU com escritor concorrente no diretório concedido;
-- side channels, DoS de recurso sem isolamento externo, limites de tempo/taxa;
-- frontends Lift/Rio em `frontends/` e dependências de fuzz;
-- sistema operacional, filesystem, hardware e runtime Rust subjacente.
+- multi-tenant isolation, containers, VMs, seccomp, cgroups/Job Objects;
+- broad, writable scopes or scopes containing hard links to sensitive files;
+- TOCTOU with a concurrent writer in the granted directory;
+- side channels, resource DoS without external isolation, time/rate limits;
+- Lift/Rio frontends under `frontends/` and fuzzing dependencies;
+- the underlying OS, filesystem, hardware, and Rust runtime.
 
-## Limitações conhecidas
+## Known limitations
 
-Estas limitações são **conhecidas e declaradas**, não vulnerabilidades novas:
+These are **known and declared** limitations, not new vulnerabilities:
 
-- TOCTOU entre a canonicalização e a abertura no host do CLI;
-- hard links dentro do escopo para inodes fora dele não são detectados;
-- teto de 1 MiB **por leitura**, sem quota agregada de bytes, tempo ou taxa;
-- sem auditoria independente e sem campanha de fuzzing de longa duração;
-- API/formato experimentais, sem compatibilidade entre versões;
-- `Host` customizado é confiável e deve aplicar sua própria política;
-- ausência de isolamento de processo/OS.
+- TOCTOU between canonicalization and open in the CLI host;
+- hard links inside the scope pointing to inodes outside it are not detected;
+- 1 MiB ceiling **per read**, with no aggregate byte, time, or rate quota;
+- no independent audit and no long-running fuzzing campaign;
+- experimental API/format, with no cross-version compatibility;
+- a custom `Host` is trusted and must apply its own policy;
+- no process/OS isolation.
 
-## Divulgação
+## Disclosure
 
-- Processo coordenado, com esforço para corrigir antes de divulgar.
-- Prazo-alvo de 90 dias para achados confirmados, ajustável por complexidade e
-  risco.
-- Crédito ao reporter, se desejado.
-- Não há programa de bug bounty.
+- Coordinated process, with an effort to fix before disclosure.
+- Target of 90 days for confirmed findings, adjustable by complexity and risk.
+- Credit to the reporter, if desired.
+- No bug bounty program.
 
-## Pesquisa de boa-fé
+## Good-faith research
 
-Pesquisa de segurança de boa-fé neste repositório é bem-vinda. Não incentive
-acesso a dados de terceiros, não exfiltre conteúdo e não cause dano. Se o teste
-exigir um ambiente multi-tenant ou dados reais, pare e descreva o cenário no
-relatório privado.
+Good-faith security research on this repository is welcome. Do not encourage
+access to third-party data, do not exfiltrate content, and do not cause harm. If
+a test requires a multi-tenant environment or real data, stop and describe the
+scenario in the private report.

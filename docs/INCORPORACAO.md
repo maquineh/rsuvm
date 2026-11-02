@@ -1,11 +1,13 @@
 # Incorporação — usar a RSUVM como biblioteca
 
+[English](./EMBEDDING.md) | **Português (BR)**
+
 A RSUVM é um workspace de crates. O caminho mínimo para executar um módulo é:
 `rvm-text`/`rvm-bytecode` → `rvm-verify` → `rvm-interpreter`.
 
 > **Escopo:** execução in-process, single-tenant. O host que incorpora a VM é
 > responsável por isolamento de processo/OS, limites externos e política de
-> arquivos. Ver `SECURITY.md`.
+> arquivos. Ver `SECURITY.pt-BR.md`.
 
 ## 1. Execução pura (sem host)
 

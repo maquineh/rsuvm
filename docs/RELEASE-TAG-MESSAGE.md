@@ -31,7 +31,7 @@ Limitações:
 - sem auditoria independente e sem campanha de fuzzing longa;
 - formatos/API experimentais, sem compatibilidade entre versões.
 
-Leia SECURITY.md e docs/COMPATIBILIDADE.md.
+Leia SECURITY.pt-BR.md e docs/COMPATIBILIDADE.md.
 ```
 
 ## Pré-condições

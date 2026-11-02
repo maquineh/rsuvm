@@ -1,154 +1,169 @@
 # RSUVM Blueprint — Rust Universal Virtual Machine
 
+**English** | [Português (BR)](./README.pt-BR.md)
+
 [![CI](https://github.com/maquineh/rsuvm/actions/workflows/ci.yml/badge.svg)](https://github.com/maquineh/rsuvm/actions/workflows/ci.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](./LICENSE-MIT)
 
 ## System Overview
 
-RSUVM é um **protótipo experimental de pesquisa** (EXP-0): uma máquina virtual em
-Rust que executa uma representação intermediária comum (RIR) produzida por
-frontends independentes. O núcleo não conhece Lift, Rio ou qualquer linguagem
-hospedeira: aceita `unit`/`bool`/`i64`, funções puras, fluxo explícito por blocos
-e chamadas estáticas, verifica o módulo inteiro **antes** de executar e roda sob
-quotas de fuel e profundidade. Nenhum formato é estável; nada aqui é sandbox
-validado nem autorização para produção.
+RSUVM is an **experimental research prototype** (EXP-0): a Rust virtual machine
+that executes a common intermediate representation (RIR) produced by independent
+frontends. The core knows nothing about Lift, Rio, or any host language: it
+accepts `unit`/`bool`/`i64`, pure functions, explicit block control flow, and
+static calls, verifies the whole module **before** execution, and runs under fuel
+and depth quotas. No format is stable; nothing here is a validated sandbox or an
+authorization for production.
 
-**Base documental:** pacote RVM-Foundation-0.1, copiado sem modificação em
-[docs/fundacao](./docs/fundacao/ORIGEM.md) (24 arquivos verificados por SHA-256).
+**Documentation base:** the RVM-Foundation-0.1 package, copied unmodified into
+[docs/fundacao](./docs/fundacao/ORIGEM.md) (24 files verified by SHA-256).
 
 Pipeline:
 
 ~~~text
-texto .rvm ── rvm-text::parse ──┐
+.rvm text ── rvm-text::parse ──┐
                                ├── Module ── structure::check ── verify
-bytes .rsvmbc ─ rvm-bytecode ──┘                                   │
+.rsvmbc bytes ─ rvm-bytecode ──┘                                   │
                                                                    ▼
-                     rvm-interpreter::execute(VerifiedModule)  →  valor | trap | limite
+                     rvm-interpreter::execute(VerifiedModule)  →  value | trap | limit
 ~~~
 
-## Início rápido
+## Quick Start
 
 ```bash
-# Instala o binário no ~/.cargo/bin.
+# Install the binary into ~/.cargo/bin.
 cargo install --path crates/rvm-cli --locked
 rsuvm run examples/soma.rvm --arg i64:10 --arg i64:20   # i64:30
 rsuvm check examples/soma.rvm
 
-# Alternativa sem instalar:
+# Or run without installing:
 cargo run -p rvm-cli -- run examples/soma.rvm --arg i64:10 --arg i64:20
 ```
 
-Guia completo: [GUIA-USUARIO](./docs/GUIA-USUARIO.md). Para incorporar a VM:
-[INCORPORACAO](./docs/INCORPORACAO.md). Versionamento:
-[COMPATIBILIDADE](./docs/COMPATIBILIDADE.md).
+- Full guide: [USER-GUIDE](./docs/USER-GUIDE.md)
+- Embedding the VM: [EMBEDDING](./docs/EMBEDDING.md)
+- Versioning: [COMPATIBILITY](./docs/COMPATIBILITY.md)
+- What is implemented: [IMPLEMENTATION](./docs/IMPLEMENTATION.md)
+- Security policy: [SECURITY](./SECURITY.md)
+- Contributing: [CONTRIBUTING](./CONTRIBUTING.md)
+- Changelog: [CHANGELOG](./CHANGELOG.md)
+
+Portuguese versions: [README](./README.pt-BR.md),
+[user guide](./docs/GUIA-USUARIO.md), [compatibility](./docs/COMPATIBILIDADE.md),
+[embedding](./docs/INCORPORACAO.md), [security](./SECURITY.pt-BR.md).
 
 ## Subdirectories & System Boundaries
 
-- [crates](./crates/README.md) — workspace de dez crates acíclicos, sem
-  dependências externas: spec, ir, runtime, verify, text, bytecode, interpreter,
-  link, cli e conformance. Os limites de dependência são impostos pelo compilador.
-- [docs](./docs/ARQUITETURA.md) — arquitetura, contratos (`docs/CONTRATOS/`),
-  ADRs deste repositório (`docs/ADRs/`), ADRs da fundação
-  (`docs/fundacao/ADRs/`) e relatórios (`docs/RELATORIOS/`).
-- [examples](./examples/soma.rvm) — módulos `.rvm` de demonstração em formato
-  textual experimental; não são contrato de código.
-- [scripts](./scripts/gerar-evidencias.ps1) — geração do log de evidências de
-  execução; não é artefato de runtime.
-- [fuzz](./fuzz/README.md) — workspace **separado** de fuzzing guiado por cobertura
-  (nightly, dependência de dev; não faz parte do workspace principal; ADR-0020).
-- [frontends](./frontends/README.md) — adaptadores de linguagem fora do núcleo;
-  protótipo Lift→RIR (ADR-0021), também workspace separado.
+- [crates](./crates/README.md) — workspace of ten acyclic crates, with no
+  external dependencies: spec, ir, runtime, verify, text, bytecode, interpreter,
+  link, cli, and conformance. Dependency boundaries are enforced by the compiler.
+- [docs](./docs/ARQUITETURA.md) — architecture, contracts (`docs/CONTRATOS/`),
+  repository ADRs (`docs/ADRs/`), foundation ADRs (`docs/fundacao/ADRs/`), and
+  reports (`docs/RELATORIOS/`).
+- [examples](./examples/soma.rvm) — demonstration `.rvm` modules in the
+  experimental textual format; they are not a code contract.
+- [scripts](./scripts/gerar-evidencias.ps1) — generates the execution evidence
+  log; it is not a runtime artifact.
+- [fuzz](./fuzz/README.md) — **separate** coverage-guided fuzzing workspace
+  (nightly, dev dependency; not part of the main workspace; ADR-0020).
+- [frontends](./frontends/README.md) — language adapters outside the core; the
+  Lift→RIR prototype (ADR-0021), also a separate workspace.
 
 ## Workspace Invariants
 
-- Zero dependências externas: apenas `std`; crate nova exige ADR e aprovação.
-- `unsafe_code = "forbid"` e `missing_docs = "deny"` em todos os alvos
+- Zero external dependencies: only `std`; a new crate requires an ADR and
+  approval.
+- `unsafe_code = "forbid"` and `missing_docs = "deny"` on all targets
   (`Cargo.toml:[workspace.lints.rust]`).
-- `overflow-checks = true` também no perfil release: a semântica de overflow vem de
-  `checked_*`, mas aritmética acidental não pode virar wrap silencioso
+- `overflow-checks = true` also in the release profile: overflow semantics come
+  from `checked_*`, but accidental arithmetic must not silently wrap
   (`Cargo.toml:[profile.release]`).
-- Verificação completa precede execução; o executor recebe somente
+- Full verification precedes execution; the executor only receives
   `rvm_verify::VerifiedModule`.
-- ADR-0004 permanece aberto: nenhum formato wire é estável; o bytecode é
-  experimental (ADR-0011).
+- ADR-0004 remains open: no wire format is stable; bytecode is experimental
+  (ADR-0011).
 
 ## Global Invariants
 
-- **Independência de frontend** (ADR-0001): nenhum crate do núcleo importa ou cita
-  Lift/Rio; adaptadores, quando existirem, ficarão fora de `crates/`.
-- **Falha fechada**: entradas textuais, binárias, nomes, índices e contagens são
-  não confiáveis; limites são checados antes de alocar, indexar, recursar ou
-  despachar.
-- **Sem efeitos implícitos** (ADR-0005): nenhuma capability é concedida por
-  padrão. A única exceção é `read_file`/`filesystem_read`, concedida
-  explicitamente por `Capabilities::grant` + `execute_with_host` ou pelo CLI com
+- **Frontend independence** (ADR-0001): no core crate imports or mentions
+  Lift/Rio; adapters, when present, live outside `crates/`.
+- **Fail closed**: textual/binary input, names, indices, and counts are
+  untrusted; limits are checked before allocating, indexing, recursing, or
+  dispatching.
+- **No implicit effects** (ADR-0005): no capability is granted by default. The
+  only exception is `read_file`/`filesystem_read`, explicitly granted by
+  `Capabilities::grant` + `execute_with_host` or by the CLI with
   `--allow-fs-read <dir>` (ADR-0036).
-- **Determinismo**: mesmo módulo + limites + configuração + argumentos ⇒ mesmo
-  valor ou mesmo código de erro no caminho puro; sem `HashMap`, relógio, ambiente
-  ou sistema de arquivos. `host_read_file` é uma chamada explícita e gated, cujo
-  resultado depende do backend e do estado do sistema; ela não é determinística
-  por construção.
-- **Diagnóstico estável**: códigos e classes de `rvm-spec` são contrato; mensagens
-  humanas não são (`docs/CONTRATOS/ERROS-EXP-0.md`).
-- **Teto de profundidade** aplicado sobre pilha de frames na heap (ADR-0012): a
-  versão recursiva estourou a pilha nativa com 256 frames.
+- **Determinism**: same module + limits + configuration + arguments ⇒ same value
+  or same error code on the pure path; no `HashMap`, clock, environment, or
+  filesystem. `host_read_file` is an explicit, gated call whose result depends on
+  the backend and system state; it is not deterministic by construction.
+- **Stable diagnostics**: `rvm-spec` codes and classes are contract; human
+  messages are not (`docs/CONTRATOS/ERROS-EXP-0.md`).
+- **Depth ceiling** applied over a heap-allocated frame stack (ADR-0012): the
+  recursive version overflowed the native stack with 256 frames.
 
 ## Global Side Effects
 
-- O núcleo (`rvm-spec`, `rvm-ir`, `rvm-runtime`, `rvm-verify`, `rvm-text`,
-  `rvm-bytecode`, `rvm-interpreter`) é puro: sem filesystem, rede, ambiente,
-  relógio, subprocesso ou `unsafe`. `rvm-interpreter` só executa efeito quando
-  recebe um `Host` explícito em `execute_with_host`; `execute` nega tudo.
-- `rvm-cli` lê o arquivo de entrada indicado, escreve apenas o arquivo de saída de
-  `encode`, usa `stdout`/`stderr` do processo e, com `--allow-fs-read <dir>`, lê
-  arquivos sob o diretório concedido durante `host_read_file` (ADR-0036).
-- A suíte de testes lê `crates/rvm-conformance/corpus` e cria arquivos temporários
-  em testes do CLI; não escreve no repositório.
-- `scripts/gerar-evidencias.ps1` escreve `docs/RELATORIOS/EVIDENCIAS-EXECUCAO.md`
-  (log de execução), nunca código.
+- The core (`rvm-spec`, `rvm-ir`, `rvm-runtime`, `rvm-verify`, `rvm-text`,
+  `rvm-bytecode`, `rvm-interpreter`) is pure: no filesystem, network,
+  environment, clock, subprocess, or `unsafe`. `rvm-interpreter` only executes an
+  effect when given an explicit `Host` in `execute_with_host`; `execute` denies
+  everything.
+- `rvm-cli` reads the indicated input file, writes only the `encode` output file,
+  uses process `stdout`/`stderr`, and, with `--allow-fs-read <dir>`, reads files
+  under the granted directory during `host_read_file` (ADR-0036).
+- The test suite reads `crates/rvm-conformance/corpus` and creates temporary
+  files in CLI tests; it does not write to the repository.
+- `scripts/gerar-evidencias.ps1` writes `docs/RELATORIOS/EVIDENCIAS-EXECUCAO.md`
+  (execution log), never code.
 
 ## System Verification
 
-- Run: `cargo test --workspace`
-- Gate adicional usado no relatório: `cargo clippy --workspace --all-targets -- -D
-  warnings` e `cargo fmt --all -- --check`.
-- CI: `.gitlab-ci.yml` (GitLab) e `.github/workflows/ci.yml` (GitHub Actions)
-  rodam `fmt --check`, `clippy -D warnings`, `test` e `test --release` em Linux e
-  Windows; há job de MSRV (`1.75`) e `cargo doc` com `-D warnings`. Workflows
-  auxiliares **manuais**: `bench.yml` (benchmark pré-registrado) e `fuzz.yml`
-  (fuzzing guiado por cobertura, nightly). Releases em tag `v*` usam
-  `.github/workflows/release.yml`; ver `docs/RELEASE-CHECKLIST.md`.
-- Resultados atuais e log bruto: [RELATORIO-IMPLEMENTACAO](./docs/RELATORIOS/RELATORIO-IMPLEMENTACAO.md)
-  e [EVIDENCIAS-EXECUCAO](./docs/RELATORIOS/EVIDENCIAS-EXECUCAO.md): 176 testes
-  verdes (o teste de symlink é `cfg(unix)` e o de junção é `cfg(windows)`),
-  62 casos válidos + 42 inválidos no corpus.
-- Empacotamento e instalação limpa: [DRYRUN-RELEASE-0.1.0-alpha.1](./docs/RELATORIOS/DRYRUN-RELEASE-0.1.0-alpha.1.md).
-- Fuzzing curto: [FUZZING-EXP-0](./docs/RELATORIOS/FUZZING-EXP-0.md) §7.
+- Run: `cargo test --workspace --locked`.
+- Additional gates: `cargo clippy --workspace --all-targets --locked -- -D
+  warnings` and `cargo fmt --all -- --check`.
+- CI: `.gitlab-ci.yml` (GitLab) and `.github/workflows/ci.yml` (GitHub Actions)
+  run `fmt --check`, `clippy -D warnings`, `test`, and `test --release` on Linux
+  and Windows; there is an MSRV (`1.75`) job and `cargo doc` with `-D warnings`.
+  Manual auxiliary workflows: `bench.yml` (pre-registered benchmark) and
+  `fuzz.yml` (coverage-guided fuzzing, nightly). Releases on `v*` tags use
+  `.github/workflows/release.yml`; see `docs/RELEASE-CHECKLIST.md`.
+- Current results and raw log:
+  [RELATORIO-IMPLEMENTACAO](./docs/RELATORIOS/RELATORIO-IMPLEMENTACAO.md) and
+  [EVIDENCIAS-EXECUCAO](./docs/RELATORIOS/EVIDENCIAS-EXECUCAO.md): 176 tests
+  green (the symlink test is `cfg(unix)`, the junction test is `cfg(windows)`),
+  62 valid + 42 invalid corpus cases.
+- Packaging and clean install:
+  [DRYRUN-RELEASE-0.1.0-alpha.1](./docs/RELATORIOS/DRYRUN-RELEASE-0.1.0-alpha.1.md).
+- Short fuzzing campaign:
+  [FUZZING-EXP-0](./docs/RELATORIOS/FUZZING-EXP-0.md) §7.
 
-## Segurança (limites declarados)
+## Security (Declared Limits)
 
-Canal privado para vulnerabilidades: [SECURITY.md](./SECURITY.md).
+Private vulnerability channel: [SECURITY.md](./SECURITY.md).
 
-- Rust seguro reduz classes de erro de memória, mas o protótipo **não** é
-  isolamento de processo/OS; uso multi-tenant hostil exigiria isolamento externo
-  revisado.
-- "Zero panic no corpus" descreve a rodada de testes, não ausência de
-  vulnerabilidade. Fuzzing de campanha **longa** e auditoria independente **não**
-  foram executados; houve campanha curta (3 × 120 s, run `41543777109`, 24,75 M
-  execuções, 0 crashes observados), que não prova ausência de falhas. O benchmark
-  pré-registrado tem medições registradas (runner dedicado e reexecução local pós
-  ADR-0034/0035); H06 foi confirmada nos runs `41429076866` e `41520845695`; ver
+- Memory-safe Rust reduces classes of memory errors, but the prototype is **not**
+  process/OS isolation; hostile multi-tenant use would require reviewed external
+  isolation.
+- "Zero panic in the corpus" describes the test run, not the absence of
+  vulnerabilities. **Long** fuzzing campaigns and independent audits were **not**
+  performed; there was a short campaign (3 × 120 s, run `41543777109`, 24.75 M
+  executions, 0 observed crashes), which does not prove the absence of flaws. The
+  pre-registered benchmark has recorded measurements (dedicated runner and local
+  re-execution after ADR-0034/0035); H06 was confirmed in runs `41429076866` and
+  `41520845695`; see
   [BENCHMARKS-PREREGISTRADOS](./docs/RELATORIOS/BENCHMARKS-PREREGISTRADOS.md).
-- Integração Lift/Rio **não** foi feita: bloqueios técnicos registrados em
-  [BASELINE-RIO](./docs/RELATORIOS/BASELINE-RIO.md) e
-  [BASELINE-LIFT](./docs/RELATORIOS/BASELINE-LIFT.md). As licenças de Rio e Lift
-  foram declaradas `MIT OR Apache-2.0` pelo mantenedor.
+- Lift/Rio integration was **not** done: technical blockers are recorded in
+  [BASELINE-RIO](./docs/RELATORIOS/BASELINE-RIO.md) and
+  [BASELINE-LIFT](./docs/RELATORIOS/BASELINE-LIFT.md). The Rio and Lift licenses
+  were declared `MIT OR Apache-2.0` by the maintainer.
 
-## Licença
+## License
 
-Dupla **`MIT OR Apache-2.0`** ([ADR-0014](./docs/ADRs/ADR-0014-LICENCA-DO-REPOSITORIO.md)):
-o reuso pode escolher uma das duas. Textos integrais em
-[LICENSE-MIT](./LICENSE-MIT) e [LICENSE-APACHE](./LICENSE-APACHE). A política de
-reuso do Rio está em
-[ADR-0015](./docs/ADRs/ADR-0015-POLITICA-DE-REUSO-DO-RIO.md). A licença autoriza
-reuso de código; não é alegação de segurança nem substitui assessoria jurídica.
+Dual **`MIT OR Apache-2.0`**
+([ADR-0014](./docs/ADRs/ADR-0014-LICENCA-DO-REPOSITORIO.md)): reuse may choose
+either. Full texts in [LICENSE-MIT](./LICENSE-MIT) and
+[LICENSE-APACHE](./LICENSE-APACHE). The Rio reuse policy is in
+[ADR-0015](./docs/ADRs/ADR-0015-POLITICA-DE-REUSO-DO-RIO.md). The license allows
+code reuse; it is not a security claim and does not replace legal advice.

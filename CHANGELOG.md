@@ -1,47 +1,48 @@
 # Changelog
 
-Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
-O projeto usa versionamento semântico `0.x`: mudanças incompatíveis podem ocorrer
-em minor releases. Formatos IR/texto/bytecode são **experimentais** e não têm
-compatibilidade entre versões.
+**English** | [Português (BR)](./CHANGELOG.pt-BR.md)
+
+Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The
+project uses semantic versioning `0.x`: incompatible changes may occur in minor
+releases. IR/text/bytecode formats are **experimental** and have no cross-version
+compatibility.
 
 ## [0.1.0-alpha.1] - 2026-11-02
 
-### Adicionado
+### Added
 
-- Workspace de crates `rvm-spec`, `rvm-ir`, `rvm-runtime`, `rvm-verify`,
-  `rvm-text`, `rvm-bytecode`, `rvm-interpreter`, `rvm-link`, `rvm-cli` e
-  `rvm-conformance`, sem dependências externas no núcleo.
-- Verificador de RIR com checagem estrutural, CFG, dominância, tipos e
-  assinaturas.
-- Intérprete determinístico com fuel, profundidade, memória modelada e traps.
-- Tipos `unit`, `bool`, `i64`, `string`, `f64`, `array`, `struct`, `option` e
-  `result`, com tabela de tipos por id.
-- Formato textual experimental e bytecode linear experimental.
-- Ligação estática inter-módulo (`rvm-link`).
-- ABI mínima de host `read_file`/`filesystem_read`, com `Capabilities`, `Host`,
-  `NoHost` e `execute_with_host`.
-- CLI `rsuvm` com `run`, `run-bc`, `check`, `fmt`, `encode` e `--allow-fs-read`.
-- Corpus de conformidade com 62 casos válidos e 42 inválidos.
-- 176 testes no workspace, CI Linux/Windows, MSRV e benchmark pré-registrado.
+- Workspace of `rvm-spec`, `rvm-ir`, `rvm-runtime`, `rvm-verify`, `rvm-text`,
+  `rvm-bytecode`, `rvm-interpreter`, `rvm-link`, `rvm-cli`, and
+  `rvm-conformance` crates, with no external dependencies in the core.
+- RIR verifier with structural checks, CFG, dominance, types, and signatures.
+- Deterministic interpreter with fuel, depth, modeled memory, and traps.
+- Types `unit`, `bool`, `i64`, `string`, `f64`, `array`, `struct`, `option`, and
+  `result`, with a type-id table.
+- Experimental textual format and linear bytecode.
+- Static inter-module linking (`rvm-link`).
+- Minimal host ABI `read_file`/`filesystem_read`, with `Capabilities`, `Host`,
+  `NoHost`, and `execute_with_host`.
+- `rsuvm` CLI with `run`, `run-bc`, `check`, `fmt`, `encode`, and
+  `--allow-fs-read`.
+- Conformance corpus with 62 valid and 42 invalid cases.
+- 176 workspace tests, Linux/Windows CI, MSRV, and a pre-registered benchmark.
 
-### Segurança
+### Security
 
-- Default deny: `execute` sem host nega qualquer efeito.
-- Escopo de arquivo absoluto, sem `..`, com canonicalização de raiz e alvo,
-  recusa de symlink/junção para fora e apenas arquivo regular.
-- Teto de 1 MiB por leitura e reserva de quota antes do IO.
-- `unsafe` proibido no workspace; nenhuma dependência externa no núcleo.
-- Campanha curta de fuzzing guiada por cobertura (run `41543777109`, 3 × 120 s,
-  **24 751 525 execuções, 0 crashes observados**); não é campanha de longa
-  duração nem auditoria.
+- Default deny: `execute` without a host denies every effect.
+- Absolute file scope, no `..`, canonicalized root and target, rejection of
+  symlinks/junctions pointing outside, and regular-files-only reads.
+- 1 MiB ceiling per read and quota reservation before I/O.
+- `unsafe` forbidden in the workspace; no external dependencies in the core.
+- Short coverage-guided fuzzing campaign (run `41543777109`, 3 × 120 s,
+  **24,751,525 executions, 0 observed crashes**); not a long campaign or audit.
 
-### Limitações conhecidas
+### Known limitations
 
-- TOCTOU entre canonicalização e abertura; hard links não são detectados.
-- Sem quota agregada de IO/tempo/taxa; teto de 1 MiB é por chamada.
-- Sem isolamento de processo/OS e sem suporte multi-tenant.
-- Sem auditoria independente e sem campanha de fuzzing de longa duração.
-- Formatos e API experimentais, sem compatibilidade entre versões.
+- TOCTOU between canonicalization and open; hard links are not detected.
+- No aggregate I/O/time/rate quota; the 1 MiB ceiling is per call.
+- No process/OS isolation and no multi-tenant support.
+- No independent audit and no long-running fuzzing campaign.
+- Experimental formats and API, with no cross-version compatibility.
 
 [0.1.0-alpha.1]: https://github.com/maquineh/rsuvm/releases/tag/v0.1.0-alpha.1

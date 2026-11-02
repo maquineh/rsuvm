@@ -1,8 +1,10 @@
 # Guia do usuário — RSUVM (EXP-0)
 
+[English](./USER-GUIDE.md) | **Português (BR)**
+
 Este guia cobre o uso do binário `rsuvm` no alpha experimental. Leia
-`SECURITY.md` e `docs/COMPATIBILIDADE.md` antes de usar em qualquer ambiente
-compartilhado.
+`SECURITY.pt-BR.md` e `docs/COMPATIBILIDADE.md` antes de usar em qualquer
+ambiente compartilhado.
 
 > **Escopo:** protótipo single-tenant. Não é sandbox, não isola processo/OS e não
 > suporta multi-tenant. Formatos e API podem mudar sem compatibilidade.
@@ -158,4 +160,4 @@ dependa do texto, apenas do código/classe.
 - `docs/INCORPORACAO.md` — usar a VM como biblioteca.
 - `docs/COMPATIBILIDADE.md` — versionamento e formatos.
 - `docs/ARQUITETURA.md` — desenho e limites.
-- `SECURITY.md` — reporte e escopo de segurança.
+- `SECURITY.pt-BR.md` — reporte e escopo de segurança.

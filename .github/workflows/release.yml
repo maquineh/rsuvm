@@ -55,7 +55,7 @@ jobs:
           set -euo pipefail
           mkdir -p dist
           cp target/release/rsuvm dist/
-          cp README.md LICENSE-MIT LICENSE-APACHE CHANGELOG.md dist/
+          cp README.md README.pt-BR.md LICENSE-MIT LICENSE-APACHE CHANGELOG.md CHANGELOG.pt-BR.md SECURITY.md SECURITY.pt-BR.md dist/
           tar -czf "${{ matrix.artifact }}.tar.gz" -C dist .
           sha256sum "${{ matrix.artifact }}.tar.gz" > "${{ matrix.artifact }}.sha256"
       - name: Package (windows)
@@ -64,7 +64,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           Copy-Item target/release/rsuvm.exe dist/
-          Copy-Item README.md, LICENSE-MIT, LICENSE-APACHE, CHANGELOG.md dist/
+          Copy-Item README.md, README.pt-BR.md, LICENSE-MIT, LICENSE-APACHE, CHANGELOG.md, CHANGELOG.pt-BR.md, SECURITY.md, SECURITY.pt-BR.md dist/
           Compress-Archive -Path dist/* -DestinationPath "${{ matrix.artifact }}.zip"
           $hash = (Get-FileHash "${{ matrix.artifact }}.zip" -Algorithm SHA256).Hash.ToLower()
           "$hash  ${{ matrix.artifact }}.zip" | Set-Content "${{ matrix.artifact }}.sha256"

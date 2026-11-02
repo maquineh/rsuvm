@@ -1,46 +1,47 @@
-# RSUVM — release experimental
+# RSUVM — Experimental Release
 
-> **Este é um alpha de pesquisa.** Single-tenant, não é sandbox, não isola
-> processo/OS e não suporta multi-tenant. Formatos IR/texto/bytecode e API Rust
-> são experimentais e podem mudar sem compatibilidade.
+**English** | [Português (BR)](./RELEASE-NOTES.pt-BR.md)
 
-## Destaques
+> **This is a research alpha.** Single-tenant, not a sandbox, no process/OS
+> isolation, no multi-tenant support. IR/text/bytecode formats and the Rust API
+> are experimental and may change without compatibility.
 
-- Verificador de RIR, intérprete determinístico e quotas de fuel/profundidade/
-  memória modelada.
-- Tipos `unit`, `bool`, `i64`, `string`, `f64`, `array`, `struct`, `option` e
+## Highlights
+
+- RIR verifier, deterministic interpreter, and fuel/depth/modeled-memory quotas.
+- Types `unit`, `bool`, `i64`, `string`, `f64`, `array`, `struct`, `option`, and
   `result`.
-- Formato textual e bytecode experimentais, com round-trip.
-- Ligação estática inter-módulo.
-- ABI de host `read_file`/`filesystem_read` com capability, escopo canonicalizado
-  e teto de 1 MiB por leitura.
-- CLI `rsuvm` (`run`, `run-bc`, `check`, `fmt`, `encode`).
+- Experimental textual format and bytecode, with round-trip.
+- Static inter-module linking.
+- Host ABI `read_file`/`filesystem_read` with capability, canonicalized scope,
+  1 MiB ceiling per read, and quota reservation before I/O.
+- `rsuvm` CLI (`run`, `run-bc`, `check`, `fmt`, `encode`).
 
-## Segurança e limites
+## Security and limits
 
-- Default deny; `execute` sem host nega efeitos.
-- Escopo de arquivo absoluto, sem `..`, canonicalizado; symlink/junção para fora
-  é negado; apenas arquivo regular.
-- Reserva de quota antes do IO; teto de 1 MiB por leitura.
-- **Não** há quota agregada de IO/tempo/taxa, isolamento de SO ou auditoria
-  independente.
-- TOCTOU e hard links permanecem residuais.
+- Default deny; `execute` without a host denies effects.
+- Absolute file scope, no `..`, canonicalized; symlinks/junctions pointing
+  outside are denied; regular files only.
+- Quota reservation before I/O; 1 MiB ceiling per read.
+- **No** aggregate I/O/time/rate quota, OS isolation, or independent audit.
+- TOCTOU and hard links remain residual.
 
-Leia `SECURITY.md`, `docs/GUIA-USUARIO.md` e `docs/COMPATIBILIDADE.md`.
+Read [SECURITY.md](../SECURITY.md), [USER-GUIDE](./USER-GUIDE.md), and
+[COMPATIBILITY](./COMPATIBILITY.md).
 
-## Verificação
+## Verification
 
 - `cargo test --workspace --locked`
 - `cargo test --release --workspace --locked`
 - `cargo clippy --workspace --all-targets --locked -- -D warnings`
 - `cargo fmt --all -- --check`
-- CI e resultados: link do run desta tag.
+- CI and results: link to this tag's run.
 
 ## Checksums
 
-Baixe `SHA256SUMS` junto dos artefatos e verifique antes de executar.
+Download `SHA256SUMS` with the artifacts and verify it before running.
 
-## Reporte de segurança
+## Security reporting
 
-Não abra issue pública. Use
+Do not open a public issue. Use
 <https://github.com/maquineh/rsuvm/security/advisories/new>.

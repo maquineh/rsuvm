@@ -1,13 +1,15 @@
 # Compatibilidade e versionamento
 
+[English](./COMPATIBILITY.md) | **Português (BR)**
+
 ## Versão do projeto
 
 O workspace usa `0.1.0-alpha.1` (primeiro alpha público). Enquanto estiver em `0.x`:
 
 - **minor** pode conter mudanças incompatíveis;
 - **patch** deve conter correções compatíveis;
-- mudanças de formato/API relevantes são registradas no `CHANGELOG.md` e, quando
-  fecham decisão, em ADR.
+- mudanças de formato/API relevantes são registradas no `CHANGELOG.pt-BR.md` e,
+  quando fecham decisão, em ADR.
 
 Não há LTS. O suporte cobre a última versão publicada, na melhor capacidade.
 
@@ -61,5 +63,5 @@ MSRV: Rust `1.75` (verificada por `cargo +1.75.0 check --workspace --locked`).
 ## Mudanças de segurança
 
 Correções de segurança podem ser lançadas sem aviso prévio detalhado, com nota
-no `CHANGELOG.md` e, quando apropriado, GitHub Security Advisory. Ver
-`SECURITY.md`.
+no `CHANGELOG.pt-BR.md` e, quando apropriado, GitHub Security Advisory. Ver
+`SECURITY.pt-BR.md`.

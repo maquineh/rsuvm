@@ -1,5 +1,7 @@
 # RSUVM 0.1.0-alpha.1 — uma VM experimental em Rust
 
+[English](./ANNOUNCEMENT-0.1.0-alpha.1.md) | **Português (BR)**
+
 Estou publicando o primeiro alpha da **RSUVM**, uma máquina virtual de pesquisa
 escrita em Rust. Ela executa uma representação intermediária (RIR) verificada,
 com intérprete determinístico, quotas de execução e uma ABI mínima de host.
@@ -41,7 +43,7 @@ Ou baixe os artefatos do release e confira o `SHA256SUMS`.
 
 ## Segurança
 
-Leia `SECURITY.md` e `docs/GUIA-USUARIO.md`. Para código não confiável, use
+Leia `SECURITY.pt-BR.md` e `docs/GUIA-USUARIO.md`. Para código não confiável, use
 isolamento externo de processo/OS; o runtime não substitui containers, VMs,
 seccomp ou cgroups.
 
