@@ -392,6 +392,9 @@ pub enum ErrorCode {
     /// Trap aritmético: deslocamento com quantidade fora de `0..=63`
     /// (`invalid_shift`, ADR-0023).
     InvalidShift,
+    /// Concatenação de `string` excede `Limits::max_string_bytes`
+    /// (`string_too_long`, ADR-0025).
+    StringTooLong,
     /// Fuel esgotado antes do despacho.
     OutOfFuel,
     /// Profundidade máxima de chamadas excedida.
@@ -421,6 +424,7 @@ impl ErrorCode {
             ErrorCode::IntegerOverflow => "integer_overflow",
             ErrorCode::DivisionByZero => "division_by_zero",
             ErrorCode::InvalidShift => "invalid_shift",
+            ErrorCode::StringTooLong => "string_too_long",
             ErrorCode::OutOfFuel => "out_of_fuel",
             ErrorCode::CallDepthExceeded => "call_depth_exceeded",
             ErrorCode::OutOfMemory => "out_of_memory",
@@ -448,6 +452,7 @@ impl ErrorCode {
             "integer_overflow" => Some(ErrorCode::IntegerOverflow),
             "division_by_zero" => Some(ErrorCode::DivisionByZero),
             "invalid_shift" => Some(ErrorCode::InvalidShift),
+            "string_too_long" => Some(ErrorCode::StringTooLong),
             "out_of_fuel" => Some(ErrorCode::OutOfFuel),
             "call_depth_exceeded" => Some(ErrorCode::CallDepthExceeded),
             "out_of_memory" => Some(ErrorCode::OutOfMemory),
@@ -471,9 +476,10 @@ impl ErrorCode {
             | ErrorCode::InvalidType
             | ErrorCode::InvalidControlFlow
             | ErrorCode::UnsupportedFeature => ErrorCategory::Verify,
-            ErrorCode::IntegerOverflow | ErrorCode::DivisionByZero | ErrorCode::InvalidShift => {
-                ErrorCategory::Trap
-            }
+            ErrorCode::IntegerOverflow
+            | ErrorCode::DivisionByZero
+            | ErrorCode::InvalidShift
+            | ErrorCode::StringTooLong => ErrorCategory::Trap,
             ErrorCode::OutOfFuel | ErrorCode::CallDepthExceeded | ErrorCode::OutOfMemory => {
                 ErrorCategory::Resource
             }
@@ -770,6 +776,7 @@ mod tests {
             ErrorCode::IntegerOverflow,
             ErrorCode::DivisionByZero,
             ErrorCode::InvalidShift,
+            ErrorCode::StringTooLong,
             ErrorCode::OutOfFuel,
             ErrorCode::CallDepthExceeded,
             ErrorCode::CapabilityDenied,

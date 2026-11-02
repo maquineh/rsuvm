@@ -238,6 +238,12 @@ fn print_op(module: &Module, function: &Function, op: &Op, out: &mut String) {
             out.push_str("str_len ");
             print_value(function, *operand, out);
         }
+        Op::ConcatStr { lhs, rhs } => {
+            out.push_str("concat_str ");
+            print_value(function, *lhs, out);
+            out.push_str(", ");
+            print_value(function, *rhs, out);
+        }
         Op::Bin { op, lhs, rhs } => {
             out.push_str(op.name());
             out.push(' ');
@@ -566,6 +572,7 @@ enum RawOp {
     StrEq(String, String),
     StrNe(String, String),
     StrLen(String),
+    ConcatStr(String, String),
     Call(String, Vec<String>),
 }
 
@@ -928,6 +935,12 @@ impl Parser {
                 RawOp::StrNe(lhs, rhs)
             }
             "str_len" => RawOp::StrLen(self.expect_ident("operando string")?),
+            "concat_str" => {
+                let lhs = self.expect_ident("operando esquerdo")?;
+                self.expect_token(Token::Comma, "`,` entre operandos")?;
+                let rhs = self.expect_ident("operando direito")?;
+                RawOp::ConcatStr(lhs, rhs)
+            }
             "call_static" => {
                 let callee = self.expect_ident("nome da função chamada")?;
                 self.expect_token(Token::LParen, "`(` na chamada")?;
@@ -1262,6 +1275,10 @@ fn lower_op(
         },
         RawOp::StrLen(operand) => Op::StrLen {
             operand: value(operand)?,
+        },
+        RawOp::ConcatStr(lhs, rhs) => Op::ConcatStr {
+            lhs: value(lhs)?,
+            rhs: value(rhs)?,
         },
         RawOp::Bin(op, lhs, rhs) => Op::Bin {
             op: *op,

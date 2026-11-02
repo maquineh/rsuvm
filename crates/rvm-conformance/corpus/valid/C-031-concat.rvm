@@ -1,0 +1,13 @@
+; id: C-031
+; expect: value str:ola mundo
+; extra: concatenação de strings (ADR-0025)
+module c031 version 1
+entry junta
+
+fn junta() -> string {
+  entry:
+    v0 = const_str "ola"
+    v1 = const_str " mundo"
+    v2 = concat_str v0, v1
+    return v2
+}

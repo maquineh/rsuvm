@@ -154,6 +154,10 @@ Saída do Lift (oráculo): `ola true false true`.
 | `igual` (`==` de string) | `("x","x")` | true | `bool:true` | sim |
 | `igual` | `("x","y")` | false | `bool:false` | sim |
 | `diferente` (`!=` de string) | `("x","y")` | true | `bool:true` | sim |
+| `junta` (`+` de string) | `("ola"," mundo")` | ola mundo | `str:ola mundo` | sim |
+
+O caso `junta` usa o oráculo `rsuvm-oracle6.lift` (o `+` de `string` do Lift é
+concatenação; ver ADR-0025).
 
 Comando de verificação:
 
@@ -161,7 +165,7 @@ Comando de verificação:
 cargo test --manifest-path frontends/lift-rir/Cargo.toml
 ```
 
-Resultado: `19 passed` (diferencial) + `9 passed` (CLI) = **28 passed; 0 failed**.
+Resultado: `20 passed` (diferencial) + `9 passed` (CLI) = **29 passed; 0 failed**.
 
 ## 3. Limitações
 

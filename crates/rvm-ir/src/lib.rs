@@ -184,6 +184,13 @@ pub enum Op {
         /// Operando `string`.
         operand: ValueId,
     },
+    /// Concatena dois `string` (`concat_str`), produzindo `string` (ADR-0025).
+    ConcatStr {
+        /// Operando esquerdo.
+        lhs: ValueId,
+        /// Operando direito.
+        rhs: ValueId,
+    },
     /// Chama estaticamente uma função do mesmo módulo (`call_static`).
     Call {
         /// Função chamada; resolvida estaticamente pelo verificador.
@@ -205,6 +212,7 @@ impl Op {
             Op::Cmp { op, .. } => op.result_type(),
             Op::StrEq { .. } | Op::StrNe { .. } => Type::Bool,
             Op::StrLen { .. } => Type::I64,
+            Op::ConcatStr { .. } => Type::Str,
             Op::Call { .. } => Type::I64, // substituído pelo tipo de retorno no verificador
         }
     }
@@ -220,7 +228,8 @@ impl Op {
             Op::Bin { lhs, rhs, .. }
             | Op::Cmp { lhs, rhs, .. }
             | Op::StrEq { lhs, rhs }
-            | Op::StrNe { lhs, rhs } => vec![*lhs, *rhs],
+            | Op::StrNe { lhs, rhs }
+            | Op::ConcatStr { lhs, rhs } => vec![*lhs, *rhs],
             Op::StrLen { operand } => vec![*operand],
             Op::Call { args, .. } => args.clone(),
         }

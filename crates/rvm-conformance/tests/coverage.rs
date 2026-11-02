@@ -59,6 +59,7 @@ fn collect_ops(module: &Module, ops: &mut BTreeSet<String>, terms: &mut BTreeSet
                     Op::StrEq { .. } => "str_eq".to_string(),
                     Op::StrNe { .. } => "str_ne".to_string(),
                     Op::StrLen { .. } => "str_len".to_string(),
+                    Op::ConcatStr { .. } => "concat_str".to_string(),
                     Op::Call { .. } => "call_static".to_string(),
                 };
                 ops.insert(name);
@@ -103,6 +104,7 @@ fn corpus_valido_cobre_todas_as_operacoes_do_subset() {
         "str_eq",
         "str_ne",
         "str_len",
+        "concat_str",
         "eq_i64",
         "ne_i64",
         "lt_i64",

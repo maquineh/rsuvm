@@ -30,6 +30,7 @@ com valor esperado, e cada terminador em pelo menos um caso válido. A verifica�
 | `str_eq` | C-027 |
 | `str_ne` | C-029 |
 | `str_len` | C-028 |
+| `concat_str` | C-031 |
 | `eq_i64` | C-002 |
 | `ne_i64` | C-012 |
 | `lt_i64` | C-008 |
@@ -62,7 +63,7 @@ com a expectativa declarada. A verificação é executada por
 | `invalid_shift` | N-027 |
 | `out_of_fuel` | N-010 |
 | `call_depth_exceeded` | N-011 |
-| `out_of_memory` | N-021, N-024 |
+| `out_of_memory` | N-021, N-024, N-028 |
 
 ## 3. Lacunas declaradas (não cobertas pelo corpus)
 
@@ -72,6 +73,7 @@ do decoder binário. A ausência é **lacuna declarada**, não aprovação:
 | Item | Onde é exercitado |
 |---|---|
 | `syntax_error`, `unknown_type`, `invalid_number`, `unsupported_feature` | parser textual (`crates/rvm-text/tests`) |
+| `string_too_long` | `crates/rvm-interpreter/tests/memoria.rs` (concatenação acima de `max_string_bytes`) |
 | `truncated_input`, `input_too_large` | decoder binário (`crates/rvm-bytecode/tests/hostile.rs`) |
 | `capability_denied` | `rvm-runtime` e `tests/properties.rs` |
 | limites estruturais (funções, blocos, instruções, valores) | `rvm-ir/src/structure.rs` (unitários, com `Limits` customizados) |

@@ -32,6 +32,9 @@ pub const DEFAULT_FUEL: u64 = 100_000;
 /// Teto padrão de memória modelada para frames (16 MiB).
 pub const DEFAULT_MEMORY_LIMIT_BYTES: u64 = 16 * 1024 * 1024;
 
+/// Limite padrão, em bytes, de uma `string` produzida por concatenação (ADR-0025).
+pub const DEFAULT_MAX_STRING_BYTES: u32 = 4096;
+
 /// Custo fixo modelado de um frame, em bytes (cabeçalho e estado do frame).
 pub const FRAME_BASE_BYTES: u64 = 256;
 
@@ -217,6 +220,7 @@ pub struct ExecConfig {
     fuel: u64,
     max_call_depth: CallDepthLimit,
     memory_limit: MemoryLimit,
+    max_string_bytes: u32,
 }
 
 impl ExecConfig {
@@ -227,6 +231,7 @@ impl ExecConfig {
             fuel,
             max_call_depth,
             memory_limit: MemoryLimit::DEFAULT,
+            max_string_bytes: DEFAULT_MAX_STRING_BYTES,
         }
     }
 
@@ -253,6 +258,19 @@ impl ExecConfig {
     pub const fn memory_limit(self) -> MemoryLimit {
         self.memory_limit
     }
+
+    /// Define o limite, em bytes, de uma `string` produzida por concatenação.
+    #[must_use]
+    pub const fn with_max_string_bytes(mut self, bytes: u32) -> Self {
+        self.max_string_bytes = bytes;
+        self
+    }
+
+    /// Limite, em bytes, de uma `string` produzida por concatenação.
+    #[must_use]
+    pub const fn max_string_bytes(self) -> u32 {
+        self.max_string_bytes
+    }
 }
 
 impl Default for ExecConfig {
@@ -261,6 +279,7 @@ impl Default for ExecConfig {
             fuel: DEFAULT_FUEL,
             max_call_depth: CallDepthLimit::DEFAULT,
             memory_limit: MemoryLimit::DEFAULT,
+            max_string_bytes: DEFAULT_MAX_STRING_BYTES,
         }
     }
 }

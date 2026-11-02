@@ -78,6 +78,7 @@ terminator:
 | 20 | `str_eq` | `u32 lhs`, `u32 rhs` |
 | 21 | `str_ne` | `u32 lhs`, `u32 rhs` |
 | 22 | `str_len` | `u32 operand` |
+| 23 | `concat_str` | `u32 lhs`, `u32 rhs` |
 
 Código desconhecido ⇒ `unknown_opcode`.
 

@@ -8,9 +8,9 @@
 
 use rvm_interpreter::execute;
 use rvm_ir::testing;
-use rvm_ir::Module;
+use rvm_ir::{Block, Function, Instr, Module, Op, Terminator};
 use rvm_runtime::{arg_buffer_cost, frame_cost, CallDepthLimit, ExecConfig, MemoryLimit, Value};
-use rvm_spec::{ErrorClass, ErrorCode, Limits};
+use rvm_spec::{ErrorClass, ErrorCode, Limits, Type, IR_VERSION};
 use rvm_verify::VerifiedModule;
 
 fn verificar(module: Module) -> VerifiedModule {
@@ -89,4 +89,51 @@ fn memoria_zero_falha_antes_da_primeira_instrucao() {
         ErrorCode::OutOfMemory,
         "não pode ser out_of_fuel"
     );
+}
+
+/// Módulo com `fn junta() -> string { a = const_str "aaaa"; return concat_str a, a }`.
+fn modulo_concat() -> Module {
+    Module {
+        name: "concat".to_string(),
+        version: IR_VERSION,
+        entry: 0,
+        functions: vec![Function {
+            id: 0,
+            name: "junta".to_string(),
+            params: Vec::new(),
+            ret: Type::Str,
+            entry: 0,
+            blocks: vec![Block {
+                id: 0,
+                label: "entry".to_string(),
+                params: Vec::new(),
+                instrs: vec![
+                    Instr {
+                        def: 0,
+                        op: Op::ConstStr("aaaa".to_string()),
+                    },
+                    Instr {
+                        def: 1,
+                        op: Op::ConcatStr { lhs: 0, rhs: 0 },
+                    },
+                ],
+                term: Terminator::Return(Some(1)),
+            }],
+        }],
+    }
+}
+
+#[test]
+fn concatenacao_respeita_o_limite_de_string() {
+    let module = verificar(modulo_concat());
+    let ok =
+        ExecConfig::new(10_000, CallDepthLimit::new(64).expect("limite")).with_max_string_bytes(8);
+    let outcome = execute(&module, module.entry(), &[], &ok).expect("8 bytes cabem");
+    assert_eq!(outcome.value, Value::Str("aaaaaaaa".to_string()));
+
+    let curto =
+        ExecConfig::new(10_000, CallDepthLimit::new(64).expect("limite")).with_max_string_bytes(6);
+    let error = execute(&module, module.entry(), &[], &curto).expect_err("8 > 6");
+    assert_eq!(error.code(), ErrorCode::StringTooLong);
+    assert_eq!(error.class(), ErrorClass::Trap);
 }

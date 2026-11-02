@@ -27,9 +27,9 @@ pode importar Lift: adaptadores ficam fora de `crates/`.
    `boolean` (`bool`), `string` (`string`) ou `void` (`unit`); `let`/`const`,
    **atribuição**, `return`, `if`/`else if`/`else` (inclusive **merge** e `if` sem
    `else`) e **`while`**; expressões `int`/`boolean`/`string` literais, locais,
-   `+ - * / %`, comparações `== != < <= > >=` (`==`/`!=` de `string` por conteúdo),
-   negação `-x`, lógica `!`/`&&`/`||` (**curto-circuito**) e chamadas a funções do
-   próprio programa.
+   `+ - * / %`, comparações `== != < <= > >=` (`==`/`!=` de `string` por conteúdo;
+   `+` de `string` é concatenação), negação `-x`, lógica `!`/`&&`/`||`
+   (**curto-circuito**) e chamadas a funções do próprio programa.
 4. **Lowering CFG/SSA**: cada binding Lift (`BindingId`) é rastreado para o
    `ValueId` corrente; `if/else` e `while` viram blocos com **parâmetros de bloco**
    que carregam o ambiente (phi explícito) no merge do `if` e no cabeçalho do
@@ -73,11 +73,12 @@ pode importar Lift: adaptadores ficam fora de `crates/`.
 
 ## Validação
 
-- `cargo test --manifest-path frontends/lift-rir/Cargo.toml`: **28 testes**
-  (`tests/diferencial.rs`: 19; `tests/cli.rs`: 9) — inclui `while` + atribuição,
+- `cargo test --manifest-path frontends/lift-rir/Cargo.toml`: **29 testes**
+  (`tests/diferencial.rs`: 20; `tests/cli.rs`: 9) — inclui `while` + atribuição,
   `if`/`else if`/`else` com merge, `&&`/`||`/`!` com curto-circuito, recursão
-  `fib`, `/` e `%`, `string` (literal e `==`/`!=`), o trap de divisão por zero,
-  rejeição de `number` (f64) e os códigos de exit do `lift-run` (0/2/3/4).
+  `fib`, `/` e `%`, `string` (literal, `==`/`!=` e `+` → concatenação), o trap de
+  divisão por zero, rejeição de `number` (f64) e os códigos de exit do `lift-run`
+  (0/2/3/4).
 - **Diferencial**: `cargo run -p lift_cli -- run examples/rsuvm-oracle.lift` no
   Lift produz `30 5 7 9 3 true false 25 12 55 0`; `rsuvm-oracle2.lift` produz
   `15 0 7 0 1 2 10 3 6 0` — idênticos ao executado na RSUVM

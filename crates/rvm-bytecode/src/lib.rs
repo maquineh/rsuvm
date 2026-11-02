@@ -74,6 +74,7 @@ const OP_CONST_STR: u8 = 19;
 const OP_STR_EQ: u8 = 20;
 const OP_STR_NE: u8 = 21;
 const OP_STR_LEN: u8 = 22;
+const OP_CONCAT_STR: u8 = 23;
 
 // Tipos de terminador (tabela de `BYTECODE-EXP-0-IMPLEMENTACAO.md` §1).
 const TERM_RETURN: u8 = 0;
@@ -256,6 +257,11 @@ fn encode_instr(out: &mut Vec<u8>, instr: &Instr) {
             push_u8(out, OP_STR_LEN);
             push_u32(out, *operand);
         }
+        Op::ConcatStr { lhs, rhs } => {
+            push_u8(out, OP_CONCAT_STR);
+            push_u32(out, *lhs);
+            push_u32(out, *rhs);
+        }
         Op::Bin { op, lhs, rhs } => {
             push_u8(out, bin_opcode(*op));
             push_u32(out, *lhs);
@@ -412,6 +418,10 @@ fn read_instr(reader: &mut Reader<'_>, limits: &Limits) -> Result<Instr, RvmErro
         },
         OP_STR_LEN => Op::StrLen {
             operand: reader.read_u32("operando str_len")?,
+        },
+        OP_CONCAT_STR => Op::ConcatStr {
+            lhs: reader.read_u32("operando concat_str")?,
+            rhs: reader.read_u32("operando concat_str")?,
         },
         OP_ADD_I64_CHECKED => read_bin_operands(reader, BinOp::AddI64Checked)?,
         OP_SUB_I64_CHECKED => read_bin_operands(reader, BinOp::SubI64Checked)?,

@@ -1,0 +1,25 @@
+; id: N-028
+; expect: limit out_of_memory
+; memory: 700
+; extra: concatenação cobra bytes cumulativos e estoura a quota (ADR-0025)
+module n028 version 1
+entry cresce
+
+fn cresce() -> string {
+  entry:
+    v0 = const_str ""
+    v1 = const_i64 0
+    br loop(v0, v1)
+  loop(s1: string, i1: i64):
+    v2 = const_i64 100
+    v3 = lt_i64 i1, v2
+    cond_br v3, corpo(s1, i1), fim(s1)
+  corpo(s2: string, i2: i64):
+    v4 = const_str "xxxx"
+    v5 = concat_str s2, v4
+    v6 = const_i64 1
+    v7 = add_i64_checked i2, v6
+    br loop(v5, v7)
+  fim(s3: string):
+    return s3
+}

@@ -653,6 +653,7 @@ impl FuncLower {
                 let rhs = self.lower_expr(names, right, env)?;
                 let string_operands = matches!(left.ty, ResolvedType::String);
                 let op = match operator {
+                    BinaryOperator::Add if string_operands => Op::ConcatStr { lhs, rhs },
                     BinaryOperator::Add => Op::Bin {
                         op: BinOp::AddI64Checked,
                         lhs,

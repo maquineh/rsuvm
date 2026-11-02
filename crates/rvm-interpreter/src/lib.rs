@@ -115,6 +115,7 @@ pub fn execute(
         memory_limit: config.memory_limit().get(),
         memory_live: 0,
         memory_peak: 0,
+        max_string_bytes: config.max_string_bytes(),
     };
     let value = interpreter.run(function, args)?;
     Ok(RunOutcome {
@@ -181,6 +182,7 @@ struct Interpreter<'a> {
     memory_limit: u64,
     memory_live: u64,
     memory_peak: u64,
+    max_string_bytes: u32,
 }
 
 impl<'a> Interpreter<'a> {
@@ -386,6 +388,26 @@ impl<'a> Interpreter<'a> {
                     let text = self.read_str(&stack, top, *operand, &site)?;
                     let len = i64::try_from(text.len()).unwrap_or(i64::MAX);
                     self.write_current(&mut stack, top, instr.def, Value::I64(len), &site)?;
+                    self.advance(&mut stack, top, &site)?;
+                }
+                Op::ConcatStr { lhs, rhs } => {
+                    let left = self.read_str(&stack, top, *lhs, &site)?;
+                    let right = self.read_str(&stack, top, *rhs, &site)?;
+                    let len = left.len().saturating_add(right.len());
+                    let cap = usize::try_from(self.max_string_bytes).unwrap_or(usize::MAX);
+                    if len > cap {
+                        return Err(error_at(
+                            ErrorCode::StringTooLong,
+                            format!("concatenação com {len} bytes excede o limite de {cap} bytes"),
+                            &site,
+                        ));
+                    }
+                    // Cobra os bytes do resultado; é cumulativo (não liberado), o que
+                    // limita crescimento descontrolado em laços (ADR-0025).
+                    self.charge_memory(u64::try_from(len).unwrap_or(u64::MAX), &site)?;
+                    let mut result = left;
+                    result.push_str(&right);
+                    self.write_current(&mut stack, top, instr.def, Value::Str(result), &site)?;
                     self.advance(&mut stack, top, &site)?;
                 }
                 Op::Call { callee, args } => {

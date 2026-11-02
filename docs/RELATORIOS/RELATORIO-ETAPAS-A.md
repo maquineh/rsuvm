@@ -319,9 +319,9 @@ Oráculo do Lift: `cargo run -p lift_cli -- run examples/rsuvm-oracle.lift` →
 
 | Comando | Resultado |
 |---|---|
-| `cargo test --manifest-path frontends/lift-rir/Cargo.toml` | 28 passed, 0 failed (19 diferencial + 9 CLI) |
+| `cargo test --manifest-path frontends/lift-rir/Cargo.toml` | 29 passed, 0 failed (20 diferencial + 9 CLI) |
 | `cargo run --bin lift-run -- fib.lift fib --arg i64:10` | `i64:55` (exit 0) |
-| oráculo do Lift (`rsuvm-oracle*.lift`) | `30 5 7 9 3 true false 25 12 55 0` / `15 0 7 0 1 2 10 3 6 0` / `3 -3 2 -2` / `-1 0 1 true false false true false true false true true true` / `ola true false true` |
+| oráculo do Lift (`rsuvm-oracle*.lift`) | `30 5 7 9 3 true false 25 12 55 0` / `15 0 7 0 1 2 10 3 6 0` / `3 -3 2 -2` / `-1 0 1 true false false true false true false true true true` / `ola true false true` / `ola mundo` |
 | `cargo test --workspace` (núcleo) | verde; **não** compila `frontends/` |
 
 Limites: o subconjunto do adaptador ainda **não** cobre strings/arrays/objetos,
@@ -337,8 +337,9 @@ Adaptador refatorado para um construtor **CFG/SSA stateful**: `if`/`else if`/`el
 `-1 0 1 true false false true false true false true true true` — bate com a RSUVM
 (inclui curto-circuito sobre divisão).
 
-`string` do Lift é mapeado (literal, `==`/`!=` por conteúdo, parâmetros/retorno).
-Oráculo (`rsuvm-oracle5.lift`): `ola true false true` — bate.
+`string` do Lift é mapeado (literal, `==`/`!=` por conteúdo, `+` → `concat_str`,
+parâmetros/retorno). Oráculos (`rsuvm-oracle5.lift`/`oracle6.lift`):
+`ola true false true` / `ola mundo` — batem.
 
 ### Divisão, resto e bit a bit (ADRs 0022–0023)
 
@@ -347,17 +348,19 @@ Núcleo ganhou `div/rem_i64_checked` (+ trap `division_by_zero`),
 `C-020..C-026` e `N-025..N-027`. O adaptador mapeia `/` e `%`; oráculo
 (`rsuvm-oracle3.lift`): `3 -3 2 -2`.
 
-### Tipo `string` (ADR-0024)
+### Tipo `string` (ADR-0024) e concatenação (ADR-0025)
 
 Núcleo ganhou `string` (literais `"..."` com escapes), `const_str`, `str_eq`,
-`str_ne`, `str_len`, limite `max_string_bytes` (4096) e corpus `C-027..C-030`.
-`Value` deixou de ser `Copy`; **sem** concatenação nem alocação em execução.
+`str_ne`, `str_len`, `concat_str`, limite `max_string_bytes` e corpus
+`C-027..C-031` + `N-028`. A concatenação cobra os bytes na quota de memória
+(cumulativo → `out_of_memory`) e limita o resultado (`string_too_long`). `Value`
+deixou de ser `Copy`.
 
 ### Verificação (Resultado)
 
 | Comando | Resultado |
 |---|---|
-| `cargo test --workspace` | **146 passed, 0 failed**; corpus 30 válidos + 26 inválidos |
-| `cargo test --manifest-path frontends/lift-rir/Cargo.toml` | 28 passed, 0 failed (19 diferencial + 9 CLI) |
+| `cargo test --workspace` | **147 passed, 0 failed**; corpus 31 válidos + 27 inválidos |
+| `cargo test --manifest-path frontends/lift-rir/Cargo.toml` | 29 passed, 0 failed (20 diferencial + 9 CLI) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | exit 0 |
 | `cargo fmt --all -- --check` | exit 0 |

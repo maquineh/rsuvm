@@ -280,6 +280,19 @@ fn string_literal_e_igualdade() {
 }
 
 #[test]
+fn concatenacao_de_strings() {
+    let source = "function junta(a: string, b: string): string { return a + b; }";
+    assert_eq!(
+        executar(
+            source,
+            "junta",
+            &[Value::Str("ola".into()), Value::Str(" mundo".into())]
+        ),
+        Value::Str("ola mundo".to_string())
+    );
+}
+
+#[test]
 fn construto_fora_do_subconjunto_e_rejeitado() {
     // `number` (f64) ainda não existe no núcleo EXP-0.
     let source = "function metade(a: number): number { return a / 2.0; }";

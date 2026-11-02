@@ -61,7 +61,7 @@ linguagem (ADR-0009).
   `sub_i64_checked`, `mul_i64_checked`, `div_i64_checked`, `rem_i64_checked`,
   `shl_i64_checked`, `shr_i64_checked`, `and_i64`, `or_i64`, `xor_i64`, `eq_i64`,
   `ne_i64`, `lt_i64`, `le_i64`, `gt_i64`, `ge_i64`, `str_eq`, `str_ne`, `str_len`,
-  `call_static`.
+  `concat_str`, `call_static`.
 - Terminadores: `return`, `br`, `cond_br`.
 - Merge por parâmetros de bloco (phi explícito).
 - Fora do EXP-0: `f64`, arrays, registros, referências, closures, `unsafe`, FFI,
