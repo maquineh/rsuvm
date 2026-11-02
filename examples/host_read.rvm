@@ -1,0 +1,15 @@
+; Exemplo: host_read_file (capability filesystem_read).
+; Executar:
+;   rsuvm run examples/host_read.rvm \
+;     --arg "str:CAMINHO_ABSOLUTO" --arg i64:1024 \
+;     --allow-fs-read DIRETORIO_ABSOLUTO
+; Saída: ok:str:<conteúdo> ou err:str:<motivo>
+module host_read version 1
+entry le
+type 5 = result string string
+
+fn le(path: string, max: i64) -> result string string {
+  entry:
+    v2 = host_read_file path, max
+    return v2
+}

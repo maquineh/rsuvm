@@ -17,8 +17,9 @@ traduz `ErrorClass`/`ErrorCode` em códigos de saída estáveis
   (`main.rs:dispatch`).
 - Opções: `--entry <fn>`, `--arg <tipo:valor>`, `--fuel <n>`, `--max-depth <n>`,
   `--memory <bytes>`, `--allow-fs-read <dir>` (`main.rs:parse_options`). Tipos de
-  argumento: `i64:<inteiro>`, `bool:true|false`, `unit` (`main.rs:parse_argument`).
-  `--allow-fs-read` só vale em `run`/`run-bc`.
+  argumento: `i64:<inteiro>`, `bool:true|false`, `f64:<real>`, `str:<texto>`,
+  `unit` (`main.rs:parse_argument`). `--allow-fs-read` só vale em
+  `run`/`run-bc`.
 - `encode` recebe exatamente dois posicionais: entrada `.rvm` e saída binária
   (`main.rs:command_encode`).
 - Saída de valor: `unit`, `bool:true`, `i64:30` (formato de `Value::Display`).

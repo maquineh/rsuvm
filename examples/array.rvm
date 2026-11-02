@@ -1,0 +1,16 @@
+; Exemplo: array imutável e acesso por índice.
+; Executar: rsuvm run examples/array.rvm
+; Saída esperada: i64:20
+module array version 1
+entry pega
+
+fn pega() -> i64 {
+  entry:
+    v0 = const_i64 10
+    v1 = const_i64 20
+    v2 = const_i64 30
+    v3 = array i64 v0, v1, v2
+    v4 = const_i64 1
+    v5 = array_get v3, v4
+    return v5
+}

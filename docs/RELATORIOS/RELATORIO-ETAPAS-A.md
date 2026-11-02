@@ -482,9 +482,9 @@ O teto da leitura é 1 MiB e o intérprete reserva o pior caso na quota antes do
 (ADR-0038). O CLI concede com `--allow-fs-read <dir>` (absoluto, existente,
 canonicalizado; leitura limitada a 1 MiB) e sai com 5 sem a flag, fora do escopo,
 com `..`, symlink (Unix) ou junção (Windows) para fora (ADR-0037). Testes: 7 em
-`rvm-interpreter/tests/host.rs`, 25 no CLI, round-trip de texto e o caso de corpus
-`C-062` (verifica + nega sem host). A leitura concedida não é executada pelo
-corpus; fica nos testes dedicados.
+`rvm-interpreter/tests/host.rs`, 27 no CLI (inclui exemplos e round-trip), 1 de
+round-trip de texto e o caso de corpus `C-062` (verifica + nega sem host). A
+leitura concedida não é executada pelo corpus; fica nos testes dedicados.
 
 ### Verificação (Resultado)
 

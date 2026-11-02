@@ -1,5 +1,5 @@
 # CI no GitHub Actions: espelha o gate local de AGENTS.md §4.
-# Sem dependências externas no projeto, então não há cache de registry.
+# Sem dependências externas no núcleo, então não há cache de registry.
 name: ci
 
 on:
@@ -7,24 +7,48 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    name: validate (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - name: Toolchain
+        shell: bash
         run: |
           rustup component add rustfmt clippy
           rustc --version
           cargo --version
       - name: Build
-        run: cargo build --workspace --all-targets
+        run: cargo build --workspace --all-targets --locked
       - name: Format
         run: cargo fmt --all -- --check
       - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Tests
-        run: cargo test --workspace
+        run: cargo test --workspace --locked
       # A semântica não pode depender do perfil: release também é testado.
       - name: Tests (release)
-        run: cargo test --release --workspace
+        run: cargo test --release --workspace --locked
+      - name: Docs
+        if: matrix.os == 'ubuntu-latest'
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --workspace --no-deps --locked
+
+  msrv:
+    name: msrv 1.75
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install MSRV
+        run: rustup toolchain install 1.75.0 --profile minimal
+      - name: Check MSRV
+        run: cargo +1.75.0 check --workspace --all-targets --locked

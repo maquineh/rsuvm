@@ -489,7 +489,7 @@ fn usage() -> String {
          rsuvm encode <arquivo.rvm> <saida.bin>\n  \
          rsuvm version\n\
          \n\
-         Tipos de argumento: i64:<inteiro>, bool:true|false, unit.\n\
+         Tipos de argumento: i64:<inteiro>, bool:true|false, f64:<real>, str:<texto>, unit.\n\
          Por padrão não concede efeitos; --allow-fs-read <dir> concede filesystem_read sob <dir>.\n",
         version = env!("CARGO_PKG_VERSION")
     )

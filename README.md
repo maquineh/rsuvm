@@ -1,5 +1,8 @@
 # RSUVM Blueprint — Rust Universal Virtual Machine
 
+[![CI](https://github.com/maquineh/rsuvm/actions/workflows/ci.yml/badge.svg)](https://github.com/maquineh/rsuvm/actions/workflows/ci.yml)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](./LICENSE-MIT)
+
 ## System Overview
 
 RSUVM é um **protótipo experimental de pesquisa** (EXP-0): uma máquina virtual em
@@ -26,11 +29,18 @@ bytes .rsvmbc ─ rvm-bytecode ──┘                                   │
 ## Início rápido
 
 ```bash
-cargo build --workspace
-cargo test --workspace
-cargo run -p rvm-cli -- run examples/soma.rvm --arg i64:10 --arg i64:20   # i64:30
-cargo run -p rvm-cli -- check examples/soma.rvm
+# Instala o binário no ~/.cargo/bin.
+cargo install --path crates/rvm-cli --locked
+rsuvm run examples/soma.rvm --arg i64:10 --arg i64:20   # i64:30
+rsuvm check examples/soma.rvm
+
+# Alternativa sem instalar:
+cargo run -p rvm-cli -- run examples/soma.rvm --arg i64:10 --arg i64:20
 ```
+
+Guia completo: [GUIA-USUARIO](./docs/GUIA-USUARIO.md). Para incorporar a VM:
+[INCORPORACAO](./docs/INCORPORACAO.md). Versionamento:
+[COMPATIBILIDADE](./docs/COMPATIBILIDADE.md).
 
 ## Subdirectories & System Boundaries
 
@@ -103,15 +113,19 @@ cargo run -p rvm-cli -- check examples/soma.rvm
 - Gate adicional usado no relatório: `cargo clippy --workspace --all-targets -- -D
   warnings` e `cargo fmt --all -- --check`.
 - CI: `.gitlab-ci.yml` (GitLab) e `.github/workflows/ci.yml` (GitHub Actions)
-  rodam `fmt --check`, `clippy -D warnings`, `test` e `test --release`; Windows é
-  opcional por regra. Workflows auxiliares **manuais**: `bench.yml` (benchmark
-  pré-registrado) e `fuzz.yml` (fuzzing guiado por cobertura, nightly).
+  rodam `fmt --check`, `clippy -D warnings`, `test` e `test --release` em Linux e
+  Windows; há job de MSRV (`1.75`) e `cargo doc` com `-D warnings`. Workflows
+  auxiliares **manuais**: `bench.yml` (benchmark pré-registrado) e `fuzz.yml`
+  (fuzzing guiado por cobertura, nightly). Releases em tag `v*` usam
+  `.github/workflows/release.yml`; ver `docs/RELEASE-CHECKLIST.md`.
 - Resultados atuais e log bruto: [RELATORIO-IMPLEMENTACAO](./docs/RELATORIOS/RELATORIO-IMPLEMENTACAO.md)
-  e [EVIDENCIAS-EXECUCAO](./docs/RELATORIOS/EVIDENCIAS-EXECUCAO.md): 174 testes
+  e [EVIDENCIAS-EXECUCAO](./docs/RELATORIOS/EVIDENCIAS-EXECUCAO.md): 176 testes
   verdes (o teste de symlink é `cfg(unix)` e o de junção é `cfg(windows)`),
   62 casos válidos + 42 inválidos no corpus.
 
 ## Segurança (limites declarados)
+
+Canal privado para vulnerabilidades: [SECURITY.md](./SECURITY.md).
 
 - Rust seguro reduz classes de erro de memória, mas o protótipo **não** é
   isolamento de processo/OS; uso multi-tenant hostil exigiria isolamento externo

@@ -1,0 +1,89 @@
+# Release em tag v*: testa, empacota Linux/Windows e publica no GitHub Releases.
+# A tag só deve ser criada após docs/RELEASE-CHECKLIST.md.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: rsuvm-linux-x86_64
+            archive: tar.gz
+          - os: windows-latest
+            artifact: rsuvm-windows-x86_64
+            archive: zip
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        shell: bash
+        run: |
+          rustup component add rustfmt clippy
+          rustc --version
+          cargo --version
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Tests
+        run: cargo test --workspace --locked
+      - name: Tests (release)
+        run: cargo test --release --workspace --locked
+      - name: Build
+        run: cargo build --release --locked -p rvm-cli
+      - name: Package (unix)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp target/release/rsuvm dist/
+          cp README.md LICENSE-MIT LICENSE-APACHE CHANGELOG.md dist/
+          tar -czf "${{ matrix.artifact }}.tar.gz" -C dist .
+          sha256sum "${{ matrix.artifact }}.tar.gz" > "${{ matrix.artifact }}.sha256"
+      - name: Package (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item target/release/rsuvm.exe dist/
+          Copy-Item README.md, LICENSE-MIT, LICENSE-APACHE, CHANGELOG.md dist/
+          Compress-Archive -Path dist/* -DestinationPath "${{ matrix.artifact }}.zip"
+          $hash = (Get-FileHash "${{ matrix.artifact }}.zip" -Algorithm SHA256).Hash.ToLower()
+          "$hash  ${{ matrix.artifact }}.zip" | Set-Content "${{ matrix.artifact }}.sha256"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            ${{ matrix.artifact }}.${{ matrix.archive }}
+            ${{ matrix.artifact }}.sha256
+
+  publish:
+    name: publish release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" dist/* \
+            --title "RSUVM ${GITHUB_REF_NAME} (experimental)" \
+            --notes-file docs/RELEASE-NOTES.md

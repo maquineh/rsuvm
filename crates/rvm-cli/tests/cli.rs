@@ -15,7 +15,13 @@ fn bin() -> Command {
 }
 
 fn caminho_exemplo() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/soma.rvm")
+    caminho_exemplo_nome("soma.rvm")
+}
+
+fn caminho_exemplo_nome(nome: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../examples")
+        .join(nome)
 }
 
 fn caminho_corpus(relativo: &str) -> PathBuf {
@@ -222,6 +228,51 @@ fn run_bc_truncado_sai_com_codigo_de_modulo() {
         texto(&output.stderr)
     );
     assert!(texto(&output.stderr).contains("truncated_input"));
+}
+
+#[test]
+fn examples_verificam() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples");
+    let mut count = 0;
+    for entry in std::fs::read_dir(&dir).expect("ler diretório examples") {
+        let path = entry.expect("entrada de examples").path();
+        if path.extension().and_then(|ext| ext.to_str()) != Some("rvm") {
+            continue;
+        }
+        let output = saida(bin().arg("check").arg(&path));
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "{}: {}",
+            path.display(),
+            texto(&output.stderr)
+        );
+        count += 1;
+    }
+    assert!(
+        count >= 7,
+        "esperava ao menos 7 exemplos, encontrou {count}"
+    );
+}
+
+#[test]
+fn examples_sem_host_executam() {
+    for (nome, esperado) in [
+        ("strings.rvm", "str:RSUVM"),
+        ("array.rvm", "i64:20"),
+        ("struct.rvm", "i64:7"),
+        ("option.rvm", "i64:42"),
+        ("result.rvm", "bool:true"),
+    ] {
+        let output = saida(bin().arg("run").arg(caminho_exemplo_nome(nome)));
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "{nome}: {}",
+            texto(&output.stderr)
+        );
+        assert_eq!(texto(&output.stdout).trim(), esperado, "{nome}");
+    }
 }
 
 #[test]

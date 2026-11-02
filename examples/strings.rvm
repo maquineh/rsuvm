@@ -1,0 +1,13 @@
+; Exemplo: concatenação de strings.
+; Executar: rsuvm run examples/strings.rvm
+; Saída esperada: str:RSUVM
+module strings version 1
+entry junta
+
+fn junta() -> string {
+  entry:
+    v0 = const_str "RSU"
+    v1 = const_str "VM"
+    v2 = concat_str v0, v1
+    return v2
+}

@@ -36,7 +36,7 @@
 //!
 //! # Máquina de frames explícita
 //!
-//! A execução usa uma pilha de frames na **heap** ([`Frame`]), não a pilha do
+//! A execução usa uma pilha de frames na **heap** (`Frame`), não a pilha do
 //! processo hospedeiro. Uma versão recursiva anterior estourou a pilha de uma
 //! thread de teste com 256 frames (ver ADR-0012): profundidade de chamadas é
 //! entrada não confiável e não pode decidir o uso de pilha nativa do host.

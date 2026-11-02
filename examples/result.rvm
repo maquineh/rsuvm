@@ -1,0 +1,13 @@
+; Exemplo: result_ok e result_is_ok.
+; Executar: rsuvm run examples/result.rvm
+; Saída esperada: bool:true
+module result_exemplo version 1
+entry ok
+
+fn ok() -> bool {
+  entry:
+    v0 = const_i64 1
+    v1 = result_ok i64 string v0
+    v2 = result_is_ok v1
+    return v2
+}

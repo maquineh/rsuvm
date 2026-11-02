@@ -1,0 +1,13 @@
+; Exemplo: option e coalesce com fallback.
+; Executar: rsuvm run examples/option.rvm
+; Saída esperada: i64:42
+module option_exemplo version 1
+entry resolve
+
+fn resolve() -> i64 {
+  entry:
+    v0 = option_none i64
+    v1 = const_i64 42
+    v2 = coalesce v0, v1
+    return v2
+}
