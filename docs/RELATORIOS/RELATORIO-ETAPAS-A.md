@@ -319,9 +319,9 @@ Oráculo do Lift: `cargo run -p lift_cli -- run examples/rsuvm-oracle.lift` →
 
 | Comando | Resultado |
 |---|---|
-| `cargo test --manifest-path frontends/lift-rir/Cargo.toml` | 30 passed, 0 failed (21 diferencial + 9 CLI) |
+| `cargo test --manifest-path frontends/lift-rir/Cargo.toml` | 31 passed, 0 failed (22 diferencial + 9 CLI) |
 | `cargo run --bin lift-run -- fib.lift fib --arg i64:10` | `i64:55` (exit 0) |
-| oráculo do Lift (`rsuvm-oracle*.lift`) | `30 5 7 9 3 true false 25 12 55 0` / `15 0 7 0 1 2 10 3 6 0` / `3 -3 2 -2` / `-1 0 1 true false false true false true false true true true` / `ola true false true` / `ola mundo` / `1.5 true false` |
+| oráculo do Lift (`rsuvm-oracle*.lift`) | `30 5 7 9 3 true false 25 12 55 0` / `15 0 7 0 1 2 10 3 6 0` / `3 -3 2 -2` / `-1 0 1 true false false true false true false true true true` / `ola true false true` / `ola mundo` / `1.5 true false` / `20` |
 | `cargo test --workspace` (núcleo) | verde; **não** compila `frontends/` |
 
 Limites: o subconjunto do adaptador ainda **não** cobre strings/arrays/objetos,
@@ -363,11 +363,18 @@ Núcleo ganhou `f64` (IEEE-754, sem trap): `const_f64`, `add/sub/mul/div_f64`,
 Lift (literal, aritmética, comparações, negação). Oráculo (`rsuvm-oracle7.lift`):
 `1.5 true false` — bate. `Value` deixou de implementar `Eq` (NaN).
 
+### Arrays imutáveis (ADR-0027)
+
+Núcleo ganhou `array` (literal não-vazio e homogêneo), `array_len` e `array_get`
+com **bounds check** (trap `index_out_of_bounds`); quota cumulativa `len × 24` e
+limite `max_array_len`. Corpus `C-034`/`C-035`/`N-029`. O adaptador mapeia
+literais `[...]` e indexação `xs[i]`; oráculo (`rsuvm-oracle8.lift`): `20` — bate.
+
 ### Verificação (Resultado)
 
 | Comando | Resultado |
 |---|---|
-| `cargo test --workspace` | **148 passed, 0 failed**; corpus 33 válidos + 27 inválidos |
-| `cargo test --manifest-path frontends/lift-rir/Cargo.toml` | 30 passed, 0 failed (21 diferencial + 9 CLI) |
+| `cargo test --workspace` | **148 passed, 0 failed**; corpus 35 válidos + 28 inválidos |
+| `cargo test --manifest-path frontends/lift-rir/Cargo.toml` | 31 passed, 0 failed (22 diferencial + 9 CLI) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | exit 0 |
 | `cargo fmt --all -- --check` | exit 0 |

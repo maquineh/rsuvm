@@ -24,7 +24,7 @@
 
 use core::fmt;
 
-use rvm_spec::{ErrorCode, RvmError, Type};
+use rvm_spec::{ArrayElem, ErrorCode, RvmError, Type};
 
 /// Fuel padrão de uma execução quando o host não especifica outro valor.
 pub const DEFAULT_FUEL: u64 = 100_000;
@@ -108,18 +108,29 @@ pub enum Value {
     Str(String),
     /// Valor do tipo `f64` (IEEE-754).
     F64(f64),
+    /// Valor do tipo `array` (imutável, elementos escalares, ADR-0027).
+    Array(Vec<Value>),
 }
 
 impl Value {
     /// Tipo do valor.
+    ///
+    /// Para `Array`, o tipo do elemento vem do primeiro elemento (arrays vazios
+    /// não são produzíveis no EXP-0).
     #[must_use]
-    pub const fn ty(&self) -> Type {
+    pub fn ty(&self) -> Type {
         match self {
             Value::Unit => Type::Unit,
             Value::Bool(_) => Type::Bool,
             Value::I64(_) => Type::I64,
             Value::Str(_) => Type::Str,
             Value::F64(_) => Type::F64,
+            Value::Array(items) => match items.first() {
+                Some(first) => ArrayElem::from_type(first.ty())
+                    .map(Type::Array)
+                    .unwrap_or(Type::Unit),
+                None => Type::Unit,
+            },
         }
     }
 
@@ -159,23 +170,37 @@ impl Value {
         }
     }
 
+    /// Elementos, se o valor for `array`.
+    #[must_use]
+    pub fn as_array(&self) -> Option<&[Value]> {
+        match self {
+            Value::Array(items) => Some(items.as_slice()),
+            _ => None,
+        }
+    }
+
     /// `true` se o valor pertence ao tipo declarado (sem conversão implícita).
     #[must_use]
     pub fn matches_type(&self, ty: Type) -> bool {
-        matches!(
-            (self, ty),
-            (Value::Unit, Type::Unit)
-                | (Value::Bool(_), Type::Bool)
-                | (Value::I64(_), Type::I64)
-                | (Value::Str(_), Type::Str)
-                | (Value::F64(_), Type::F64)
-        )
+        match (self, ty) {
+            (Value::Array(items), Type::Array(elem)) => {
+                items.iter().all(|item| item.matches_type(elem.ty()))
+            }
+            _ => matches!(
+                (self, ty),
+                (Value::Unit, Type::Unit)
+                    | (Value::Bool(_), Type::Bool)
+                    | (Value::I64(_), Type::I64)
+                    | (Value::Str(_), Type::Str)
+                    | (Value::F64(_), Type::F64)
+            ),
+        }
     }
 }
 
 impl fmt::Display for Value {
     /// Formato estável usado pelo CLI e pelo corpus: `unit`, `bool:true`,
-    /// `i64:30`, `str:<texto>`, `f64:<valor>`.
+    /// `i64:30`, `str:<texto>`, `f64:<valor>`, `array:[<elementos>]`.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Value::Unit => f.write_str("unit"),
@@ -183,6 +208,16 @@ impl fmt::Display for Value {
             Value::I64(value) => write!(f, "i64:{value}"),
             Value::Str(value) => write!(f, "str:{value}"),
             Value::F64(value) => write!(f, "f64:{value}"),
+            Value::Array(items) => {
+                f.write_str("array:[")?;
+                for (index, item) in items.iter().enumerate() {
+                    if index > 0 {
+                        f.write_str(", ")?;
+                    }
+                    write!(f, "{item}")?;
+                }
+                f.write_str("]")
+            }
         }
     }
 }

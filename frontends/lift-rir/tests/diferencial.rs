@@ -314,10 +314,17 @@ fn f64_aritmetica_e_comparacoes() {
 }
 
 #[test]
+fn arrays_literal_e_indice() {
+    let source = "function segundo(): int { const xs: int[] = [10, 20, 30]; return xs[1]; } function tamanho(): int { const xs: int[] = [1, 2, 3, 4]; return 0; }";
+    assert_eq!(executar(source, "segundo", &[]), Value::I64(20));
+    assert_eq!(executar(source, "tamanho", &[]), Value::I64(0));
+}
+
+#[test]
 fn construto_fora_do_subconjunto_e_rejeitado() {
-    // Arrays ainda não existem no núcleo EXP-0.
-    let source = "function tamanho(xs: int[]): int { return 0; }";
-    let error = lower_source(source, "tamanho").expect_err("array está fora do subconjunto");
+    // `console.log` (efeito de host) está fora do subconjunto.
+    let source = "function f(): int { console.log(\"x\"); return 0; }";
+    let error = lower_source(source, "f").expect_err("console.log está fora do subconjunto");
     assert!(
         matches!(error, AdapterError::Unsupported(_)),
         "erro inesperado: {error:?}"

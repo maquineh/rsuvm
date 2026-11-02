@@ -16,7 +16,7 @@ BlockParam{ value: ValueId, name, ty }
 Instr     { def: ValueId, op: Op }
 Op        = const_i64 | const_bool | const_str | const_f64 | bin(op,lhs,rhs) | cmp(op,lhs,rhs)
           | str_eq(lhs,rhs) | str_ne(lhs,rhs) | str_len(operand) | concat_str(lhs,rhs)
-          | float(op,lhs,rhs) | call(callee,args)
+          | float(op,lhs,rhs) | array(items) | array_len(v) | array_get(v,i) | call(callee,args)
 Term      = return [v] | br(target,args) | cond_br(cond, target, target)
 ~~~
 
@@ -90,6 +90,9 @@ Depois de `structure::check`:
    | `const_f64` | — | `f64` |
    | `add_f64`/`sub_f64`/`mul_f64`/`div_f64` | `f64`, `f64` | `f64` |
    | `eq_f64`/`ne_f64`/`lt_f64`/`le_f64`/`gt_f64`/`ge_f64` | `f64`, `f64` | `bool` |
+   | `array` | `1..=max_array_len` valores do mesmo tipo escalar | `array` |
+   | `array_len` | `array` | `i64` |
+   | `array_get` | `array`, `i64` | elemento do array |
    | comparações `*_i64` | `i64`, `i64` | `bool` |
    | `call_static` | casam com `params` do alvo | `ret` do alvo |
    Qualquer divergência ⇒ `invalid_type`.
@@ -126,6 +129,9 @@ terminador por último. O primeiro erro vence.
   (quota) ou `string_too_long` (acima de `ExecConfig::max_string_bytes`, ADR-0025).
 - `const_f64`/`Float` operam sobre `f64` com **IEEE-754 sem trap** (divisão por zero
   → `inf`/`NaN`; comparações com `NaN` são falsas exceto `!=`, ADR-0026).
+- `array` cria um array imutável (não-vazio, homogêneo) e cobra `len × 24` bytes na
+  quota (cumulativo); `array_len` devolve o comprimento; `array_get` faz **bounds
+  check** e produz `index_out_of_bounds` fora de `0..len` (ADR-0027).
 - `br`/`cond_br` copiam os argumentos para os slots dos parâmetros do bloco alvo
   antes de saltar (phi explícito).
 - `return` devolve `Value::Unit` quando não há valor.

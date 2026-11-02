@@ -54,7 +54,7 @@
 use rvm_ir::{
     Block, BlockId, BranchTarget, FnId, Function, Instr, Module, Op, Terminator, ValueId,
 };
-use rvm_spec::{ErrorCode, Limits, Location, RvmError, Type};
+use rvm_spec::{ArrayElem, ErrorCode, Limits, Location, RvmError, Type};
 
 /// Módulo que passou pela verificação completa.
 ///
@@ -246,6 +246,44 @@ impl<'a> FunctionFacts<'a> {
                 self.check_operand_type(*lhs, Type::F64, location)?;
                 self.check_operand_type(*rhs, Type::F64, location)
             }
+            Op::ArrayLiteral(items) => {
+                for item in items {
+                    self.check_use(block_index, instr_index, *item, location)?;
+                }
+                let mut element: Option<ArrayElem> = None;
+                for item in items {
+                    let ty = self.type_of_value(*item, location)?;
+                    let this = ArrayElem::from_type(ty).ok_or_else(|| {
+                        invalid(
+                            ErrorCode::InvalidType,
+                            "elemento de array não é escalar".to_string(),
+                            location.clone(),
+                        )
+                    })?;
+                    match element {
+                        None => element = Some(this),
+                        Some(previous) if previous != this => {
+                            return Err(invalid(
+                                ErrorCode::InvalidType,
+                                "array heterogêneo".to_string(),
+                                location.clone(),
+                            ))
+                        }
+                        Some(_) => {}
+                    }
+                }
+                Ok(())
+            }
+            Op::ArrayLen { array } => {
+                self.check_use(block_index, instr_index, *array, location)?;
+                self.require_array(*array, location)
+            }
+            Op::ArrayGet { array, index } => {
+                self.check_use(block_index, instr_index, *array, location)?;
+                self.check_use(block_index, instr_index, *index, location)?;
+                self.require_array(*array, location)?;
+                self.check_operand_type(*index, Type::I64, location)
+            }
             Op::Call { callee, args } => {
                 let target = self.module.function(*callee).ok_or_else(|| {
                     invalid(
@@ -425,6 +463,18 @@ impl<'a> FunctionFacts<'a> {
                 format!("valor v{value} tem tipo {actual}, esperado {expected}"),
                 location.clone(),
             ))
+        }
+    }
+
+    /// Exige que `value` tenha tipo de array.
+    fn require_array(&self, value: ValueId, location: &Location) -> Result<(), RvmError> {
+        match self.type_of_value(value, location)? {
+            Type::Array(_) => Ok(()),
+            other => Err(invalid(
+                ErrorCode::InvalidType,
+                format!("valor v{value} tem tipo {other}, esperado array"),
+                location.clone(),
+            )),
         }
     }
 
@@ -711,7 +761,55 @@ fn build_values(
                 },
                 location,
             )?;
-            let ty = operation_type(module, &instr.op, location)?;
+            let ty = match &instr.op {
+                Op::ArrayLiteral(items) => {
+                    let first = items.first().ok_or_else(|| {
+                        invalid(
+                            ErrorCode::InvalidModule,
+                            "array literal vazio".to_string(),
+                            location.clone(),
+                        )
+                    })?;
+                    let first_index = value_index(*first, location)?;
+                    let element_ty =
+                        types.get(first_index).copied().flatten().ok_or_else(|| {
+                            invalid(
+                                ErrorCode::InvalidModule,
+                                "tipo do elemento de array desconhecido".to_string(),
+                                location.clone(),
+                            )
+                        })?;
+                    let element = ArrayElem::from_type(element_ty).ok_or_else(|| {
+                        invalid(
+                            ErrorCode::InvalidType,
+                            "elemento de array não é escalar".to_string(),
+                            location.clone(),
+                        )
+                    })?;
+                    Type::Array(element)
+                }
+                Op::ArrayGet { array, .. } => {
+                    let array_index = value_index(*array, location)?;
+                    let array_ty = types.get(array_index).copied().flatten().ok_or_else(|| {
+                        invalid(
+                            ErrorCode::InvalidModule,
+                            "tipo do array desconhecido".to_string(),
+                            location.clone(),
+                        )
+                    })?;
+                    match array_ty {
+                        Type::Array(element) => element.ty(),
+                        _ => {
+                            return Err(invalid(
+                                ErrorCode::InvalidType,
+                                "array_get sobre valor que não é array".to_string(),
+                                location.clone(),
+                            ))
+                        }
+                    }
+                }
+                other => operation_type(module, other, location)?,
+            };
             record_type(&mut types, index, ty, location)?;
         }
     }
@@ -734,6 +832,11 @@ fn operation_type(module: &Module, op: &Op, location: &Location) -> Result<Type,
         Op::StrLen { .. } => Ok(Type::I64),
         Op::ConcatStr { .. } => Ok(Type::Str),
         Op::Float { op, .. } => Ok(op.result_type()),
+        // `ArrayLiteral`/`ArrayGet` são resolvidos em `build_values` (dependem dos
+        // tipos dos operandos); aqui só se mantém a exaustividade.
+        Op::ArrayLiteral(_) => Ok(Type::Array(ArrayElem::I64)),
+        Op::ArrayLen { .. } => Ok(Type::I64),
+        Op::ArrayGet { .. } => Ok(Type::I64),
         Op::Call { callee, .. } => module
             .function(*callee)
             .map(|target| target.ret)

@@ -36,7 +36,7 @@ use rvm_ir::structure;
 use rvm_ir::{
     Block, BlockParam, BranchTarget, Function, Instr, Module, Op, Param, Terminator, ValueId,
 };
-use rvm_spec::{BinOp, CmpOp, ErrorCode, FloatOp, Limits, RvmError, Type};
+use rvm_spec::{ArrayElem, BinOp, CmpOp, ErrorCode, FloatOp, Limits, RvmError, Type};
 
 /// Magic bytes no início de todo arquivo codificado: `RSVMB1`.
 pub const MAGIC: [u8; 6] = *b"RSVMB1";
@@ -50,6 +50,7 @@ const TAG_BOOL: u8 = 1;
 const TAG_I64: u8 = 2;
 const TAG_STR: u8 = 3;
 const TAG_F64: u8 = 4;
+const TAG_ARRAY: u8 = 5;
 
 // Opcodes de instrução (tabela de `BYTECODE-EXP-0-IMPLEMENTACAO.md` §1).
 const OP_CONST_I64: u8 = 0;
@@ -87,6 +88,9 @@ const OP_LT_F64: u8 = 31;
 const OP_LE_F64: u8 = 32;
 const OP_GT_F64: u8 = 33;
 const OP_GE_F64: u8 = 34;
+const OP_ARRAY: u8 = 35;
+const OP_ARRAY_LEN: u8 = 36;
+const OP_ARRAY_GET: u8 = 37;
 
 // Tipos de terminador (tabela de `BYTECODE-EXP-0-IMPLEMENTACAO.md` §1).
 const TERM_RETURN: u8 = 0;
@@ -209,12 +213,12 @@ pub fn decode(bytes: &[u8], limits: &Limits) -> Result<Module, RvmError> {
 fn encode_function(out: &mut Vec<u8>, function: &Function) {
     push_u32(out, function.id);
     push_string(out, &function.name);
-    push_u8(out, type_tag(function.ret));
+    push_type(out, function.ret);
     push_u32(out, function.entry);
     push_u16(out, len_u16(function.params.len()));
     for param in &function.params {
         push_string(out, &param.name);
-        push_u8(out, type_tag(param.ty));
+        push_type(out, param.ty);
     }
     push_u32(out, len_u32(function.blocks.len()));
     for block in &function.blocks {
@@ -230,7 +234,7 @@ fn encode_block(out: &mut Vec<u8>, block: &Block) {
     for param in &block.params {
         push_u32(out, param.value);
         push_string(out, &param.name);
-        push_u8(out, type_tag(param.ty));
+        push_type(out, param.ty);
     }
     push_u32(out, len_u32(block.instrs.len()));
     for instr in &block.instrs {
@@ -282,6 +286,22 @@ fn encode_instr(out: &mut Vec<u8>, instr: &Instr) {
             push_u8(out, float_opcode(*op));
             push_u32(out, *lhs);
             push_u32(out, *rhs);
+        }
+        Op::ArrayLiteral(items) => {
+            push_u8(out, OP_ARRAY);
+            push_u16(out, len_u16(items.len()));
+            for item in items {
+                push_u32(out, *item);
+            }
+        }
+        Op::ArrayLen { array } => {
+            push_u8(out, OP_ARRAY_LEN);
+            push_u32(out, *array);
+        }
+        Op::ArrayGet { array, index } => {
+            push_u8(out, OP_ARRAY_GET);
+            push_u32(out, *array);
+            push_u32(out, *index);
         }
         Op::Bin { op, lhs, rhs } => {
             push_u8(out, bin_opcode(*op));
@@ -455,6 +475,21 @@ fn read_instr(reader: &mut Reader<'_>, limits: &Limits) -> Result<Instr, RvmErro
         OP_LE_F64 => read_float_operands(reader, FloatOp::Le)?,
         OP_GT_F64 => read_float_operands(reader, FloatOp::Gt)?,
         OP_GE_F64 => read_float_operands(reader, FloatOp::Ge)?,
+        OP_ARRAY => {
+            let count = reader.read_count_u16(limits.max_array_len, "contagem de array")?;
+            let mut items: Vec<u32> = Vec::new();
+            for _ in 0..count {
+                items.push(reader.read_u32("elemento de array")?);
+            }
+            Op::ArrayLiteral(items)
+        }
+        OP_ARRAY_LEN => Op::ArrayLen {
+            array: reader.read_u32("operando array_len")?,
+        },
+        OP_ARRAY_GET => Op::ArrayGet {
+            array: reader.read_u32("operando array_get")?,
+            index: reader.read_u32("índice de array_get")?,
+        },
         OP_ADD_I64_CHECKED => read_bin_operands(reader, BinOp::AddI64Checked)?,
         OP_SUB_I64_CHECKED => read_bin_operands(reader, BinOp::SubI64Checked)?,
         OP_MUL_I64_CHECKED => read_bin_operands(reader, BinOp::MulI64Checked)?,
@@ -554,6 +589,7 @@ fn read_type(reader: &mut Reader<'_>, what: &'static str) -> Result<Type, RvmErr
         TAG_I64 => Ok(Type::I64),
         TAG_STR => Ok(Type::Str),
         TAG_F64 => Ok(Type::F64),
+        TAG_ARRAY => Ok(Type::Array(read_elem(reader, what)?)),
         tag => Err(decode_error(
             ErrorCode::UnknownType,
             format!("{what}: tag de tipo {tag} desconhecida"),
@@ -569,6 +605,29 @@ const fn type_tag(ty: Type) -> u8 {
         Type::I64 => TAG_I64,
         Type::Str => TAG_STR,
         Type::F64 => TAG_F64,
+        Type::Array(_) => TAG_ARRAY,
+    }
+}
+
+/// Escreve um [`Type`]; arrays escrevem também a tag do elemento.
+fn push_type(out: &mut Vec<u8>, ty: Type) {
+    push_u8(out, type_tag(ty));
+    if let Type::Array(element) = ty {
+        push_u8(out, type_tag(element.ty()));
+    }
+}
+
+/// Lê a tag do elemento de um array.
+fn read_elem(reader: &mut Reader<'_>, what: &'static str) -> Result<ArrayElem, RvmError> {
+    match reader.read_u8(what)? {
+        TAG_BOOL => Ok(ArrayElem::Bool),
+        TAG_I64 => Ok(ArrayElem::I64),
+        TAG_STR => Ok(ArrayElem::Str),
+        TAG_F64 => Ok(ArrayElem::F64),
+        tag => Err(decode_error(
+            ErrorCode::UnknownType,
+            format!("{what}: tag de elemento {tag} desconhecida"),
+        )),
     }
 }
 

@@ -32,7 +32,7 @@
     )
 )]
 
-use rvm_spec::{BinOp, CmpOp, FloatOp, Type};
+use rvm_spec::{ArrayElem, BinOp, CmpOp, FloatOp, Type};
 
 pub mod structure;
 #[cfg(any(test, feature = "test-helpers"))]
@@ -202,6 +202,20 @@ pub enum Op {
         /// Operando direito.
         rhs: ValueId,
     },
+    /// Cria um array imutável a partir de elementos já definidos (`array`), ADR-0027.
+    ArrayLiteral(Vec<ValueId>),
+    /// Comprimento de um array (`array_len`), produzindo `i64`, ADR-0027.
+    ArrayLen {
+        /// Operando array.
+        array: ValueId,
+    },
+    /// Lê um elemento de um array (`array_get`), com bounds check, ADR-0027.
+    ArrayGet {
+        /// Operando array.
+        array: ValueId,
+        /// Índice (`i64`).
+        index: ValueId,
+    },
     /// Chama estaticamente uma função do mesmo módulo (`call_static`).
     Call {
         /// Função chamada; resolvida estaticamente pelo verificador.
@@ -226,6 +240,11 @@ impl Op {
             Op::StrLen { .. } => Type::I64,
             Op::ConcatStr { .. } => Type::Str,
             Op::Float { op, .. } => op.result_type(),
+            // O tipo do elemento é resolvido pelo verificador a partir dos itens.
+            Op::ArrayLiteral(_) => Type::Array(ArrayElem::I64),
+            Op::ArrayLen { .. } => Type::I64,
+            // O tipo do elemento é resolvido pelo verificador a partir do array.
+            Op::ArrayGet { .. } => Type::I64,
             Op::Call { .. } => Type::I64, // substituído pelo tipo de retorno no verificador
         }
     }
@@ -245,6 +264,9 @@ impl Op {
             | Op::ConcatStr { lhs, rhs }
             | Op::Float { lhs, rhs, .. } => vec![*lhs, *rhs],
             Op::StrLen { operand } => vec![*operand],
+            Op::ArrayLiteral(items) => items.clone(),
+            Op::ArrayLen { array } => vec![*array],
+            Op::ArrayGet { array, index } => vec![*array, *index],
             Op::Call { args, .. } => args.clone(),
         }
     }

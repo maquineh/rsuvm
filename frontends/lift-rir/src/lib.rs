@@ -42,7 +42,7 @@ use rvm_ir::{
     Block, BlockId, BlockParam, BranchTarget, FnId, Function, Instr, Module, Op, Param, Terminator,
     ValueId,
 };
-use rvm_spec::{BinOp, CmpOp, FloatOp, Type, IR_VERSION};
+use rvm_spec::{ArrayElem, BinOp, CmpOp, FloatOp, Type, IR_VERSION};
 
 /// Erro do adaptador.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -142,6 +142,16 @@ fn map_type(ty: &ResolvedType) -> Result<Type, AdapterError> {
         ResolvedType::Void => Ok(Type::Unit),
         ResolvedType::String => Ok(Type::Str),
         ResolvedType::Number => Ok(Type::F64),
+        ResolvedType::Array(inner) => {
+            let element = match inner.as_ref() {
+                ResolvedType::Int => ArrayElem::I64,
+                ResolvedType::Boolean => ArrayElem::Bool,
+                ResolvedType::String => ArrayElem::Str,
+                ResolvedType::Number => ArrayElem::F64,
+                other => return Err(AdapterError::Unsupported(format!("array de `{other}`"))),
+            };
+            Ok(Type::Array(element))
+        }
         other => Err(AdapterError::Unsupported(format!("tipo `{other}`"))),
     }
 }
@@ -617,6 +627,21 @@ impl FuncLower {
             HirExprKind::BooleanLiteral(value) => self.emit(Op::ConstBool(*value)),
             HirExprKind::StringLiteral(text) => self.emit(Op::ConstStr(text.clone())),
             HirExprKind::NumberLiteral(value) => self.emit(Op::ConstF64(value.to_bits())),
+            HirExprKind::ArrayLiteral(items) => {
+                let mut values: Vec<ValueId> = Vec::new();
+                for item in items {
+                    values.push(self.lower_expr(names, item, env)?);
+                }
+                self.emit(Op::ArrayLiteral(values))
+            }
+            HirExprKind::Index { object, index } => {
+                let array = self.lower_expr(names, object, env)?;
+                let position = self.lower_expr(names, index, env)?;
+                self.emit(Op::ArrayGet {
+                    array,
+                    index: position,
+                })
+            }
             HirExprKind::Local { id, name } => env
                 .get(id)
                 .map(|(value, _)| *value)

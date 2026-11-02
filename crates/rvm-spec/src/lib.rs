@@ -33,6 +33,55 @@ use core::fmt;
 /// Módulos com outra versão são rejeitados com [`ErrorCode::UnsupportedVersion`].
 pub const IR_VERSION: u16 = 1;
 
+/// Tipo de elemento de um array (ADR-0027). Escalar; arrays aninhados ficam fora.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum ArrayElem {
+    /// Elementos `bool`.
+    Bool,
+    /// Elementos `i64`.
+    I64,
+    /// Elementos `string`.
+    Str,
+    /// Elementos `f64`.
+    F64,
+}
+
+impl ArrayElem {
+    /// Tipo escalar do elemento.
+    #[must_use]
+    pub const fn ty(self) -> Type {
+        match self {
+            ArrayElem::Bool => Type::Bool,
+            ArrayElem::I64 => Type::I64,
+            ArrayElem::Str => Type::Str,
+            ArrayElem::F64 => Type::F64,
+        }
+    }
+
+    /// Nome estável do elemento.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            ArrayElem::Bool => "bool",
+            ArrayElem::I64 => "i64",
+            ArrayElem::Str => "string",
+            ArrayElem::F64 => "f64",
+        }
+    }
+
+    /// Elemento correspondente a um tipo escalar, se houver.
+    #[must_use]
+    pub const fn from_type(ty: Type) -> Option<Self> {
+        match ty {
+            Type::Bool => Some(ArrayElem::Bool),
+            Type::I64 => Some(ArrayElem::I64),
+            Type::Str => Some(ArrayElem::Str),
+            Type::F64 => Some(ArrayElem::F64),
+            Type::Unit | Type::Array(_) => None,
+        }
+    }
+}
+
 /// Tipo de valor do subset EXP-0.
 ///
 /// Não existe coerção implícita entre tipos: toda operação declara tipos de
@@ -53,6 +102,8 @@ pub enum Type {
     Str,
     /// Ponto flutuante IEEE-754 de 64 bits (ADR-0026).
     F64,
+    /// Array imutável de elementos escalares (ADR-0027).
+    Array(ArrayElem),
 }
 
 impl Type {
@@ -65,6 +116,7 @@ impl Type {
             Type::I64 => "i64",
             Type::Str => "string",
             Type::F64 => "f64",
+            Type::Array(_) => "array",
         }
     }
 
@@ -507,6 +559,8 @@ pub enum ErrorCode {
     /// Concatenação de `string` excede `Limits::max_string_bytes`
     /// (`string_too_long`, ADR-0025).
     StringTooLong,
+    /// Índice de array fora de `0..len` (`index_out_of_bounds`, ADR-0027).
+    IndexOutOfBounds,
     /// Fuel esgotado antes do despacho.
     OutOfFuel,
     /// Profundidade máxima de chamadas excedida.
@@ -537,6 +591,7 @@ impl ErrorCode {
             ErrorCode::DivisionByZero => "division_by_zero",
             ErrorCode::InvalidShift => "invalid_shift",
             ErrorCode::StringTooLong => "string_too_long",
+            ErrorCode::IndexOutOfBounds => "index_out_of_bounds",
             ErrorCode::OutOfFuel => "out_of_fuel",
             ErrorCode::CallDepthExceeded => "call_depth_exceeded",
             ErrorCode::OutOfMemory => "out_of_memory",
@@ -565,6 +620,7 @@ impl ErrorCode {
             "division_by_zero" => Some(ErrorCode::DivisionByZero),
             "invalid_shift" => Some(ErrorCode::InvalidShift),
             "string_too_long" => Some(ErrorCode::StringTooLong),
+            "index_out_of_bounds" => Some(ErrorCode::IndexOutOfBounds),
             "out_of_fuel" => Some(ErrorCode::OutOfFuel),
             "call_depth_exceeded" => Some(ErrorCode::CallDepthExceeded),
             "out_of_memory" => Some(ErrorCode::OutOfMemory),
@@ -591,7 +647,8 @@ impl ErrorCode {
             ErrorCode::IntegerOverflow
             | ErrorCode::DivisionByZero
             | ErrorCode::InvalidShift
-            | ErrorCode::StringTooLong => ErrorCategory::Trap,
+            | ErrorCode::StringTooLong
+            | ErrorCode::IndexOutOfBounds => ErrorCategory::Trap,
             ErrorCode::OutOfFuel | ErrorCode::CallDepthExceeded | ErrorCode::OutOfMemory => {
                 ErrorCategory::Resource
             }
@@ -772,6 +829,8 @@ pub struct Limits {
     pub max_name_len: u32,
     /// Tamanho máximo, em bytes, de um literal `string` (ADR-0024).
     pub max_string_bytes: u32,
+    /// Número máximo de elementos de um literal de array (ADR-0027).
+    pub max_array_len: u32,
     /// Tamanho máximo, em bytes, da entrada textual ou binária de um módulo.
     pub max_input_bytes: u32,
 }
@@ -788,6 +847,7 @@ impl Default for Limits {
             max_call_args: 16,
             max_name_len: 64,
             max_string_bytes: 4096,
+            max_array_len: 4096,
             max_input_bytes: 1_048_576,
         }
     }
@@ -889,6 +949,7 @@ mod tests {
             ErrorCode::DivisionByZero,
             ErrorCode::InvalidShift,
             ErrorCode::StringTooLong,
+            ErrorCode::IndexOutOfBounds,
             ErrorCode::OutOfFuel,
             ErrorCode::CallDepthExceeded,
             ErrorCode::CapabilityDenied,

@@ -90,6 +90,9 @@ terminator:
 | 32 | `le_f64` | `u32 lhs`, `u32 rhs` |
 | 33 | `gt_f64` | `u32 lhs`, `u32 rhs` |
 | 34 | `ge_f64` | `u32 lhs`, `u32 rhs` |
+| 35 | `array` | `u16 count`, `u32 items[count]` |
+| 36 | `array_len` | `u32 array` |
+| 37 | `array_get` | `u32 array`, `u32 index` |
 
 Código desconhecido ⇒ `unknown_opcode`.
 
@@ -117,7 +120,7 @@ Código desconhecido ⇒ `unknown_opcode`.
    comparada com o limite estrutural correspondente **e** com os bytes restantes
    antes de reservar memória. Contagem maior que os bytes restantes ⇒
    `truncated_input` (cada item consome ao menos 1 byte).
-6. Tag de tipo fora de `0..=4` (`unit`, `bool`, `i64`, `string`, `f64`) ⇒
+6. Tag de tipo fora de `0..=5` (`unit`, `bool`, `i64`, `string`, `f64`, `array`) ⇒
    `unknown_type`; `const_bool` fora de `0|1` ⇒
    `invalid_number`.
 7. Ao final, bytes excedentes ⇒ `invalid_module`.

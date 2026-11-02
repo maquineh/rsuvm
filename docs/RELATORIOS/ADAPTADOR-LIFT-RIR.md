@@ -181,14 +181,28 @@ Comando de verificação:
 cargo test --manifest-path frontends/lift-rir/Cargo.toml
 ```
 
-Resultado: `21 passed` (diferencial) + `9 passed` (CLI) = **30 passed; 0 failed**.
+### 2.6 Arrays
+
+Sétimo programa de referência (`rsuvm-oracle8.lift`):
+
+```bash
+cargo run -p lift_cli -- run examples/rsuvm-oracle8.lift
+```
+
+Saída do Lift (oráculo): `20`.
+
+| Caso (Lift) | Chamada | Oráculo Lift | RSUVM (RIR) | Igual? |
+|---|---|---|---|---|
+| `segundo` (literal + índice) | `segundo()` | 20 | `i64:20` | sim |
+
+Resultado: `22 passed` (diferencial) + `9 passed` (CLI) = **31 passed; 0 failed**.
 
 ## 3. Limitações
 
-1. Subconjunto ainda estreito: **sem** `coalesce`, arrays, objetos, closures,
+1. Subconjunto ainda estreito: **sem** `coalesce`, objetos/structs, closures,
    `console.log`/`import`. Fora disso, `AdapterError::Unsupported`. Divisão/resto,
-   `string` (com concatenação) e `f64` (`number`) são suportados; arrays exigiriam
-   um tipo novo no núcleo.
+   `string` (com concatenação), `f64` (`number`) e arrays (literal + índice) são
+   suportados; mutação de array e objetos exigiriam mais no núcleo.
 2. O adaptador é um **workspace separado** e depende do Lift por git fixado; o
    núcleo RSUVM continua sem dependências externas.
 3. O teste compara com o oráculo do Lift **registrado**; não invoca o compilador do

@@ -300,6 +300,19 @@ fn check_function<'a>(
                     ));
                 }
             }
+            if let Op::ArrayLiteral(items) = &instr.op {
+                if items.is_empty() || items.len() > limit(limits.max_array_len) {
+                    return Err(invalid(
+                        ErrorCode::InvalidModule,
+                        format!(
+                            "array literal com {} elemento(s); esperado 1..={}",
+                            items.len(),
+                            limits.max_array_len
+                        ),
+                        instr_location.clone(),
+                    ));
+                }
+            }
             for operand in instr.op.operand_ids() {
                 check_value_ref(&seen, operand, &instr_location)?;
             }

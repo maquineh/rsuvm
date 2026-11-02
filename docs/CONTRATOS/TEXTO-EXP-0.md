@@ -29,6 +29,9 @@ operação   = "const_i64" inteiro
            | "str_len" valor
            | "concat_str" valor "," valor
            | op_f64 valor "," valor
+           | "array" valor { "," valor }
+           | "array_len" valor
+           | "array_get" valor "," valor
            | "call_static" ident "(" [valores] ")" ;
 op_binário = "add_i64_checked" | "sub_i64_checked" | "mul_i64_checked"
            | "div_i64_checked" | "rem_i64_checked"

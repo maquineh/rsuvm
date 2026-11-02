@@ -55,7 +55,7 @@
 )]
 
 use rvm_ir::{BlockId, FnId, Function, Module, Op, Terminator, ValueId};
-use rvm_runtime::{arg_buffer_cost, frame_cost, ExecConfig, Value};
+use rvm_runtime::{arg_buffer_cost, frame_cost, ExecConfig, Value, SLOT_BYTES};
 use rvm_spec::{BinOp, ErrorCode, Location, RvmError, Type};
 
 use rvm_verify::VerifiedModule;
@@ -429,6 +429,103 @@ impl<'a> Interpreter<'a> {
                         Value::Bool(op.eval_cmp(left, right))
                     };
                     self.write_current(&mut stack, top, instr.def, value, &site)?;
+                    self.advance(&mut stack, top, &site)?;
+                }
+                Op::ArrayLiteral(items) => {
+                    let mut values: Vec<Value> = Vec::new();
+                    {
+                        let frame = stack.get(top).ok_or_else(|| {
+                            error_at(
+                                ErrorCode::InvalidModule,
+                                "frame ausente ao ler array",
+                                &site,
+                            )
+                        })?;
+                        values.try_reserve_exact(items.len()).map_err(|_| {
+                            error_at(
+                                ErrorCode::InvalidModule,
+                                "não foi possível alocar o array",
+                                &site,
+                            )
+                        })?;
+                        for id in items {
+                            values.push(read_slot(frame, *id, &site)?);
+                        }
+                    }
+                    // Cobra os bytes do array; é cumulativo (ADR-0027).
+                    let bytes = u64::try_from(items.len())
+                        .unwrap_or(u64::MAX)
+                        .saturating_mul(SLOT_BYTES);
+                    self.charge_memory(bytes, &site)?;
+                    self.write_current(&mut stack, top, instr.def, Value::Array(values), &site)?;
+                    self.advance(&mut stack, top, &site)?;
+                }
+                Op::ArrayLen { array } => {
+                    let length = {
+                        let frame = stack.get(top).ok_or_else(|| {
+                            error_at(
+                                ErrorCode::InvalidModule,
+                                "frame ausente ao medir array",
+                                &site,
+                            )
+                        })?;
+                        let value = read_slot(frame, *array, &site)?;
+                        match value.as_array() {
+                            Some(items) => i64::try_from(items.len()).unwrap_or(i64::MAX),
+                            None => {
+                                return Err(error_at(
+                                    ErrorCode::InvalidModule,
+                                    format!("v{array} não é um array"),
+                                    &site,
+                                ))
+                            }
+                        }
+                    };
+                    self.write_current(&mut stack, top, instr.def, Value::I64(length), &site)?;
+                    self.advance(&mut stack, top, &site)?;
+                }
+                Op::ArrayGet { array, index } => {
+                    let element = {
+                        let frame = stack.get(top).ok_or_else(|| {
+                            error_at(
+                                ErrorCode::InvalidModule,
+                                "frame ausente ao indexar array",
+                                &site,
+                            )
+                        })?;
+                        let array_value = read_slot(frame, *array, &site)?;
+                        let items = array_value.as_array().ok_or_else(|| {
+                            error_at(
+                                ErrorCode::InvalidModule,
+                                format!("v{array} não é um array"),
+                                &site,
+                            )
+                        })?;
+                        let position = read_i64(frame, *index, &site)?;
+                        let len = i64::try_from(items.len()).unwrap_or(i64::MAX);
+                        if position < 0 || position >= len {
+                            return Err(error_at(
+                                ErrorCode::IndexOutOfBounds,
+                                format!("índice {position} fora de 0..{len}"),
+                                &site,
+                            ));
+                        }
+                        let offset = usize::try_from(position).map_err(|_| {
+                            error_at(
+                                ErrorCode::InvalidModule,
+                                "índice não representável neste host",
+                                &site,
+                            )
+                        })?;
+                        items.get(offset).cloned().ok_or_else(|| {
+                            error_at(
+                                ErrorCode::IndexOutOfBounds,
+                                format!("índice {position} fora de 0..{len}"),
+                                &site,
+                            )
+                        })?
+                    };
+                    self.write_current(&mut stack, top, instr.def, element, &site)?;
                     self.advance(&mut stack, top, &site)?;
                 }
                 Op::Call { callee, args } => {

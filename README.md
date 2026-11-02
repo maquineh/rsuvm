@@ -102,7 +102,7 @@ cargo run -p rvm-cli -- check examples/soma.rvm
   pré-registrado) e `fuzz.yml` (fuzzing guiado por cobertura, nightly).
 - Resultados atuais e log bruto: [RELATORIO-IMPLEMENTACAO](./docs/RELATORIOS/RELATORIO-IMPLEMENTACAO.md)
   e [EVIDENCIAS-EXECUCAO](./docs/RELATORIOS/EVIDENCIAS-EXECUCAO.md): 148 testes
-  verdes, 33 casos válidos + 27 inválidos no corpus.
+  verdes, 35 casos válidos + 28 inválidos no corpus.
 
 ## Segurança (limites declarados)
 

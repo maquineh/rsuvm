@@ -265,6 +265,25 @@ fn print_op(module: &Module, function: &Function, op: &Op, out: &mut String) {
             out.push_str(", ");
             print_value(function, *rhs, out);
         }
+        Op::ArrayLiteral(items) => {
+            out.push_str("array ");
+            for (index, item) in items.iter().enumerate() {
+                if index > 0 {
+                    out.push_str(", ");
+                }
+                print_value(function, *item, out);
+            }
+        }
+        Op::ArrayLen { array } => {
+            out.push_str("array_len ");
+            print_value(function, *array, out);
+        }
+        Op::ArrayGet { array, index } => {
+            out.push_str("array_get ");
+            print_value(function, *array, out);
+            out.push_str(", ");
+            print_value(function, *index, out);
+        }
         Op::Bin { op, lhs, rhs } => {
             out.push_str(op.name());
             out.push(' ');
@@ -629,6 +648,9 @@ enum RawOp {
     StrNe(String, String),
     StrLen(String),
     ConcatStr(String, String),
+    Array(Vec<String>),
+    ArrayLen(String),
+    ArrayGet(String, String),
     Call(String, Vec<String>),
 }
 
@@ -1009,6 +1031,25 @@ impl Parser {
                 let rhs = self.expect_ident("operando direito")?;
                 RawOp::ConcatStr(lhs, rhs)
             }
+            "array" => {
+                let mut items: Vec<String> = Vec::new();
+                loop {
+                    items.push(self.expect_ident("elemento do array")?);
+                    if self.peek() == &Token::Comma {
+                        self.bump();
+                    } else {
+                        break;
+                    }
+                }
+                RawOp::Array(items)
+            }
+            "array_len" => RawOp::ArrayLen(self.expect_ident("operando array")?),
+            "array_get" => {
+                let array = self.expect_ident("operando array")?;
+                self.expect_token(Token::Comma, "`,` entre operandos")?;
+                let index = self.expect_ident("índice")?;
+                RawOp::ArrayGet(array, index)
+            }
             "call_static" => {
                 let callee = self.expect_ident("nome da função chamada")?;
                 self.expect_token(Token::LParen, "`(` na chamada")?;
@@ -1358,6 +1399,20 @@ fn lower_op(
         RawOp::ConcatStr(lhs, rhs) => Op::ConcatStr {
             lhs: value(lhs)?,
             rhs: value(rhs)?,
+        },
+        RawOp::Array(items) => {
+            let mut resolved: Vec<ValueId> = Vec::new();
+            for item in items {
+                resolved.push(value(item)?);
+            }
+            Op::ArrayLiteral(resolved)
+        }
+        RawOp::ArrayLen(array) => Op::ArrayLen {
+            array: value(array)?,
+        },
+        RawOp::ArrayGet(array, index) => Op::ArrayGet {
+            array: value(array)?,
+            index: value(index)?,
         },
         RawOp::Bin(op, lhs, rhs) => Op::Bin {
             op: *op,

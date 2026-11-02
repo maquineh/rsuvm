@@ -42,6 +42,9 @@ com valor esperado, e cada terminador em pelo menos um caso válido. A verifica�
 | `le_f64` | C-033 |
 | `gt_f64` | C-033 |
 | `ge_f64` | C-033 |
+| `array` | C-034, C-035 |
+| `array_len` | C-034 |
+| `array_get` | C-035 |
 | `eq_i64` | C-002 |
 | `ne_i64` | C-012 |
 | `lt_i64` | C-008 |
@@ -72,6 +75,7 @@ com a expectativa declarada. A verificação é executada por
 | `integer_overflow` | N-009, N-019, N-020, N-026 |
 | `division_by_zero` | N-025 |
 | `invalid_shift` | N-027 |
+| `index_out_of_bounds` | N-029 |
 | `out_of_fuel` | N-010 |
 | `call_depth_exceeded` | N-011 |
 | `out_of_memory` | N-021, N-024, N-028 |

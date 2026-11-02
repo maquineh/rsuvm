@@ -1,0 +1,15 @@
+; id: C-034
+; expect: value i64:3
+; extra: array literal e array_len (ADR-0027)
+module c034 version 1
+entry tamanho
+
+fn tamanho() -> i64 {
+  entry:
+    v0 = const_i64 10
+    v1 = const_i64 20
+    v2 = const_i64 30
+    v3 = array v0, v1, v2
+    v4 = array_len v3
+    return v4
+}

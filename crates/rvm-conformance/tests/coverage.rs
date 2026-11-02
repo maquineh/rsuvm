@@ -62,6 +62,9 @@ fn collect_ops(module: &Module, ops: &mut BTreeSet<String>, terms: &mut BTreeSet
                     Op::ConcatStr { .. } => "concat_str".to_string(),
                     Op::ConstF64(_) => "const_f64".to_string(),
                     Op::Float { op, .. } => op.name().to_string(),
+                    Op::ArrayLiteral(_) => "array".to_string(),
+                    Op::ArrayLen { .. } => "array_len".to_string(),
+                    Op::ArrayGet { .. } => "array_get".to_string(),
                     Op::Call { .. } => "call_static".to_string(),
                 };
                 ops.insert(name);
@@ -118,6 +121,9 @@ fn corpus_valido_cobre_todas_as_operacoes_do_subset() {
         "le_f64",
         "gt_f64",
         "ge_f64",
+        "array",
+        "array_len",
+        "array_get",
         "eq_i64",
         "ne_i64",
         "lt_i64",
@@ -175,6 +181,7 @@ fn corpus_invalido_cobre_os_codigos_de_erro_centrais() {
         "integer_overflow",
         "division_by_zero",
         "invalid_shift",
+        "index_out_of_bounds",
         "out_of_fuel",
         "call_depth_exceeded",
         "out_of_memory",
