@@ -35,7 +35,7 @@ function Add-Block([string]$exe, [string[]]$arguments, [string]$label) {
     return $result
 }
 
-$lines.Add('# Evidências de execução — 2026-11-01')
+$lines.Add('# Evidências de execução — 2026-11-02')
 $lines.Add('')
 $lines.Add('Log gerado por `scripts/gerar-evidencias.ps1`, com captura literal de stdout/stderr (UTF-8) no checkout `H:\projetos\rsuvm`, rustc/cargo 1.94.1, Windows. Nenhum resultado abaixo é estimado.')
 $lines.Add('')
@@ -53,8 +53,8 @@ $validos = (Get-ChildItem 'crates\rvm-conformance\corpus\valid' -Filter *.rvm).C
 $invalidos = (Get-ChildItem 'crates\rvm-conformance\corpus\invalid' -Filter *.rvm).Count
 $lines.Add('## Corpus de conformidade')
 $lines.Add('')
-$lines.Add('- casos válidos: **' + $validos + '** (C-001..C-016)')
-$lines.Add('- casos inválidos: **' + $invalidos + '** (N-001..N-011, N-013..N-021; N-012 vive no decoder binário)')
+$lines.Add('- casos válidos: **' + $validos + '** (C-001..C-061)')
+$lines.Add('- casos inválidos: **' + $invalidos + '** (N-001..N-011, N-013..N-043; N-012 vive no decoder binário)')
 $lines.Add('')
 
 $cliCases = @(

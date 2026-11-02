@@ -33,7 +33,7 @@ humanas nunca são contrato.
 | `invalid_module` | verify | module | IDs não densos/duplicados, nome inválido/reservado, referência a função inexistente, limite estrutural, contagem transbordando | `rvm-ir` |
 | `invalid_type` | verify | module | tipo ou aridade incompatível (operandos, argumentos, retorno, condição, chamada) | `rvm-verify` |
 | `invalid_control_flow` | verify | module | alvo de desvio inexistente, bloco inalcançável, terminador ausente/duplicado, violação de dominância | `rvm-ir`, `rvm-verify`, `rvm-text` |
-| `unsupported_feature` | verify | module | imports, capability concedida sem executor, recurso fora do EXP-0 | `rvm-ir`, `rvm-verify`, `rvm-text`, `rvm-runtime` |
+| `unsupported_feature` | verify | module | imports, recurso fora do EXP-0 | `rvm-ir`, `rvm-verify`, `rvm-text`, `rvm-runtime` |
 | `integer_overflow` | trap | trap | soma/subtração/multiplicação fora de `i64`; `i64::MIN / -1` e `i64::MIN % -1` | `rvm-interpreter` |
 | `division_by_zero` | trap | trap | divisão ou resto por zero (ADR-0022) | `rvm-interpreter` |
 | `invalid_shift` | trap | trap | deslocamento com quantidade fora de `0..=63` (ADR-0023) | `rvm-interpreter` |
@@ -44,7 +44,7 @@ humanas nunca são contrato.
 | `out_of_fuel` | resource | resource_limit | saldo de fuel insuficiente antes do despacho | `rvm-interpreter` |
 | `call_depth_exceeded` | resource | resource_limit | profundidade de chamadas excederia o limite | `rvm-interpreter` |
 | `out_of_memory` | resource | resource_limit | quota de memória modelada de frames excedida | `rvm-interpreter` |
-| `capability_denied` | capability | capability | requisição de efeito de host sem concessão | `rvm-runtime` |
+| `capability_denied` | capability | capability | `host_read_file` sem concessão de `filesystem_read` para o escopo, ou host ausente (ADR-0036) | `rvm-interpreter`, `rvm-runtime`, `rvm-cli` |
 
 ## 3. Ordem de falha (determinismo de diagnóstico)
 
@@ -110,7 +110,7 @@ aparecem durante a execução de um `VerifiedModule`.
 | 2 | erro de módulo (`class = module`) |
 | 3 | trap semântico (`class = trap`) |
 | 4 | limite de recurso (`class = resource_limit`) |
-| 5 | capability negada (`class = capability`, não alcançável no MVP) |
+| 5 | capability negada (`class = capability`; `host_read_file` sem `--allow-fs-read` ou fora do escopo) |
 
 O CLI imprime `código: detalhe [localização]` em `stderr` e nunca converte erro em
 pânico.

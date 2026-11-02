@@ -41,13 +41,13 @@ Regras estruturais:
 |---|---|---|
 | `rvm-spec` | — | tipos, operações, códigos de erro, limites, semântica de overflow |
 | `rvm-ir` | spec | modelo RIR, invariantes de IDs, `structure::check`, fixtures de teste |
-| `rvm-runtime` | spec | `Value`, quotas (`ExecConfig`, `CallDepthLimit`), capabilities deny-by-default |
-| `rvm-verify` | spec, ir | tipos, CFG, dominância, assinatura de chamada, `VerifiedModule` |
+| `rvm-runtime` | spec | `Value`, quotas (`ExecConfig`, `CallDepthLimit`), hosts e capabilities (deny-by-default) |
+| `rvm-verify` | spec, ir | tipos, CFG, dominância, assinatura de chamada e de host, `VerifiedModule` |
 | `rvm-text` | spec, ir | parser e impressão canônica do formato textual experimental |
 | `rvm-bytecode` | spec, ir | codificação linear experimental e decoder limitado |
-| `rvm-interpreter` | spec, ir, runtime, verify | execução determinística com fuel, profundidade e traps |
+| `rvm-interpreter` | spec, ir, runtime, verify | execução determinística com fuel, profundidade, traps e host |
 | `rvm-link` | spec, ir | ligação estática inter-módulo: resolve externas em um módulo plano |
-| `rvm-cli` | todos acima | binário `rsuvm`; não concede capabilities |
+| `rvm-cli` | todos acima | binário `rsuvm`; nega efeitos por padrão e concede `filesystem_read` com `--allow-fs-read` (ADR-0036) |
 | `rvm-conformance` | todos (dev) | corpus em dados + testes de conformidade e propriedades |
 
 O grafo é acíclico e o compilador impõe a separação: `rvm-interpreter` não pode
@@ -68,7 +68,7 @@ linguagem (ADR-0009).
   `array_set`, `struct_new`, `field_get`, `field_set`, `option_none`, `option_some`,
   `option_is_some`, `option_unwrap`, `coalesce`, `option_eq`, `option_ne`,
   `result_ok`, `result_err`, `result_is_ok`, `result_unwrap`, `result_unwrap_err`,
-  `call_static`.
+  `call_static`, `host_read_file` (ABI fechada, ADR-0036).
 - Terminadores: `return`, `br`, `cond_br`.
 - Merge por parâmetros de bloco (phi explícito).
 - Fora do EXP-0: referências, closures, `unsafe`, FFI,
@@ -110,6 +110,10 @@ zero → `inf`/`NaN`, ADR-0026). O comportamento é idêntico em debug e release
   slot cobra o valor novo e libera o anterior, e o retorno do frame libera os
   slots (ADR-0035). Teto padrão de 16 MiB e `out_of_memory` ao exceder
   (ADR-0013, ADR-0016, ADR-0035). É modelo determinístico, não RSS.
+- **Quota por efeito (host):** `read_file` exige `max_bytes` e o host pode impor
+  teto menor (1 MiB no CLI); a string devolvida entra na quota de memória ao ser
+  gravada. A capability é conferida **antes** do efeito; sem concessão ⇒
+  `capability_denied` (ADR-0036).
 
 ## 5. Erros
 
@@ -145,7 +149,10 @@ Comando de verificação do projeto: `cargo test --workspace`.
   in-process. Uso multi-tenant hostil exige isolamento externo revisado.
 - O corpus demonstra o comportamento no conjunto testado, não ausência de
   vulnerabilidades.
-- Nenhuma capability é concedida; isso é uma propriedade do código atual, não uma
-  promessa de que efeitos futuros serão seguros.
+- Nenhuma capability é concedida por padrão: `execute` sem host e `HostApi`
+  negam tudo. A exceção explícita é `read_file` com `filesystem_read`, concedida
+  programaticamente por `Capabilities::grant`/`execute_with_host` ou pelo CLI com
+  `--allow-fs-read <dir>` (ADR-0036). Isso é uma propriedade do código atual, não
+  uma promessa de que efeitos futuros serão seguros.
 - Adaptadores Lift/Rio não existem neste repositório; ver
   `docs/RELATORIOS/BASELINE-RIO.md` e `docs/fundacao/INTEGRACAO/`.

@@ -31,8 +31,11 @@ estável, não há checksum e bytes não são confiáveis. Depende de `rvm-spec`
 - **Contagem antes de alocação**: cada contagem declarada é comparada com o limite
   estrutural correspondente **e** com os bytes restantes antes de reservar
   memória; contagem maior que os bytes restantes é `truncated_input`.
-- Tag de tipo fora de `0..=2` é `unknown_type`; `const_bool` fora de `0|1` é
+- Tag de tipo fora de `0..=8` é `unknown_type`; `const_bool` fora de `0|1` é
   `invalid_number`; opcode/kind desconhecido é `unknown_opcode`.
+- `host_read_file` (opcode 54) carrega `u8 function` (0 = `read_file`),
+  `u16 argc` e `u32 args[]`; `function` desconhecida é `unknown_opcode` e `argc`
+  respeita `Limits::max_call_args` (ADR-0036).
 - Bytes excedentes ao final são `invalid_module`; o resultado passa por
   `rvm_ir::structure::check` antes de ser devolvido.
 - O decoder nunca devolve módulo parcial: ou módulo completo e estruturalmente

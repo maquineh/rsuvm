@@ -37,7 +37,7 @@ use rvm_ir::{
     Block, BlockParam, BranchTarget, FieldDef, Function, Instr, Module, Op, Param, StructDef,
     Terminator, ValueId,
 };
-use rvm_spec::{BinOp, CmpOp, ErrorCode, FloatOp, Limits, RvmError, TypeDef};
+use rvm_spec::{BinOp, BuiltinHost, CmpOp, ErrorCode, FloatOp, Limits, RvmError, TypeDef};
 
 /// Magic bytes no início de todo arquivo codificado: `RSVMB1`.
 pub const MAGIC: [u8; 6] = *b"RSVMB1";
@@ -111,6 +111,7 @@ const OP_RESULT_ERR: u8 = 50;
 const OP_RESULT_IS_OK: u8 = 51;
 const OP_RESULT_UNWRAP: u8 = 52;
 const OP_RESULT_UNWRAP_ERR: u8 = 53;
+const OP_HOST_CALL: u8 = 54;
 
 // Tipos de terminador (tabela de `BYTECODE-EXP-0-IMPLEMENTACAO.md` §1).
 const TERM_RETURN: u8 = 0;
@@ -444,6 +445,14 @@ fn encode_instr(out: &mut Vec<u8>, instr: &Instr) {
             push_u8(out, OP_RESULT_UNWRAP_ERR);
             push_u32(out, *value);
         }
+        Op::HostCall { function, args } => {
+            push_u8(out, OP_HOST_CALL);
+            push_u8(out, function.code());
+            push_u16(out, len_u16(args.len()));
+            for arg in args {
+                push_u32(out, *arg);
+            }
+        }
         Op::Bin { op, lhs, rhs } => {
             push_u8(out, bin_opcode(*op));
             push_u32(out, *lhs);
@@ -714,6 +723,21 @@ fn read_instr(reader: &mut Reader<'_>, limits: &Limits) -> Result<Instr, RvmErro
         OP_RESULT_UNWRAP_ERR => Op::ResultUnwrapErr {
             value: reader.read_u32("operando result_unwrap_err")?,
         },
+        OP_HOST_CALL => {
+            let code = reader.read_u8("função de host")?;
+            let function = BuiltinHost::from_code(code).ok_or_else(|| {
+                decode_error(
+                    ErrorCode::UnknownOpcode,
+                    format!("função de host {code} desconhecida"),
+                )
+            })?;
+            let count = reader.read_count_u16(limits.max_call_args, "argumentos de host")?;
+            let mut args: Vec<u32> = Vec::with_capacity(count);
+            for _ in 0..count {
+                args.push(reader.read_u32("argumento de host")?);
+            }
+            Op::HostCall { function, args }
+        }
         OP_ADD_I64_CHECKED => read_bin_operands(reader, BinOp::AddI64Checked)?,
         OP_SUB_I64_CHECKED => read_bin_operands(reader, BinOp::SubI64Checked)?,
         OP_MUL_I64_CHECKED => read_bin_operands(reader, BinOp::MulI64Checked)?,
@@ -1144,7 +1168,7 @@ mod tests {
     use rvm_ir::testing;
 
     /// Corpus válido compartilhado (`rvm_ir::testing`).
-    fn fixtures() -> [Module; 9] {
+    fn fixtures() -> [Module; 10] {
         [
             testing::soma(),
             testing::constante(42),
@@ -1155,6 +1179,7 @@ mod tests {
             testing::recursao(),
             testing::overflow(),
             testing::comparacao(),
+            testing::host_read_file(),
         ]
     }
 

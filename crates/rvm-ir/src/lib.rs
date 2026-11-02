@@ -33,7 +33,8 @@
 )]
 
 use rvm_spec::{
-    BinOp, CmpOp, FloatOp, StructId, TypeDef, TypeId, TYPE_BOOL, TYPE_F64, TYPE_I64, TYPE_STR,
+    BinOp, BuiltinHost, CmpOp, FloatOp, StructId, TypeDef, TypeId, TYPE_BOOL, TYPE_F64, TYPE_I64,
+    TYPE_STR,
 };
 
 pub mod structure;
@@ -373,6 +374,16 @@ pub enum Op {
         /// Operando `result`.
         value: ValueId,
     },
+    /// Chama uma função de host embutida (`host_read_file`), ADR-0036.
+    ///
+    /// O efeito é declarado pela função; o intérprete exige a capability e o
+    /// host executa o efeito. O resultado é sempre do tipo declarado pela ABI.
+    HostCall {
+        /// Função de host.
+        function: BuiltinHost,
+        /// Argumentos, na ordem da assinatura.
+        args: Vec<ValueId>,
+    },
     /// Chama estaticamente uma função do mesmo módulo (`call_static`).
     Call {
         /// Função chamada; resolvida estaticamente pelo verificador.
@@ -419,6 +430,7 @@ impl Op {
             | Op::Coalesce { .. }
             | Op::ResultUnwrap { .. }
             | Op::ResultUnwrapErr { .. }
+            | Op::HostCall { .. }
             | Op::Call { .. } => None,
         }
     }
@@ -461,6 +473,7 @@ impl Op {
             Op::ResultIsOk { value }
             | Op::ResultUnwrap { value }
             | Op::ResultUnwrapErr { value } => vec![*value],
+            Op::HostCall { args, .. } => args.clone(),
             Op::Call { args, .. } => args.clone(),
         }
     }

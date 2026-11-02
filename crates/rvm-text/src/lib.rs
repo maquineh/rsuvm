@@ -58,8 +58,8 @@ use rvm_ir::{
     StructDef, Terminator, ValueId,
 };
 use rvm_spec::{
-    builtin_types, BinOp, CmpOp, ErrorCode, FloatOp, Limits, Location, RvmError, StructId, TypeDef,
-    TypeId, IR_VERSION,
+    builtin_types, BinOp, BuiltinHost, CmpOp, ErrorCode, FloatOp, Limits, Location, RvmError,
+    StructId, TypeDef, TypeId, IR_VERSION,
 };
 
 /// Converte o texto experimental em um módulo RIR estruturalmente válido.
@@ -478,6 +478,21 @@ fn print_op(module: &Module, function: &Function, op: &Op, out: &mut String) {
             out.push_str("result_unwrap_err ");
             print_value(function, *value, out);
         }
+        Op::HostCall {
+            function: host,
+            args,
+        } => {
+            match host {
+                BuiltinHost::ReadFile => out.push_str("host_read_file "),
+            }
+            if let Some((first, rest)) = args.split_first() {
+                print_value(function, *first, out);
+                for arg in rest {
+                    out.push_str(", ");
+                    print_value(function, *arg, out);
+                }
+            }
+        }
         Op::Bin { op, lhs, rhs } => {
             out.push_str(op.name());
             out.push(' ');
@@ -871,6 +886,7 @@ enum RawOp {
     ResultIsOk(String),
     ResultUnwrap(String),
     ResultUnwrapErr(String),
+    HostReadFile(String, String),
     Call(String, Vec<String>),
 }
 
@@ -1495,6 +1511,12 @@ impl Parser {
             "result_is_ok" => RawOp::ResultIsOk(self.expect_ident("operando result")?),
             "result_unwrap" => RawOp::ResultUnwrap(self.expect_ident("operando result")?),
             "result_unwrap_err" => RawOp::ResultUnwrapErr(self.expect_ident("operando result")?),
+            "host_read_file" => {
+                let path = self.expect_ident("caminho do arquivo")?;
+                self.expect_token(Token::Comma, "`,` entre operandos")?;
+                let max = self.expect_ident("limite de bytes")?;
+                RawOp::HostReadFile(path, max)
+            }
             "call_static" => {
                 let callee = self.expect_ident("nome da função chamada")?;
                 self.expect_token(Token::LParen, "`(` na chamada")?;
@@ -1970,6 +1992,10 @@ fn lower_op(
         RawOp::ResultUnwrapErr(operand) => Op::ResultUnwrapErr {
             value: value(operand)?,
         },
+        RawOp::HostReadFile(path, max) => Op::HostCall {
+            function: BuiltinHost::ReadFile,
+            args: vec![value(path)?, value(max)?],
+        },
         RawOp::Bin(op, lhs, rhs) => Op::Bin {
             op: *op,
             lhs: value(lhs)?,
@@ -2103,6 +2129,33 @@ fn soma(a: i64, b: i64) -> i64 {
             module, reparsed,
             "impressão canônica precisa ser reparseável:\n{printed}"
         );
+    }
+
+    #[test]
+    fn round_trip_do_host_read_file() {
+        let texto = r#"module hostcli version 1
+entry le
+type 5 = result string string
+
+fn le(path: string, max: i64) -> result string string {
+  entry:
+    v2 = host_read_file path, max
+    return v2
+}
+"#;
+        let module = parse_ok(texto);
+        let printed = print(&module);
+        assert_eq!(printed, texto);
+        assert_eq!(module, parse_ok(&printed));
+        let function = module.function(0).expect("função");
+        let block = function.block(0).expect("bloco");
+        assert!(matches!(
+            block.instrs.first().map(|instr| &instr.op),
+            Some(Op::HostCall {
+                function: BuiltinHost::ReadFile,
+                args,
+            }) if args.as_slice() == [0, 1]
+        ));
     }
 
     #[test]

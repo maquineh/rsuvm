@@ -1,9 +1,11 @@
 //! `rvm-runtime` — valores, quotas de execução e capabilities do host.
 //!
-//! Este crate implementa a regra **deny-by-default** do ADR-0005: não existe
-//! caminho no EXP-0 que conceda uma capability. [`HostApi::request`] sempre falha
-//! com [`rvm_spec::ErrorCode::CapabilityDenied`] e nenhuma função aqui toca
-//! arquivos, rede, ambiente, relógio ou processos do sistema operacional.
+//! Este crate implementa a regra **deny-by-default** do ADR-0005: o conjunto de
+//! capabilities nasce vazio e só cresce por construtores explícitos do host
+//! ([`Capabilities::grant`]/[`Capabilities::with_grant`], ADR-0036).
+//! [`HostApi::request`] devolve [`rvm_spec::ErrorCode::CapabilityDenied`] para
+//! qualquer efeito/escopo não coberto, e nenhuma função aqui toca arquivos, rede,
+//! ambiente, relógio ou processos do sistema operacional.
 //!
 //! As quotas de execução são objetos de valor já validados: [`CallDepthLimit`]
 //! só existem no intervalo permitido. O teto limita a profundidade convidada,
@@ -25,8 +27,11 @@
 use core::fmt;
 
 use rvm_spec::{
-    ErrorCode, RvmError, StructId, TypeId, TYPE_BOOL, TYPE_F64, TYPE_I64, TYPE_STR, TYPE_UNIT,
+    BuiltinHost, ErrorCode, RvmError, StructId, TypeId, TYPE_BOOL, TYPE_F64, TYPE_I64, TYPE_STR,
+    TYPE_UNIT,
 };
+
+pub use rvm_spec::Effect;
 
 /// Fuel padrão de uma execução quando o host não especifica outro valor.
 pub const DEFAULT_FUEL: u64 = 100_000;
@@ -434,75 +439,158 @@ impl Default for ExecConfig {
     }
 }
 
-/// Efeito de host que exigiria capability explícita.
-///
-/// Nenhum destes efeitos é oferecido ao convidado no EXP-0.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum Effect {
-    /// Leitura de arquivo.
-    FilesystemRead,
-    /// Escrita de arquivo.
-    FilesystemWrite,
-    /// Rede (cliente ou servidor).
-    Network,
-    /// Variáveis de ambiente.
-    Environment,
-    /// Relógio (data/hora, temporização).
-    Clock,
-    /// Criação de subprocesso ou sinal.
-    Process,
+/// Concessão de uma capability a um escopo (host-side, ADR-0036).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CapabilityGrant {
+    effect: Effect,
+    scope: String,
 }
 
-impl Effect {
-    /// Nome estável do efeito em relatórios e erros.
+impl CapabilityGrant {
+    /// Cria uma concessão de `effect` para `scope`.
     #[must_use]
-    pub const fn name(self) -> &'static str {
-        match self {
-            Effect::FilesystemRead => "filesystem_read",
-            Effect::FilesystemWrite => "filesystem_write",
-            Effect::Network => "network",
-            Effect::Environment => "environment",
-            Effect::Clock => "clock",
-            Effect::Process => "process",
+    pub fn new(effect: Effect, scope: impl Into<String>) -> Self {
+        Self {
+            effect,
+            scope: scope.into(),
         }
     }
-}
 
-impl fmt::Display for Effect {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.name())
+    /// Efeito concedido.
+    #[must_use]
+    pub const fn effect(&self) -> Effect {
+        self.effect
+    }
+
+    /// Escopo concedido (vazio = qualquer escopo).
+    #[must_use]
+    pub fn scope(&self) -> &str {
+        &self.scope
     }
 }
 
 /// Conjunto de capabilities concedidas ao convidado.
 ///
-/// No EXP-0 só existe [`Capabilities::none`]; o campo é privado e não há método
-/// de concessão. Adicionar um caminho de concessão exige ADR e aprovação
-/// explícita do mantenedor (ADR-0005).
+/// O convidado **não** tem caminho de concessão: só o host constrói o conjunto
+/// (ADR-0005/ADR-0036). `allows` exige o efeito e compara o escopo pedido com o
+/// concedido por componentes de caminho (`Path::starts_with`); escopo vazio
+/// concede qualquer caminho sem `..`.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Capabilities {
-    granted: Vec<Effect>,
+    grants: Vec<CapabilityGrant>,
 }
 
 impl Capabilities {
     /// Conjunto vazio: nenhuma capability concedida.
     #[must_use]
     pub fn none() -> Self {
+        Self { grants: Vec::new() }
+    }
+
+    /// Conjunto com uma concessão explícita (host-side).
+    #[must_use]
+    pub fn grant(effect: Effect, scope: impl Into<String>) -> Self {
         Self {
-            granted: Vec::new(),
+            grants: vec![CapabilityGrant::new(effect, scope)],
         }
     }
 
-    /// Lista das capabilities concedidas (sempre vazia no EXP-0).
+    /// Adiciona uma concessão explícita.
     #[must_use]
-    pub fn granted(&self) -> &[Effect] {
-        &self.granted
+    pub fn with_grant(mut self, effect: Effect, scope: impl Into<String>) -> Self {
+        self.grants.push(CapabilityGrant::new(effect, scope));
+        self
     }
 
-    /// `true` somente se a capability foi concedida explicitamente.
+    /// Lista das concessões.
+    #[must_use]
+    pub fn granted(&self) -> &[CapabilityGrant] {
+        &self.grants
+    }
+
+    /// `true` se o efeito foi concedido para algum escopo.
     #[must_use]
     pub fn is_granted(&self, effect: Effect) -> bool {
-        self.granted.contains(&effect)
+        self.grants.iter().any(|grant| grant.effect == effect)
+    }
+
+    /// `true` se `effect` foi concedido para `scope`.
+    ///
+    /// Caminhos com componente `..` são negados: sem canonicalização, `..` pode
+    /// escapar do escopo por resolução do sistema de arquivos. A comparação usa
+    /// componentes (`Path::starts_with`), então `base/sub` não casa
+    /// `base/submarine`.
+    #[must_use]
+    pub fn allows(&self, effect: Effect, scope: &str) -> bool {
+        let requested = std::path::Path::new(scope);
+        if requested
+            .components()
+            .any(|component| matches!(component, std::path::Component::ParentDir))
+        {
+            return false;
+        }
+        self.grants.iter().any(|grant| {
+            grant.effect == effect
+                && (grant.scope.is_empty()
+                    || requested.starts_with(std::path::Path::new(&grant.scope)))
+        })
+    }
+}
+
+/// Backend de host para chamadas de host (ADR-0036).
+///
+/// O host executa o efeito e valida o escopo no seu contexto. O intérprete
+/// confere a capability e o tipo do valor devolvido; o host não pode alargar o
+/// conjunto de capabilities por conta própria.
+pub trait Host {
+    /// Capabilities concedidas a esta execução.
+    fn capabilities(&self) -> &Capabilities;
+    /// Executa `function` com `args`, devolvendo um valor do tipo `ret`.
+    ///
+    /// # Errors
+    ///
+    /// Cada host devolve os erros do seu efeito; `capability_denied` é o padrão
+    /// para negação e `invalid_type` para retorno incompatível.
+    fn call(
+        &mut self,
+        function: BuiltinHost,
+        args: &[Value],
+        ret: TypeId,
+    ) -> Result<Value, RvmError>;
+}
+
+/// Host que nega toda chamada de host; usado pelo executor sem backend.
+#[derive(Clone, Debug, Default)]
+pub struct NoHost {
+    capabilities: Capabilities,
+}
+
+impl NoHost {
+    /// Host sem capabilities.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl Host for NoHost {
+    fn capabilities(&self) -> &Capabilities {
+        &self.capabilities
+    }
+
+    fn call(
+        &mut self,
+        function: BuiltinHost,
+        _args: &[Value],
+        _ret: TypeId,
+    ) -> Result<Value, RvmError> {
+        Err(RvmError::new(
+            ErrorCode::CapabilityDenied,
+            format!(
+                "capability `{}` negada: nenhum host de efeitos conectado (ADR-0036)",
+                function.effect().name()
+            ),
+        ))
     }
 }
 
@@ -517,8 +605,7 @@ pub struct HostApi {
 }
 
 impl HostApi {
-    /// Constrói a API com um conjunto de capabilities (o MVP não tem como
-    /// construir um conjunto não vazio).
+    /// Constrói a API com um conjunto de capabilities.
     #[must_use]
     pub fn new(capabilities: Capabilities) -> Self {
         Self { capabilities }
@@ -536,22 +623,15 @@ impl HostApi {
         &self.capabilities
     }
 
-    /// Solicita permissão para executar um efeito.
+    /// Solicita permissão para executar um efeito em `scope`.
     ///
     /// # Errors
     ///
-    /// Sempre devolve [`ErrorCode::CapabilityDenied`]: o MVP não concede
-    /// capabilities e o caso `Ok(())` não é alcançável.
+    /// Devolve [`ErrorCode::CapabilityDenied`] quando o efeito não foi concedido
+    /// ou o escopo não está coberto por uma concessão.
     pub fn request(&self, effect: Effect, scope: &str) -> Result<(), RvmError> {
-        if self.capabilities.is_granted(effect) {
-            // Inalcançável no EXP-0: não existe construtor que popule o conjunto.
-            return Err(RvmError::new(
-                ErrorCode::UnsupportedFeature,
-                format!(
-                    "capability `{}` concedida, mas executores de efeito não existem no EXP-0",
-                    effect.name()
-                ),
-            ));
+        if self.capabilities.allows(effect, scope) {
+            return Ok(());
         }
         Err(RvmError::new(
             ErrorCode::CapabilityDenied,
@@ -638,6 +718,48 @@ mod tests {
             assert_eq!(error.code(), ErrorCode::CapabilityDenied);
             assert_eq!(error.class(), rvm_spec::ErrorClass::Capability);
         }
+    }
+
+    #[test]
+    fn capability_concedida_cobre_o_escopo_e_subcaminhos() {
+        let capabilities = Capabilities::grant(Effect::FilesystemRead, "base");
+        assert!(capabilities.allows(Effect::FilesystemRead, "base"));
+        assert!(capabilities.allows(Effect::FilesystemRead, "base/sub/arquivo.txt"));
+        assert!(!capabilities.allows(Effect::FilesystemRead, "outro"));
+        assert!(!capabilities.allows(Effect::FilesystemWrite, "base"));
+        assert!(capabilities.is_granted(Effect::FilesystemRead));
+        assert_eq!(capabilities.granted().len(), 1);
+    }
+
+    #[test]
+    fn capability_nao_casa_prefixo_textual_de_componente() {
+        let capabilities = Capabilities::grant(Effect::FilesystemRead, "base/sub");
+        assert!(capabilities.allows(Effect::FilesystemRead, "base/sub/arquivo"));
+        assert!(!capabilities.allows(Effect::FilesystemRead, "base/submarine"));
+    }
+
+    #[test]
+    fn capability_nega_caminho_com_parent_dir() {
+        let capabilities = Capabilities::grant(Effect::FilesystemRead, "base");
+        assert!(!capabilities.allows(Effect::FilesystemRead, "base/../fora"));
+        assert!(!capabilities.allows(Effect::FilesystemRead, ".."));
+    }
+
+    #[test]
+    fn escopo_vazio_concede_qualquer_caminho() {
+        let capabilities = Capabilities::none().with_grant(Effect::FilesystemRead, "");
+        assert!(capabilities.allows(Effect::FilesystemRead, "qualquer/caminho"));
+        assert!(!capabilities.allows(Effect::FilesystemWrite, "qualquer/caminho"));
+    }
+
+    #[test]
+    fn host_api_request_permite_escopo_concedido() {
+        let host = HostApi::new(Capabilities::grant(Effect::FilesystemRead, "base"));
+        assert!(host.request(Effect::FilesystemRead, "base/arquivo").is_ok());
+        let error = host
+            .request(Effect::FilesystemRead, "outro/arquivo")
+            .expect_err("fora do escopo deve negar");
+        assert_eq!(error.code(), ErrorCode::CapabilityDenied);
     }
     #[test]
     fn custo_de_frame_e_modelado_e_satura() {

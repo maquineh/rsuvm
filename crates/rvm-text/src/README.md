@@ -27,8 +27,11 @@ constrói módulos estruturalmente válidos. Depende de `rvm-spec` e `rvm-ir`.
   `unsupported_feature`.
 - `version != 1` é `unsupported_version`, decidido imediatamente após ler o
   número; número fora de `i64`/`u16` é `invalid_number`.
-- Tipo fora de `unit|bool|i64` é `unknown_type`; operação/terminador desconhecido
-  é `unknown_opcode`.
+- Tipo fora de `unit|bool|i64|string|f64|array|struct|option|result` é
+  `unknown_type`; operação/terminador desconhecido é `unknown_opcode`.
+- `host_read_file` (opcode 54) representa `HostCall` com `u8 function` (0 =
+  `read_file`), `u16 argc` e `u32 args[]`; função desconhecida é `unknown_opcode`.
+  A semântica e o efeito vêm da ABI (ADR-0036), não do texto/bytecode.
 - Cada bloco tem exatamente um terminador, necessariamente a última instrução do
   bloco; zero terminadores, dois terminadores ou instrução após o terminador são
   `invalid_control_flow`.

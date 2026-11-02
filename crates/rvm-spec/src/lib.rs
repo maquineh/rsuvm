@@ -126,6 +126,112 @@ pub fn builtin_types() -> Vec<TypeDef> {
     ]
 }
 
+/// Efeito de host exigível por uma chamada de host (ADR-0036).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum Effect {
+    /// Leitura de arquivo.
+    FilesystemRead,
+    /// Escrita de arquivo.
+    FilesystemWrite,
+    /// Rede.
+    Network,
+    /// Variáveis de ambiente.
+    Environment,
+    /// Relógio.
+    Clock,
+    /// Subprocesso ou sinal.
+    Process,
+}
+
+impl Effect {
+    /// Nome estável do efeito.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Effect::FilesystemRead => "filesystem_read",
+            Effect::FilesystemWrite => "filesystem_write",
+            Effect::Network => "network",
+            Effect::Environment => "environment",
+            Effect::Clock => "clock",
+            Effect::Process => "process",
+        }
+    }
+
+    /// Efeito pelo nome estável.
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "filesystem_read" => Some(Effect::FilesystemRead),
+            "filesystem_write" => Some(Effect::FilesystemWrite),
+            "network" => Some(Effect::Network),
+            "environment" => Some(Effect::Environment),
+            "clock" => Some(Effect::Clock),
+            "process" => Some(Effect::Process),
+            _ => None,
+        }
+    }
+}
+
+impl fmt::Display for Effect {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+/// Função de host embutida na ABI mínima do EXP-0 (ADR-0036).
+///
+/// A ABI é um conjunto **fechado** nesta rodada: qualquer extensão exige ADR e
+/// revisão de modelo de ameaças.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum BuiltinHost {
+    /// `read_file(path: string, max_bytes: i64) -> result string string`, com
+    /// efeito [`Effect::FilesystemRead`] e escopo = `path`.
+    ReadFile,
+}
+
+impl BuiltinHost {
+    /// Nome estável da função.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            BuiltinHost::ReadFile => "read_file",
+        }
+    }
+
+    /// Efeito exigido pela função.
+    #[must_use]
+    pub const fn effect(self) -> Effect {
+        match self {
+            BuiltinHost::ReadFile => Effect::FilesystemRead,
+        }
+    }
+
+    /// Código estável no bytecode.
+    #[must_use]
+    pub const fn code(self) -> u8 {
+        match self {
+            BuiltinHost::ReadFile => 0,
+        }
+    }
+
+    /// Função a partir do código do bytecode.
+    #[must_use]
+    pub const fn from_code(code: u8) -> Option<Self> {
+        match code {
+            0 => Some(BuiltinHost::ReadFile),
+            _ => None,
+        }
+    }
+
+    /// Índice do argumento que define o escopo da capability, se houver.
+    #[must_use]
+    pub const fn scope_arg(self) -> Option<usize> {
+        match self {
+            BuiltinHost::ReadFile => Some(0),
+        }
+    }
+}
+
 /// Operação aritmética binária verificada sobre `i64`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum BinOp {

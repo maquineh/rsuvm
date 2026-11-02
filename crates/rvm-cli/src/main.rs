@@ -1,22 +1,25 @@
 //! CLI de desenvolvimento da RSUVM (`rsuvm`).
 //!
-//! Não concede capabilities: todos os subcomandos executam apenas código puro do
-//! convidado. Códigos de saída (`docs/CONTRATOS/ERROS-EXP-0.md` §5):
+//! Por padrão não concede capabilities: só executa código puro. O subcomando
+//! `run`/`run-bc` pode conceder **`filesystem_read`** explicitamente com
+//! `--allow-fs-read <dir>` (ADR-0036). Códigos de saída
+//! (`docs/CONTRATOS/ERROS-EXP-0.md` §5):
 //!
 //! - `0` sucesso;
 //! - `1` erro de uso ou de IO da ferramenta;
 //! - `2` erro de módulo (decode ou verificação);
 //! - `3` trap semântico;
 //! - `4` limite de recurso;
-//! - `5` capability negada (não alcançável no MVP).
+//! - `5` capability negada.
 
 use std::fmt;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use rvm_ir::Module;
-use rvm_runtime::{CallDepthLimit, ExecConfig, MemoryLimit, Value};
-use rvm_spec::{ErrorClass, Limits, RvmError};
+use rvm_runtime::{CallDepthLimit, Capabilities, Effect, ExecConfig, Host, MemoryLimit, Value};
+use rvm_spec::{BuiltinHost, ErrorClass, ErrorCode, Limits, RvmError, TypeId};
 
 const EXIT_USAGE: u8 = 1;
 const EXIT_MODULE: u8 = 2;
@@ -78,6 +81,7 @@ struct Options {
     fuel: Option<u64>,
     max_depth: Option<u16>,
     memory: Option<u64>,
+    fs_read_scope: Option<PathBuf>,
 }
 
 impl Options {
@@ -115,6 +119,7 @@ fn parse_options(rest: &[String], allow_value_options: bool) -> Result<Options, 
     let mut fuel: Option<u64> = None;
     let mut max_depth: Option<u16> = None;
     let mut memory: Option<u64> = None;
+    let mut fs_read_scope: Option<PathBuf> = None;
 
     let mut index = 0;
     while index < rest.len() {
@@ -125,6 +130,15 @@ fn parse_options(rest: &[String], allow_value_options: bool) -> Result<Options, 
         match token.as_str() {
             "--entry" if allow_value_options => {
                 entry = Some(take_value(rest, &mut index, "--entry")?);
+            }
+            "--allow-fs-read" if allow_value_options => {
+                let raw = take_value(rest, &mut index, "--allow-fs-read")?;
+                if raw.is_empty() {
+                    return Err(Failure::Usage(
+                        "`--allow-fs-read` exige um diretório não vazio".to_string(),
+                    ));
+                }
+                fs_read_scope = Some(PathBuf::from(raw));
             }
             "--arg" if allow_value_options => {
                 let raw = take_value(rest, &mut index, "--arg")?;
@@ -175,6 +189,7 @@ fn parse_options(rest: &[String], allow_value_options: bool) -> Result<Options, 
         fuel,
         max_depth,
         memory,
+        fs_read_scope,
     })
 }
 
@@ -238,6 +253,94 @@ fn resolve_entry(module: &Module, requested: Option<&str>) -> Result<u32, Failur
     }
 }
 
+/// Teto de leitura do host do CLI (1 MiB).
+const HOST_READ_LIMIT: u64 = 1024 * 1024;
+
+/// Host do CLI: concede `filesystem_read` apenas sob o diretório indicado.
+///
+/// A checagem de capability é feita pelo intérprete **antes** de chamar o host; o
+/// host revalida o escopo e limita os bytes lidos (defesa em profundidade).
+struct CliHost {
+    capabilities: Capabilities,
+    max_bytes: u64,
+}
+
+impl CliHost {
+    fn new(scope: Option<&Path>) -> Self {
+        let capabilities = match scope {
+            Some(path) => {
+                Capabilities::grant(Effect::FilesystemRead, path.to_string_lossy().into_owned())
+            }
+            None => Capabilities::none(),
+        };
+        Self {
+            capabilities,
+            max_bytes: HOST_READ_LIMIT,
+        }
+    }
+}
+
+impl Host for CliHost {
+    fn capabilities(&self) -> &Capabilities {
+        &self.capabilities
+    }
+
+    fn call(
+        &mut self,
+        function: BuiltinHost,
+        args: &[Value],
+        ret: TypeId,
+    ) -> Result<Value, RvmError> {
+        match function {
+            BuiltinHost::ReadFile => {
+                let path = args.first().and_then(Value::as_str).ok_or_else(|| {
+                    RvmError::new(ErrorCode::InvalidType, "read_file: caminho não é `string`")
+                })?;
+                let requested = args.get(1).and_then(Value::as_i64).ok_or_else(|| {
+                    RvmError::new(ErrorCode::InvalidType, "read_file: limite não é `i64`")
+                })?;
+                if !self.capabilities.allows(Effect::FilesystemRead, path) {
+                    return Err(RvmError::new(
+                        ErrorCode::CapabilityDenied,
+                        format!("read_file: escopo `{path}` não coberto pela concessão"),
+                    ));
+                }
+                let limit = u64::try_from(requested).unwrap_or(0).min(self.max_bytes);
+                let failure = |message: String| Value::Result {
+                    ty: ret,
+                    value: Err(Box::new(Value::Str(message))),
+                };
+                let file = match std::fs::File::open(path) {
+                    Ok(file) => file,
+                    Err(error) => return Ok(failure(format!("falha ao abrir `{path}`: {error}"))),
+                };
+                // Recusa cedo pelo metadado, mas nunca lê mais que `limit + 1`
+                // bytes: um arquivo que cresça depois do metadado continua
+                // limitado (ADR-0036).
+                if let Ok(metadata) = file.metadata() {
+                    if metadata.len() > limit {
+                        return Ok(failure(format!("arquivo excede {limit} bytes")));
+                    }
+                }
+                let mut bytes = Vec::new();
+                match file.take(limit.saturating_add(1)).read_to_end(&mut bytes) {
+                    Ok(_) if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > limit => {
+                        Ok(failure(format!("arquivo excede {limit} bytes")))
+                    }
+                    Ok(_) => match String::from_utf8(bytes) {
+                        Ok(text) => Ok(Value::Result {
+                            ty: ret,
+                            value: Ok(Box::new(Value::Str(text))),
+                        }),
+                        Err(_) => Ok(failure("conteúdo não é UTF-8 válido".to_string())),
+                    },
+                    Err(error) => Ok(failure(format!("falha ao ler `{path}`: {error}"))),
+                }
+            }
+        }
+    }
+}
+
 fn command_run(rest: &[String], source: Source) -> Result<(), Failure> {
     let options = parse_options(rest, true)?;
     let config = options.config()?;
@@ -245,7 +348,9 @@ fn command_run(rest: &[String], source: Source) -> Result<(), Failure> {
     let module = load_module(&options.path, source, &limits)?;
     let entry = resolve_entry(&module, options.entry.as_deref())?;
     let verified = rvm_verify::VerifiedModule::verify(module, &limits)?;
-    let outcome = rvm_interpreter::execute(&verified, entry, &options.args, &config)?;
+    let mut host = CliHost::new(options.fs_read_scope.as_deref());
+    let outcome =
+        rvm_interpreter::execute_with_host(&verified, entry, &options.args, &config, &mut host)?;
     println!("{}", outcome.value);
     Ok(())
 }
@@ -316,15 +421,15 @@ fn usage() -> String {
         "rsuvm {version} — Rust Universal Virtual Machine (protótipo EXP-0)\n\
          \n\
          Uso:\n  \
-         rsuvm run <arquivo.rvm> [--entry <fn>] [--arg <tipo:valor>...] [--fuel <n>] [--max-depth <n>] [--memory <bytes>]\n  \
-         rsuvm run-bc <arquivo.bin> [--entry <fn>] [--arg <tipo:valor>...] [--fuel <n>] [--max-depth <n>] [--memory <bytes>]\n  \
+         rsuvm run <arquivo.rvm> [--entry <fn>] [--arg <tipo:valor>...] [--fuel <n>] [--max-depth <n>] [--memory <bytes>] [--allow-fs-read <dir>]\n  \
+         rsuvm run-bc <arquivo.bin> [--entry <fn>] [--arg <tipo:valor>...] [--fuel <n>] [--max-depth <n>] [--memory <bytes>] [--allow-fs-read <dir>]\n  \
          rsuvm check <arquivo.rvm>\n  \
          rsuvm fmt <arquivo.rvm>\n  \
          rsuvm encode <arquivo.rvm> <saida.bin>\n  \
          rsuvm version\n\
          \n\
          Tipos de argumento: i64:<inteiro>, bool:true|false, unit.\n\
-         Este binário não concede filesystem, rede, ambiente, relógio ou subprocessos.\n",
+         Por padrão não concede efeitos; --allow-fs-read <dir> concede filesystem_read sob <dir>.\n",
         version = env!("CARGO_PKG_VERSION")
     )
 }

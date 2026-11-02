@@ -533,6 +533,19 @@ fn check_function<'a>(
             for operand in instr.op.operand_ids() {
                 check_value_ref(&seen, operand, &instr_location)?;
             }
+            if let Op::HostCall { args, .. } = &instr.op {
+                if args.len() > limit(limits.max_call_args) {
+                    return Err(invalid(
+                        ErrorCode::InvalidModule,
+                        format!(
+                            "limite de argumentos de host excedido: {} > {}",
+                            args.len(),
+                            limits.max_call_args
+                        ),
+                        instr_location.clone(),
+                    ));
+                }
+            }
             if let Op::Call { callee, args } = &instr.op {
                 if args.len() > limit(limits.max_call_args) {
                     return Err(invalid(

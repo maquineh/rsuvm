@@ -1,8 +1,9 @@
 //! `rvm-interpreter` — executor de referência da RIR verificada (EXP-0).
 //!
-//! Execução single-thread, determinística e sem efeitos de host. O executor só
-//! aceita [`rvm_verify::VerifiedModule`] e a única operação pública é
-//! [`execute`].
+//! Execução single-thread e determinística no caminho puro. O executor só aceita
+//! [`rvm_verify::VerifiedModule`]; [`execute`] usa `NoHost` e nega qualquer efeito,
+//! enquanto [`execute_with_host`] permite um backend explícito para
+//! `host_read_file` (ADR-0036).
 //!
 //! # Semântica (contrato RIR-EXP-0, seção 4)
 //!
@@ -55,8 +56,10 @@
 )]
 
 use rvm_ir::{BlockId, FnId, Function, Module, Op, Terminator, ValueId};
-use rvm_runtime::{arg_buffer_cost, frame_cost, ExecConfig, Value, SLOT_BYTES};
-use rvm_spec::{BinOp, ErrorCode, Location, RvmError, TypeDef, TYPE_F64};
+use rvm_runtime::{arg_buffer_cost, frame_cost, ExecConfig, Host, NoHost, Value, SLOT_BYTES};
+use rvm_spec::{
+    BinOp, BuiltinHost, ErrorCode, Location, RvmError, TypeDef, TypeId, TYPE_F64, TYPE_STR,
+};
 
 use rvm_verify::VerifiedModule;
 
@@ -96,6 +99,27 @@ pub fn execute(
     args: &[Value],
     config: &ExecConfig,
 ) -> Result<RunOutcome, RvmError> {
+    let mut host = NoHost::new();
+    execute_with_host(module, entry, args, config, &mut host)
+}
+
+/// Executa com um backend de host explícito (ADR-0036).
+///
+/// O host só é consultado em `host_call`; as demais operações continuam puras. A
+/// capability é conferida **antes** de chamar o host; sem concessão, a execução
+/// falha com `capability_denied`.
+///
+/// # Errors
+///
+/// As mesmas de [`execute`], mais `capability_denied` quando o host nega a
+/// chamada e os erros específicos do backend.
+pub fn execute_with_host(
+    module: &VerifiedModule,
+    entry: FnId,
+    args: &[Value],
+    config: &ExecConfig,
+    host: &mut dyn Host,
+) -> Result<RunOutcome, RvmError> {
     let module = module.module();
     let function = module.function(entry).ok_or_else(|| {
         error_at(
@@ -108,6 +132,7 @@ pub fn execute(
 
     let mut interpreter = Interpreter {
         module,
+        host,
         remaining_fuel: config.fuel(),
         initial_fuel: config.fuel(),
         max_call_depth: u32::from(config.max_call_depth().get()),
@@ -177,6 +202,7 @@ struct Frame<'a> {
 /// Estado de uma execução; criado do zero por [`execute`].
 struct Interpreter<'a> {
     module: &'a Module,
+    host: &'a mut dyn Host,
     remaining_fuel: u64,
     initial_fuel: u64,
     max_call_depth: u32,
@@ -1073,6 +1099,67 @@ impl<'a> Interpreter<'a> {
                     self.write_current(&mut stack, top, instr.def, payload, &site)?;
                     self.advance(&mut stack, top, &site)?;
                 }
+                Op::HostCall { function, args } => {
+                    // O buffer de argumentos do host também entra na quota
+                    // modelada, como o de `call_static` (ADR-0016/ADR-0036).
+                    let arg_bytes = arg_buffer_cost(u64::try_from(args.len()).unwrap_or(u64::MAX));
+                    self.charge_memory(arg_bytes, &site)?;
+                    let host_args = match stack.get(top) {
+                        Some(frame) => collect_args(frame, args, &site)?,
+                        None => {
+                            return Err(error_at(
+                                ErrorCode::InvalidModule,
+                                "frame ausente na chamada de host",
+                                &site,
+                            ))
+                        }
+                    };
+                    let effect = function.effect();
+                    let scope =
+                        match function.scope_arg() {
+                            Some(index) => host_args
+                                .get(index)
+                                .and_then(Value::as_str)
+                                .ok_or_else(|| {
+                                    error_at(
+                                        ErrorCode::InvalidModule,
+                                        format!(
+                                        "host `{}` exige `string` no argumento de escopo {index}",
+                                        function.name()
+                                    ),
+                                        &site,
+                                    )
+                                })?,
+                            None => "",
+                        };
+                    if !self.host.capabilities().allows(effect, scope) {
+                        return Err(error_at(
+                            ErrorCode::CapabilityDenied,
+                            format!(
+                                "capability `{}` negada para escopo `{scope}` (host_call `{}`)",
+                                effect.name(),
+                                function.name()
+                            ),
+                            &site,
+                        ));
+                    }
+                    let ret = host_ret_type(self.module, *function, &site)?;
+                    let value = self.host.call(*function, &host_args, ret)?;
+                    self.release_memory(arg_bytes);
+                    if !value.matches_type(ret) {
+                        return Err(error_at(
+                            ErrorCode::InvalidType,
+                            format!(
+                                "host `{}` devolveu `{}`, esperado `{ret}`",
+                                function.name(),
+                                value.ty()
+                            ),
+                            &site,
+                        ));
+                    }
+                    self.write_current(&mut stack, top, instr.def, value, &site)?;
+                    self.advance(&mut stack, top, &site)?;
+                }
                 Op::Call { callee, args } => {
                     let callee_function = self.callee(*callee, &site)?;
                     // O buffer de argumentos é cobrado antes de alocar (falha
@@ -1514,6 +1601,25 @@ fn slot_index(value: ValueId, site: &Site<'_>) -> Result<usize, RvmError> {
             site,
         )
     })
+}
+
+/// Tipo de retorno da função de host embutida (ADR-0036).
+fn host_ret_type(
+    module: &Module,
+    function: BuiltinHost,
+    site: &Site<'_>,
+) -> Result<TypeId, RvmError> {
+    match function {
+        BuiltinHost::ReadFile => module
+            .find_type(TypeDef::Result(TYPE_STR, TYPE_STR))
+            .ok_or_else(|| {
+                error_at(
+                    ErrorCode::InvalidModule,
+                    "tipo `result string string` não declarado no módulo".to_string(),
+                    site,
+                )
+            }),
+    }
 }
 
 /// Lê um valor já inicializado do slot de `value`.

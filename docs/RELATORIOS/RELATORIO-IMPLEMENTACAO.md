@@ -53,7 +53,7 @@ este relatório; `.gitlab-ci.yml` e `.github/workflows/ci.yml` (gates de CI); `A
 | RF-05 erros distinguem módulo/trap/limite | atendido | `ErrorClass` + códigos de saída 2/3/4 no CLI |
 | RF-06 frontends independentes | atendido estruturalmente | zero dependências externas; nenhum crate cita Lift/Rio; ADR-0009 |
 | RF-07 testes diferenciais registrados | **parcial** | diferencial RIR↔bytecode e corpus com entrada/expectativa; **não** há frontend real nem versão de frontend a registrar |
-| RF-08 sem efeitos implícitos | atendido no escopo | `HostApi::request` nega 6 efeitos; não há instrução de host no subset |
+| RF-08 sem efeitos implícitos | atendido no escopo | `HostApi::request` nega 6 efeitos; `host_read_file` exige capability explícita e é negado sem host (ADR-0036) |
 | RF-09 decisões em ADR | atendido | ADR-0009..0012 + ADRs 0001..0008 da fundação preservados |
 
 ## 3. Verificação executada (Resultado)
@@ -164,8 +164,9 @@ Demonstrado no escopo executado:
   antes da execução).
 - Overflow aritmético produz trap com localização, em vez de wrap silencioso.
 - Fuel e profundidade interrompem execução com códigos distintos e determinísticos.
-- Nenhum caminho de concessão de capability existe; seis efeitos testados como
-  negados.
+- O caminho de concessão de capability é explícito e escopado (ADR-0036): sem
+  concessão, seis efeitos e `host_read_file` são negados; a leitura só ocorre com
+  `filesystem_read` concedido para o caminho.
 - Decoder binário e parser textual rejeitam truncamento, opcode/tag/versão
   desconhecidos e contagens gigantes sem pânico observado nos orçamentos
   declarados.
@@ -180,10 +181,10 @@ futuras. O protótipo não é sandbox multi-tenant.
 |---|---|---|
 | H01 núcleo comum a dois frontends | **inconclusiva** | nenhum frontend integrado; AST do Rio é privada e a licença é desconhecida |
 | H02 verificador rejeita inválidos antes da execução | **corroborada no escopo do corpus** | 19 casos inválidos, todos `ErrorClass::Module` antes da execução |
-| H03 chamada inter-módulo sem serialização geral | **não testada** | `call_static` só alcança o próprio módulo no EXP-0 |
+| H03 chamada inter-módulo sem serialização geral | **confirmada estruturalmente** | ADR-0018; ver `BENCHMARKS-PREREGISTRADOS.md` |
 | H04 transferência exclusiva/alias | **não testada** | sem objetos, referências ou aliasing no EXP-0 |
-| H05 capabilities deny-by-default | **corroborada no escopo** | sem construtor de concessão; 6 efeitos negados |
-| H06 custo de chamada inter-módulo ≤ 25% | **não medida** | sem benchmark e sem chamada inter-módulo |
+| H05 capabilities deny-by-default | **corroborada no escopo** | default deny; concessão explícita só para `filesystem_read` com escopo; testes de negação (ADR-0036) |
+| H06 custo de chamada inter-módulo ≤ 25% | **confirmada no runner dedicado; inconclusiva na reexecução local** | dispersão 1,33% no runner; 57,8%/31,8% local — ver `BENCHMARK-REEXECUCAO-2026-11-02.md` |
 | H07 fuel/profundidade determinísticos | **corroborada no escopo** | fronteiras exatas 5/6, 8/255/256 e testes repetidos |
 | H08 integração Lift sem alterar semântica | **bloqueada** | sem clone/auditoria do Lift; ADR-0007 inalterado |
 

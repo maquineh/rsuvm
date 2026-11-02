@@ -52,6 +52,7 @@ operação   = "const_i64" inteiro
            | "result_is_ok" valor
            | "result_unwrap" valor
            | "result_unwrap_err" valor
+           | "host_read_file" valor "," valor
            | "call_static" ident "(" [valores] ")" ;
 op_binário = "add_i64_checked" | "sub_i64_checked" | "mul_i64_checked"
            | "div_i64_checked" | "rem_i64_checked"
@@ -101,6 +102,10 @@ terminador de instrução.
 9. `entry` duplicado, função duplicada, rótulo duplicado, valor duplicado ou
    nome `v<N>` usado como parâmetro são `invalid_module`.
 10. Quando existir mais de um erro, vence o primeiro na ordem do arquivo.
+11. `host_read_file` (ADR-0036) exige `string` e `i64` como argumentos e o tipo
+    `result string string` na tabela (`type <id> = result string string`). O texto
+    não escolhe o efeito nem o escopo: ambos vêm da ABI; a capability é conferida
+    em execução.
 
 ## 3. Resolução de nomes e identificadores de valor
 

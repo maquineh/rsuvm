@@ -69,11 +69,15 @@ cargo run -p rvm-cli -- check examples/soma.rvm
 - **Falha fechada**: entradas textuais, binárias, nomes, índices e contagens são
   não confiáveis; limites são checados antes de alocar, indexar, recursar ou
   despachar.
-- **Sem efeitos implícitos** (ADR-0005): nenhuma capability é concedida; não há
-  caminho de concessão no EXP-0.
+- **Sem efeitos implícitos** (ADR-0005): nenhuma capability é concedida por
+  padrão. A única exceção é `read_file`/`filesystem_read`, concedida
+  explicitamente por `Capabilities::grant` + `execute_with_host` ou pelo CLI com
+  `--allow-fs-read <dir>` (ADR-0036).
 - **Determinismo**: mesmo módulo + limites + configuração + argumentos ⇒ mesmo
-  valor ou mesmo código de erro; sem `HashMap`, relógio, ambiente ou sistema de
-  arquivos no caminho de execução.
+  valor ou mesmo código de erro no caminho puro; sem `HashMap`, relógio, ambiente
+  ou sistema de arquivos. `host_read_file` é uma chamada explícita e gated, cujo
+  resultado depende do backend e do estado do sistema; ela não é determinística
+  por construção.
 - **Diagnóstico estável**: códigos e classes de `rvm-spec` são contrato; mensagens
   humanas não são (`docs/CONTRATOS/ERROS-EXP-0.md`).
 - **Teto de profundidade** aplicado sobre pilha de frames na heap (ADR-0012): a
@@ -83,9 +87,11 @@ cargo run -p rvm-cli -- check examples/soma.rvm
 
 - O núcleo (`rvm-spec`, `rvm-ir`, `rvm-runtime`, `rvm-verify`, `rvm-text`,
   `rvm-bytecode`, `rvm-interpreter`) é puro: sem filesystem, rede, ambiente,
-  relógio, subprocesso ou `unsafe`.
+  relógio, subprocesso ou `unsafe`. `rvm-interpreter` só executa efeito quando
+  recebe um `Host` explícito em `execute_with_host`; `execute` nega tudo.
 - `rvm-cli` lê o arquivo de entrada indicado, escreve apenas o arquivo de saída de
-  `encode` e usa `stdout`/`stderr` do processo.
+  `encode`, usa `stdout`/`stderr` do processo e, com `--allow-fs-read <dir>`, lê
+  arquivos sob o diretório concedido durante `host_read_file` (ADR-0036).
 - A suíte de testes lê `crates/rvm-conformance/corpus` e cria arquivos temporários
   em testes do CLI; não escreve no repositório.
 - `scripts/gerar-evidencias.ps1` escreve `docs/RELATORIOS/EVIDENCIAS-EXECUCAO.md`
@@ -101,7 +107,7 @@ cargo run -p rvm-cli -- check examples/soma.rvm
   opcional por regra. Workflows auxiliares **manuais**: `bench.yml` (benchmark
   pré-registrado) e `fuzz.yml` (fuzzing guiado por cobertura, nightly).
 - Resultados atuais e log bruto: [RELATORIO-IMPLEMENTACAO](./docs/RELATORIOS/RELATORIO-IMPLEMENTACAO.md)
-  e [EVIDENCIAS-EXECUCAO](./docs/RELATORIOS/EVIDENCIAS-EXECUCAO.md): 149 testes
+  e [EVIDENCIAS-EXECUCAO](./docs/RELATORIOS/EVIDENCIAS-EXECUCAO.md): 166 testes
   verdes, 61 casos válidos + 42 inválidos no corpus.
 
 ## Segurança (limites declarados)

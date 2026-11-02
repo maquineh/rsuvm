@@ -81,6 +81,7 @@ fn collect_ops(module: &Module, ops: &mut BTreeSet<String>, terms: &mut BTreeSet
                     Op::ResultIsOk { .. } => "result_is_ok".to_string(),
                     Op::ResultUnwrap { .. } => "result_unwrap".to_string(),
                     Op::ResultUnwrapErr { .. } => "result_unwrap_err".to_string(),
+                    Op::HostCall { .. } => "host_read_file".to_string(),
                     Op::Call { .. } => "call_static".to_string(),
                 };
                 ops.insert(name);

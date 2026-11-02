@@ -471,11 +471,23 @@ ligação ≈24–26 µs. A confirmação anterior em runner dedicado (`bench.ym
 `41429076866`, dispersão 1,33%) permanece como referência. Relatório:
 `docs/RELATORIOS/BENCHMARK-REEXECUCAO-2026-11-02.md`.
 
+### ABI de host com capabilities (item 3)
+
+A ABI mínima fechada é `read_file(path: string, max_bytes: i64) -> result string
+string`, com efeito `filesystem_read`, escopo no argumento 0 e código `0`/opcode
+`54` no bytecode (ADR-0036). `execute` sem host nega toda chamada; o intérprete
+confere a capability **antes** de chamar o backend e revalida o tipo do retorno.
+O CLI concede com `--allow-fs-read <dir>` (leitura limitada a 1 MiB; escopo vazio
+é erro de uso) e sai com 5 sem a flag, fora do escopo ou com `..`. Testes: 5 em
+`rvm-interpreter/tests/host.rs`, 6 no CLI (incluindo round-trip
+`encode`/`run-bc`) e round-trip de texto; o corpus de conformidade não executa
+`host_read_file` (lacuna registrada).
+
 ### Verificação (Resultado)
 
 | Comando | Resultado |
 |---|---|
-| `cargo test --workspace` | **149 passed, 0 failed**; corpus 61 válidos + 42 inválidos |
+| `cargo test --workspace` | **166 passed, 0 failed**; corpus 61 válidos + 42 inválidos |
 | `cargo test --manifest-path frontends/lift-rir/Cargo.toml` | 43 passed, 0 failed (34 diferencial + 9 CLI) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | exit 0 |
 | `cargo fmt --all -- --check` | exit 0 |

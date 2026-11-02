@@ -6,8 +6,8 @@ Pacote fonte do verificador de RIR: um único arquivo, `lib.rs`, que separa
 módulos não confiáveis do executor. A única forma de obter um `VerifiedModule` é
 `VerifiedModule::verify`, que roda primeiro a checagem estrutural de
 `rvm_ir::structure::check` e depois valida fluxo de controle, alcançabilidade,
-dominância, definição antes do uso, tipos, chamadas e terminadores
-(`lib.rs:1-40`).
+dominância, definição antes do uso, tipos, chamadas, chamadas de host e
+terminadores (`lib.rs:1-40`).
 
 Ordem efetiva dentro de `verify` (`lib.rs:81-87`) e de `verify_function`
 (`lib.rs:408-426`):
@@ -78,6 +78,9 @@ desenvolvimento).
   argumento com tipo divergente, `return` incompatível e condição não-`bool` são
   `invalid_type` (`lib.rs:219-237`, `lib.rs:251-290`); argumentos de desvio
   seguem a mesma regra contra os parâmetros do bloco alvo (`lib.rs:309-327`).
+- `host_read_file` é verificado contra a ABI fechada (`host_signature`):
+  argumentos `string` e `i64`; o retorno `result string string` precisa existir na
+  tabela do módulo. Aridade/tipo divergentes são `invalid_type` (ADR-0036).
 - A verificação de disponibilidade (`check_use`) roda antes da checagem de tipo
   do mesmo operando (`lib.rs:197-210`), então um uso não dominante com tipo
   errado produz `invalid_control_flow`.

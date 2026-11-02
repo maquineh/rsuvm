@@ -21,14 +21,16 @@ dados compartilhada (ADR-0002).
 - `Block` — `id`, `label`, `params`, `instrs`, `term` (`lib.rs:Block`).
 - `BlockParam` — `value`, `name`, `ty` (merge por phi explícito).
 - `Instr` — `def`, `op`.
-- `Op` — `ConstI64`, `ConstBool`, `Bin`, `Cmp`, `Call`; `result_type`,
-  `operand_ids` (`lib.rs:Op`).
+- `Op` — variantes do subset (`ConstI64`, `ConstBool`, `ConstStr`, `ConstF64`,
+  `Bin`, `Cmp`, operações de `string`/`f64`/array/struct/option/result, `Call` e
+  `HostCall`); `result_type`, `operand_ids` (`lib.rs:Op`).
 - `Terminator` — `Return`, `Br`, `CondBr`; `operand_ids` (`lib.rs:Terminator`).
 - `BranchTarget` — `target`, `args`.
 - `structure::check(&Module, &Limits) -> Result<(), RvmError>`
   (`structure.rs:check`).
-- `testing` — construtores de módulos válidos para testes, habilitados por
-  `cfg(test)` ou pela feature `test-helpers` (`lib.rs:testing`).
+- `testing` — construtores de módulos válidos para testes, incluindo
+  `host_read_file`, habilitados por `cfg(test)` ou pela feature `test-helpers`
+  (`lib.rs:testing`).
 
 ## Invariants
 

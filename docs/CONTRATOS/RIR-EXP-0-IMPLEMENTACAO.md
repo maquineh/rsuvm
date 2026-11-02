@@ -27,7 +27,8 @@ Op        = const_i64 | const_bool | const_str | const_f64 | bin(op,lhs,rhs) | c
           | option_none(ty) | option_some(ty,v) | option_is_some(v) | option_unwrap(v)
           | coalesce(o,f) | option_eq(lhs,rhs) | option_ne(lhs,rhs)
           | result_ok(ty,v) | result_err(ty,v) | result_is_ok(v)
-          | result_unwrap(v) | result_unwrap_err(v) | call(callee,args)
+          | result_unwrap(v) | result_unwrap_err(v)
+          | call(callee,args) | host_call(function,args)
 Term      = return [v] | br(target,args) | cond_br(cond, target, target)
 ~~~
 
@@ -129,6 +130,7 @@ Depois de `structure::check`:
    | `result_ok`/`result_err` | valor no tipo da variante | `result(T, E)` (no op) |
    | `result_is_ok` | `result(T, E)` | `bool` |
    | `result_unwrap`/`result_unwrap_err` | `result(T, E)` | `T`/`E` |
+   | `host_read_file` | `string`, `i64` (ABI fechada, ADR-0036) | `result string string` |
    | comparações `*_i64` | `i64`, `i64` | `bool` |
    | `call_static` | casam com `params` do alvo | `ret` do alvo |
    Qualquer divergência ⇒ `invalid_type`.
@@ -161,8 +163,9 @@ terminador por último. O primeiro erro vence.
   argumentos, verifica profundidade, entra no frame do callee e grava o retorno no
   slot de `def`.
 - `const_str`/`str_eq`/`str_ne`/`str_len` operam sobre `string`; `concat_str`
-  cobra os bytes do resultado na quota (cumulativo) e falha com `out_of_memory`
-  (quota) ou `string_too_long` (acima de `ExecConfig::max_string_bytes`, ADR-0025).
+  retém os bytes do resultado na quota e falha com `out_of_memory` (quota) ou
+  `string_too_long` (acima de `ExecConfig::max_string_bytes`, ADR-0025); a
+  liberação ocorre ao sobrescrever o slot ou no retorno do frame (ADR-0035).
 - `const_f64`/`Float` operam sobre `f64` com **IEEE-754 sem trap** (divisão por zero
   → `inf`/`NaN`; comparações com `NaN` são falsas exceto `!=`, ADR-0026).
 - `array` cria um array imutável (não-vazio, homogêneo) do tipo declarado no op e
@@ -191,6 +194,12 @@ terminador por último. O primeiro erro vence.
 - `result_ok`/`result_err` constroem um `result` do tipo declarado no op
   (ADR-0033/0034); `result_is_ok` testa; `result_unwrap`/`result_unwrap_err`
   extraem o payload e produzem o trap `unwrap_error` sobre a variante errada.
+- `host_read_file` é a única chamada de host do EXP-0 (ADR-0036): exige a
+  capability `filesystem_read` para o escopo do argumento `path` **antes** de
+  chamar o backend; sem concessão ⇒ `capability_denied`. O host devolve
+  `result string string` e o tipo do valor é conferido pelo intérprete
+  (`invalid_type` se divergir). A string devolvida entra na quota de memória ao
+  ser gravada (ADR-0035).
 - `br`/`cond_br` copiam os argumentos para os slots dos parâmetros do bloco alvo
   antes de saltar (phi explícito).
 - `return` devolve `Value::Unit` quando não há valor.

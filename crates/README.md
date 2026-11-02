@@ -27,7 +27,7 @@ executor aceita.
 - [rvm-ir](./rvm-ir/README.md) — modelo da RIR e checagem estrutural antes de
   alocar (`structure::check`). Depende de `rvm-spec`.
 - [rvm-runtime](./rvm-runtime/README.md) — valores, quotas (`ExecConfig`,
-  `CallDepthLimit`) e capabilities deny-by-default. Depende de `rvm-spec`.
+  `CallDepthLimit`), hosts e capabilities deny-by-default. Depende de `rvm-spec`.
 - [rvm-verify](./rvm-verify/README.md) — tipos, CFG, dominância e a única
   construção de `VerifiedModule`. Depende de spec e ir.
 - [rvm-text](./rvm-text/README.md) — parser e impressão canônica do formato
@@ -40,5 +40,6 @@ executor aceita.
 - [rvm-link](./rvm-link/README.md) — ligação estática inter-módulo: resolve
   declarações externas em um módulo plano (ADR-0018). Depende de spec e ir.
 - [rvm-cli](./rvm-cli/README.md) — binário `rsuvm` (`run`, `run-bc`, `check`,
-  `fmt`, `encode`); não concede capabilities.
+  `fmt`, `encode`); nega efeitos por padrão e concede `filesystem_read` com
+  `--allow-fs-read <dir>`.
 - [rvm-conformance](./rvm-conformance/README.md) — corpus em dados (61 válidos, 42 inválidos) e testes de conformidade/propriedades.

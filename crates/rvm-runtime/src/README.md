@@ -3,9 +3,11 @@
 ## Overview
 
 `rvm-runtime` define valores de runtime, quotas de execução e a fronteira de
-capabilities. Implementa a regra **deny-by-default** do ADR-0005 de forma
-estrutural: não existe construtor que conceda capability e nenhuma função do
-crate toca sistema operacional. Depende apenas de `rvm-spec`.
+capabilities. Implementa a regra **deny-by-default** do ADR-0005: o conjunto
+concedido nasce vazio e só cresce por construtores explícitos do host
+(`Capabilities::grant`/`with_grant`, ADR-0036). Nenhuma função do crate toca
+sistema operacional; o efeito só existe se um `Host` externo implementar
+`call`. Depende apenas de `rvm-spec`.
 
 ## Interface
 
@@ -28,21 +30,29 @@ crate toca sistema operacional. Depende apenas de `rvm-spec`.
   `with_memory(MemoryLimit)`, `memory_limit()`, `Default`
   (`lib.rs:ExecConfig`).
 - `Effect` — `FilesystemRead`, `FilesystemWrite`, `Network`, `Environment`,
-  `Clock`, `Process`; `name()`.
-- `Capabilities` — `none()`, `granted() -> &[Effect]`, `is_granted(Effect)`.
+  `Clock`, `Process`; `name()`, `from_name(&str)`. Reexportado de `rvm-spec`.
+- `CapabilityGrant` — `new(effect, scope)`, `effect()`, `scope()`.
+- `Capabilities` — `none()`, `grant(effect, scope)`, `with_grant(effect, scope)`,
+  `granted() -> &[CapabilityGrant]`, `is_granted(Effect)`,
+  `allows(Effect, scope)` (componentes de caminho; escopo vazio = qualquer).
+- `Host` — trait de backend: `capabilities()`, `call(BuiltinHost, args, ret)`;
+  `NoHost` nega toda chamada.
 - `HostApi` — `standalone()`, `new(Capabilities)`, `capabilities()`,
   `request(Effect, scope) -> Result<(), RvmError>` (`lib.rs:HostApi`).
 
 ## Invariants
 
-- `Capabilities` tem campo privado e **um único** construtor efetivo, `none()`;
-  não há `grant`, `insert`, `with` nem `Default` com conteúdo. No EXP-0 o conjunto
-  concedido é sempre vazio.
-- `HostApi::request` devolve sempre `Err(capability_denied)`; o ramo `Ok` usa
-  `UnsupportedFeature` e é inalcançável porque nenhum conjunto não vazio pode ser
-  construído.
+- `Capabilities` tem campo privado e construtores explícitos; não há
+  desserialização nem `Default` com conteúdo. `none()` é o padrão e nenhum efeito
+  é concedido sem uma chamada explícita a `grant`/`with_grant`.
+- `Capabilities::allows` compara o escopo por componentes de caminho
+  (`Path::starts_with`), não por prefixo textual, e nega caminhos com componente
+  `..` (sem canonicalização, `..` escaparia do escopo); escopo vazio concede
+  qualquer caminho sem `..`. `HostApi::request` devolve `Ok(())` quando `allows` é
+  verdadeiro e `Err(capability_denied)` caso contrário.
 - Nenhuma função do crate abre arquivo, socket, variável de ambiente, relógio ou
-  processo; a negação é do código, não de flag.
+  processo; o `Host` é um trait implementado fora do crate (o CLI implementa
+  `CliHost` com `std::fs`), e a negação padrão é do código, não de flag.
 - `CallDepthLimit` só existe em `1..=HARD_MAX`; `new(0)` e `new(257)` devolvem
   `None`. O teto de 256 é aplicado pelo intérprete sobre uma pilha de frames na
   heap (ADR-0012).
@@ -57,7 +67,8 @@ crate toca sistema operacional. Depende apenas de `rvm-spec`.
 ## Side Effects
 
 - `None`. O crate não lê nem escreve recursos do host. `request` produz um
-  diagnóstico de negação sem efeito colateral observável.
+  diagnóstico de negação sem efeito colateral observável; `Host` é apenas um
+  trait, sem implementação de efeito neste crate.
 
 ## Verification
 

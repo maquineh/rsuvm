@@ -34,10 +34,12 @@ sandbox validado ou autorização para produção. Leia antes de editar:
    indexar direto; use `get`, `checked_*`, `try_into` e propague `RvmError`.
    `cfg_attr(test, allow(...))` já existe para testes unitários.
 5. **Sem efeitos implícitos**: nenhuma operação de SO (arquivo, rede, ambiente,
-   relógio, processo) é oferecida ao convidado. O MVP não concede capabilities.
-6. **Determinismo**: mesma versão + módulo + limites + configuração ⇒ mesmo
-   valor/trap. Não dependa de `HashMap`, tempo de parede, ordem de arquivos ou
-   `debug_assertions`.
+   relógio, processo) é oferecida ao convidado por padrão. A única exceção é
+   `filesystem_read` via `host_read_file`, concedida explicitamente pelo host com
+   escopo (ADR-0036); `execute` sem host nega tudo.
+6. **Determinismo**: mesma versão + módulo + limites + configuração (+ host, quando
+   houver efeito explícito) ⇒ mesmo valor/trap. Não dependa de `HashMap`, tempo de
+   parede, ordem de arquivos ou `debug_assertions` no caminho puro.
 7. **Independência de frontend**: nenhum crate do runtime pode importar ou citar
    Lift/Rio. Adaptadores vivem fora do núcleo (`frontends/`, ainda inexistente).
 8. **Sem `unsafe` em testes** e sem teste que dependa de rede, porta ou relógio.

@@ -232,3 +232,173 @@ fn version_e_help_saem_com_zero() {
         assert!(!texto(&output.stdout).is_empty());
     }
 }
+
+/// Módulo que chama `host_read_file`; a tabela de tipos precisa declarar
+/// `result string string` (id 5) para a ABI (ADR-0036).
+const MODULO_HOST: &str = "module hostcli version 1\n\
+entry le\n\
+type 5 = result string string\n\
+\n\
+fn le(path: string, max: i64) -> result string string {\n\
+  entry:\n\
+    v0 = host_read_file path, max\n\
+    return v0\n\
+}\n";
+
+/// Cria um diretório único por teste com o módulo, um arquivo dentro e outro
+/// fora de um subdiretório de escopo.
+fn cenario_host(nome: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("rsuvm-cli-host-{}-{nome}", std::process::id()));
+    std::fs::create_dir_all(dir.join("sub")).expect("criar diretório de teste");
+    std::fs::write(dir.join("le.rvm"), MODULO_HOST).expect("escrever módulo de teste");
+    std::fs::write(dir.join("dentro.txt"), "conteudo-secreto").expect("escrever arquivo dentro");
+    std::fs::write(dir.join("fora.txt"), "conteudo-fora").expect("escrever arquivo fora");
+    dir
+}
+
+#[test]
+fn host_sem_flag_e_capability_denied() {
+    let dir = cenario_host("sem-flag");
+    let output = saida(bin().arg("run").arg(dir.join("le.rvm")).args([
+        "--arg",
+        &format!("str:{}", dir.join("dentro.txt").display()),
+        "--arg",
+        "i64:100",
+    ]));
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(
+        output.status.code(),
+        Some(5),
+        "stderr: {}",
+        texto(&output.stderr)
+    );
+    assert!(texto(&output.stderr).contains("capability_denied"));
+}
+
+#[test]
+fn host_com_flag_le_dentro_do_escopo() {
+    let dir = cenario_host("dentro");
+    let output = saida(
+        bin()
+            .arg("run")
+            .arg(dir.join("le.rvm"))
+            .args([
+                "--arg",
+                &format!("str:{}", dir.join("dentro.txt").display()),
+                "--arg",
+                "i64:100",
+                "--allow-fs-read",
+            ])
+            .arg(&dir),
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "stderr: {}",
+        texto(&output.stderr)
+    );
+    assert_eq!(texto(&output.stdout).trim(), "ok:str:conteudo-secreto");
+}
+
+#[test]
+fn host_com_flag_nega_arquivo_fora_do_escopo() {
+    let dir = cenario_host("fora");
+    let output = saida(
+        bin()
+            .arg("run")
+            .arg(dir.join("le.rvm"))
+            .args([
+                "--arg",
+                &format!("str:{}", dir.join("fora.txt").display()),
+                "--arg",
+                "i64:100",
+                "--allow-fs-read",
+            ])
+            .arg(dir.join("sub")),
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(
+        output.status.code(),
+        Some(5),
+        "stderr: {}",
+        texto(&output.stderr)
+    );
+    assert!(texto(&output.stderr).contains("capability_denied"));
+}
+
+#[test]
+fn host_com_flag_nega_escapada_com_parent_dir() {
+    let dir = cenario_host("parent-dir");
+    let escape = dir.join("sub").join("..").join("fora.txt");
+    let output = saida(
+        bin()
+            .arg("run")
+            .arg(dir.join("le.rvm"))
+            .args([
+                "--arg",
+                &format!("str:{}", escape.display()),
+                "--arg",
+                "i64:100",
+                "--allow-fs-read",
+            ])
+            .arg(dir.join("sub")),
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(
+        output.status.code(),
+        Some(5),
+        "stderr: {}",
+        texto(&output.stderr)
+    );
+    assert!(texto(&output.stderr).contains("capability_denied"));
+}
+
+#[test]
+fn host_com_escopo_vazio_e_erro_de_uso() {
+    let output = saida(bin().arg("run").arg(caminho_exemplo()).args([
+        "--arg",
+        "i64:10",
+        "--arg",
+        "i64:20",
+        "--allow-fs-read",
+        "",
+    ]));
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "stderr: {}",
+        texto(&output.stderr)
+    );
+    assert!(texto(&output.stderr).contains("allow-fs-read"));
+}
+
+#[test]
+fn encode_e_run_bc_preservam_host_read_file() {
+    let dir = cenario_host("roundtrip");
+    let fonte = dir.join("le.rvm");
+    let destino = dir.join("le.bin");
+    let encode = saida(bin().arg("encode").arg(&fonte).arg(&destino));
+    assert_eq!(
+        encode.status.code(),
+        Some(0),
+        "stderr: {}",
+        texto(&encode.stderr)
+    );
+    let run = saida(
+        bin()
+            .arg("run-bc")
+            .arg(&destino)
+            .args([
+                "--arg",
+                &format!("str:{}", dir.join("dentro.txt").display()),
+                "--arg",
+                "i64:100",
+                "--allow-fs-read",
+            ])
+            .arg(&dir),
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(run.status.code(), Some(0), "stderr: {}", texto(&run.stderr));
+    assert_eq!(texto(&run.stdout).trim(), "ok:str:conteudo-secreto");
+}

@@ -19,6 +19,11 @@ semântica de overflow independente do perfil de compilação: toda aritmética 
   `operand_type`, `result_type`, `name`, `from_name` (`lib.rs:BinOp`).
 - `CmpOp` — `Eq`, `Ne`, `Lt`, `Le`, `Gt`, `Ge`; `eval_i64(lhs, rhs) -> bool`,
   `operand_type`, `result_type` (`lib.rs:CmpOp`).
+- `Effect` — efeitos de host (`filesystem_read`, `filesystem_write`, `network`,
+  `environment`, `clock`, `process`); `name`, `from_name`, `Display`
+  (`lib.rs:Effect`).
+- `BuiltinHost` — ABI fechada do EXP-0: `ReadFile`, com `name`, `effect`, `code`
+  e `scope_arg` (`lib.rs:BuiltinHost`, ADR-0036).
 - `ErrorCategory` — `Decode`, `Verify`, `Trap`, `Resource`, `Capability`.
 - `ErrorClass` — `Module`, `Trap`, `ResourceLimit`, `Capability` (RF-05).
 - `ErrorCode::OutOfMemory` — quota de memória de frames excedida (classe

@@ -4,7 +4,10 @@
 //! `test-helpers`. Não faz parte da API de produção: nada aqui valida limites ou
 //! tipos, apenas monta estruturas densas e legíveis.
 
-use rvm_spec::{builtin_types, BinOp, CmpOp, TypeId, IR_VERSION, TYPE_BOOL, TYPE_I64, TYPE_UNIT};
+use rvm_spec::{
+    builtin_types, BinOp, BuiltinHost, CmpOp, TypeDef, TypeId, BUILTIN_TYPE_COUNT, IR_VERSION,
+    TYPE_BOOL, TYPE_I64, TYPE_STR, TYPE_UNIT,
+};
 
 use crate::{
     Block, BlockParam, BranchTarget, Function, Instr, Module, Op, Param, Terminator, ValueId,
@@ -386,4 +389,34 @@ pub fn comparacao() -> Module {
         )],
     );
     modulo("comparacao", 0, vec![main])
+}
+
+/// Chamada de host `read_file(path, max)` com retorno `result string string`
+/// (ADR-0036).
+#[must_use]
+pub fn host_read_file() -> Module {
+    let mut types = builtin_types();
+    types.push(TypeDef::Result(TYPE_STR, TYPE_STR));
+    let ret: TypeId = u32::try_from(BUILTIN_TYPE_COUNT).unwrap_or(u32::MAX);
+    let le = funcao(
+        0,
+        "le",
+        vec![param("path", TYPE_STR), param("max", TYPE_I64)],
+        ret,
+        vec![bloco(
+            0,
+            "entry",
+            vec![instr(
+                2,
+                Op::HostCall {
+                    function: BuiltinHost::ReadFile,
+                    args: vec![0, 1],
+                },
+            )],
+            Terminator::Return(Some(2)),
+        )],
+    );
+    let mut module = modulo("host", 0, vec![le]);
+    module.types = types;
+    module
 }

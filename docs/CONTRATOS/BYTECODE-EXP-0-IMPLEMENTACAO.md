@@ -126,8 +126,11 @@ terminator:
 | 51 | `result_is_ok` | `u32 value` |
 | 52 | `result_unwrap` | `u32 value` |
 | 53 | `result_unwrap_err` | `u32 value` |
+| 54 | `host_read_file` | `u8 function`, `u16 argc`, `u32 args[argc]` |
 
-Código desconhecido ⇒ `unknown_opcode`.
+Código desconhecido ⇒ `unknown_opcode`. Na opcode 54, `function` é `0`
+(`read_file`, ADR-0036); qualquer outro valor ⇒ `unknown_opcode`; `argc` respeita
+`Limits::max_call_args`.
 
 ### Tipos de terminador
 

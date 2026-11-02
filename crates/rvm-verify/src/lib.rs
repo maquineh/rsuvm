@@ -55,8 +55,8 @@ use rvm_ir::{
     Block, BlockId, BranchTarget, FnId, Function, Instr, Module, Op, StructDef, Terminator, ValueId,
 };
 use rvm_spec::{
-    ErrorCode, Limits, Location, RvmError, StructId, TypeDef, TypeId, TYPE_BOOL, TYPE_F64,
-    TYPE_I64, TYPE_STR, TYPE_UNIT,
+    BuiltinHost, ErrorCode, Limits, Location, RvmError, StructId, TypeDef, TypeId, TYPE_BOOL,
+    TYPE_F64, TYPE_I64, TYPE_STR, TYPE_UNIT,
 };
 
 /// Módulo que passou pela verificação completa.
@@ -426,6 +426,28 @@ impl<'a> FunctionFacts<'a> {
             | Op::ResultUnwrapErr { value } => {
                 self.check_use(block_index, instr_index, *value, location)?;
                 self.require_result(*value, location).map(|_| ())
+            }
+            Op::HostCall { function, args } => {
+                for arg in args {
+                    self.check_use(block_index, instr_index, *arg, location)?;
+                }
+                let (params, _) = host_signature(self.module, *function, location)?;
+                if args.len() != params.len() {
+                    return Err(invalid(
+                        ErrorCode::InvalidType,
+                        format!(
+                            "host `{}` espera {} argumento(s), recebeu {}",
+                            function.name(),
+                            params.len(),
+                            args.len()
+                        ),
+                        location.clone(),
+                    ));
+                }
+                for (arg, expected) in args.iter().zip(params.iter()) {
+                    self.check_operand_type(*arg, *expected, location)?;
+                }
+                Ok(())
             }
             Op::Call { callee, args } => {
                 let target = self.module.function(*callee).ok_or_else(|| {
@@ -978,6 +1000,27 @@ fn build_values(
     Ok(ValueMaps { definitions, types })
 }
 
+/// Assinatura da função de host embutida (ADR-0036).
+///
+/// Devolve `(parâmetros, retorno)` em `TypeId`; o retorno precisa existir na
+/// tabela do módulo.
+fn host_signature(
+    module: &Module,
+    function: BuiltinHost,
+    location: &Location,
+) -> Result<(Vec<TypeId>, TypeId), RvmError> {
+    match function {
+        BuiltinHost::ReadFile => {
+            let ret = find_type(
+                module,
+                TypeDef::Result(rvm_spec::TYPE_STR, rvm_spec::TYPE_STR),
+                location,
+            )?;
+            Ok((vec![rvm_spec::TYPE_STR, rvm_spec::TYPE_I64], ret))
+        }
+    }
+}
+
 /// Resolve o `TypeId` definido por uma operação, consultando os tipos já
 /// registrados dos operandos e a tabela do módulo (ADR-0034).
 fn resolve_op_type(
@@ -1043,6 +1086,10 @@ fn resolve_op_type(
                 location.clone(),
             )),
         },
+        Op::HostCall { function, .. } => {
+            let (_, ret) = host_signature(module, *function, location)?;
+            Ok(ret)
+        }
         Op::Call { callee, .. } => module
             .function(*callee)
             .map(|target| target.ret)

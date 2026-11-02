@@ -3,10 +3,11 @@
 ## Overview
 
 `rvm-cli` implementa o binário de desenvolvimento `rsuvm`. É a única interface de
-linha de comando do protótipo e **não concede capabilities**: nenhum subcomando
-oferece arquivo, rede, ambiente, relógio ou subprocesso ao convidado. Lê módulos
-textuais ou binários, verifica antes de executar e traduz
-`ErrorClass`/`ErrorCode` em códigos de saída estáveis
+linha de comando do protótipo e **nega efeitos por padrão**: sem
+`--allow-fs-read`, nenhum subcomando oferece arquivo, rede, ambiente, relógio ou
+subprocesso ao convidado (ADR-0036). A flag concede apenas `filesystem_read` sob o
+diretório indicado. Lê módulos textuais ou binários, verifica antes de executar e
+traduz `ErrorClass`/`ErrorCode` em códigos de saída estáveis
 (`docs/CONTRATOS/ERROS-EXP-0.md` §5).
 
 ## Interface
@@ -14,9 +15,10 @@ textuais ou binários, verifica antes de executar e traduz
 - Binário `rsuvm` (`Cargo.toml:[[bin]]`).
 - Subcomandos: `run`, `run-bc`, `check`, `fmt`, `encode`, `version`, `help`
   (`main.rs:dispatch`).
-- Opções: `--entry <fn>`, `--arg <tipo:valor>`, `--fuel <n>`, `--max-depth <n>`
-  (`main.rs:parse_options`). Tipos de argumento: `i64:<inteiro>`, `bool:true|false`,
-  `unit` (`main.rs:parse_argument`).
+- Opções: `--entry <fn>`, `--arg <tipo:valor>`, `--fuel <n>`, `--max-depth <n>`,
+  `--memory <bytes>`, `--allow-fs-read <dir>` (`main.rs:parse_options`). Tipos de
+  argumento: `i64:<inteiro>`, `bool:true|false`, `unit` (`main.rs:parse_argument`).
+  `--allow-fs-read` só vale em `run`/`run-bc`.
 - `encode` recebe exatamente dois posicionais: entrada `.rvm` e saída binária
   (`main.rs:command_encode`).
 - Saída de valor: `unit`, `bool:true`, `i64:30` (formato de `Value::Display`).
@@ -34,8 +36,17 @@ textuais ou binários, verifica antes de executar e traduz
   `out_of_fuel` na primeira operação.
 - O nome em `--entry` precisa existir no módulo verificado; ausente é erro de uso
   (exit 1) e não uma execução silenciosa da entrada padrão (`main.rs:resolve_entry`).
-- Não existe opção de concessão de capability; qualquer `--allow-*` é opção
-  desconhecida e sai com 1 (`main.rs:parse_options`, teste `opcao_de_capability_nao_existe`).
+- Sem `--allow-fs-read`, `CliHost` usa `Capabilities::none()` e `host_read_file`
+  falha com `capability_denied` (exit 5) antes de tocar o arquivo
+  (`main.rs:CliHost`, teste `host_sem_flag_e_capability_denied`).
+- `--allow-fs-read <dir>` concede `filesystem_read` para caminhos sob `dir`
+  (comparação por componentes; `..` é negado; escopo vazio é erro de uso); o host
+  revalida o escopo e limita a leitura a 1 MiB. Caminho fora do escopo ⇒ exit 5
+  (testes `host_com_flag_nega_arquivo_fora_do_escopo` e
+  `host_com_flag_nega_escapada_com_parent_dir`).
+- `--allow-fs-read` é a única flag de concessão; qualquer outro `--allow-*` é
+  opção desconhecida e sai com 1 (`main.rs:parse_options`, teste
+  `opcao_de_capability_nao_existe`).
 - Erros de módulo, trap e limite são distinguidos por `ErrorClass`, não por texto:
   a mensagem em `stderr` segue `código: detalhe [localização]`
   (`main.rs:Failure::Display`).
@@ -48,9 +59,11 @@ textuais ou binários, verifica antes de executar e traduz
 
 - Lê exatamente o arquivo de entrada indicado e, em `encode`, escreve exatamente o
   arquivo de saída indicado (`std::fs::read`, `std::fs::read_to_string`,
-  `std::fs::write`). Nenhum outro acesso a filesystem.
-- Escreve em `stdout`/`stderr` do processo. Nenhuma rede, ambiente, relógio,
-  subprocesso ou capability.
+  `std::fs::write`). Com `--allow-fs-read <dir>`, `CliHost` também lê arquivos sob
+  `<dir>` quando o convidado chama `host_read_file`; nenhum outro acesso a
+  filesystem.
+- Escreve em `stdout`/`stderr` do processo. Nenhuma rede, ambiente, relógio ou
+  subprocesso.
 
 ## Verification
 
