@@ -2,7 +2,7 @@
 
 ## Overview
 
-Workspace Cargo da RSUVM (EXP-0): nove crates com dependências acíclicas e
+Workspace Cargo da RSUVM (EXP-0): dez crates com dependências acíclicas e
 **zero dependências externas** (apenas `std`). O grafo é:
 
 ~~~text
@@ -10,6 +10,7 @@ rvm-spec
  ├── rvm-ir ── rvm-verify ── rvm-interpreter ── rvm-cli
  │        ├── rvm-text ─────────────────────────┘
  │        └── rvm-bytecode ─────────────────────┘
+ │        └── rvm-link ── rvm-conformance (dev)
  └── rvm-runtime ── rvm-interpreter
                     rvm-conformance (somente dev-dependencies)
 ~~~
@@ -36,6 +37,8 @@ executor aceita.
 - [rvm-interpreter](./rvm-interpreter/README.md) — executor determinístico com
   fuel, profundidade, traps e pilha de frames explícita. Depende de spec, ir,
   runtime e verify.
+- [rvm-link](./rvm-link/README.md) — ligação estática inter-módulo: resolve
+  declarações externas em um módulo plano (ADR-0018). Depende de spec e ir.
 - [rvm-cli](./rvm-cli/README.md) — binário `rsuvm` (`run`, `run-bc`, `check`,
   `fmt`, `encode`); não concede capabilities.
 - [rvm-conformance](./rvm-conformance/README.md) — corpus em dados (19 válidos, 23 inválidos) e testes de conformidade/propriedades.

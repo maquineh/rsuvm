@@ -12,6 +12,8 @@ Mapeamento aprovado pelo mantenedor:
 | A2 | 3–4 | Ampliação do corpus/cobertura + quota de memória por frame |
 | A3 | 5–6 | Campanha de fuzzing + benchmarks pré-registrados (H06/H03) |
 | A4 | 7 | Auditoria do Lift ou fechamento do ADR-0007 como bloqueado |
+| B1 | lacuna §9 (H03/H06) | Ligação estática inter-módulo (crate `rvm-link`, ADR-0018) |
+| B2 | lacuna §9 (fuzzing/benchmark) | Fuzzing guiado por cobertura + benchmark inter-módulo |
 
 Convenção: **Resultado** (executado, com comando) é separado de **Proposta** e
 **Desconhecido**. Nada aqui foi auditado por terceiros.
@@ -163,14 +165,43 @@ bloqueado pela ausência de ligação estática (ADR pendente).
 Limite: a auditoria é **inspeção estática**; o Lift não foi compilado nem
 executado, e a licença continua pendente de decisão do mantenedor.
 
-## Próximas etapas (B1/B2)
+## B1 — Ligação estática inter-módulo
 
-B1/B2 tomam as lacunas remanescentes do `RELATORIO-IMPLEMENTACAO.md` (§9). Recorte
-proposto a confirmar com o mantenedor:
+Lacuna remanescente do §9: H03/H06 não medidas por falta de ligação entre
+módulos. Decisão e limites em
+`docs/ADRs/ADR-0018-LIGACAO-ESTATICA-INTER-MODULO.md`.
 
-- **B1 — ligação estática inter-módulo**: decidir em ADR e implementar a chamada
-  entre módulos para destravar H03/H06 (hoje `call_static` só alcança o próprio
-  módulo).
-- **B2 — campanha ampliada de fuzzing/benchmark**: fuzzer guiado por cobertura
-  (com ADR de dependência de desenvolvimento) e execução do benchmark
-  inter-módulo pré-registrado.
+### Entregue
+
+- **Declaração externa** na RIR: `Function` sem blocos (`Function::is_external`);
+  `structure::check` aceita externas, mas a entrada não pode ser externa;
+  `rvm-verify` rejeita módulos com externas não linkadas.
+- **Formato textual**: `import <nome>` declara a externa; a impressão canônica
+  reemite `import`.
+- **Novo crate `rvm-link`** (10º crate): `link(modules, entry_module,
+  entry_function, limits)` resolve externas por nome único, reescreve `call_static`
+  para IDs globais, renomeia funções para unicidade e produz um `Module` plano sem
+  externas. Sem serialização (H03).
+- Testes em `crates/rvm-conformance/tests/linking.rs` (ligação, diferencial de
+  bytecode, externa sem provedor, provedor ambíguo, nome de módulo duplicado,
+  verificação de módulo não linkado) e em `rvm-ir`/`rvm-text`.
+- Contratos e arquitetura atualizados: `docs/CONTRATOS/RIR-EXP-0-IMPLEMENTACAO.md`,
+  `docs/CONTRATOS/TEXTO-EXP-0.md`, `docs/ARQUITETURA.md`, `crates/README.md`.
+
+### Verificação (Resultado)
+
+| Comando | Resultado |
+|---|---|
+| `cargo test --workspace` | **143 passed, 0 failed** (antes: 134) |
+| `cargo clippy --workspace --all-targets -- -D warnings` | exit 0 |
+| `cargo fmt --all -- --check` | exit 0 |
+| `linking.rs` | liga `app`+`prov`, verifica e executa `i64:30`; diferencial de bytecode ok; falhas fechadas |
+
+Limite: resolução por **nome único** (sem namespaces qualificados nem ligação
+dinâmica); os nomes das funções mudam no módulo plano. H06 continua dependendo de
+executar o benchmark (B2).
+
+## B2 — Fuzzing e benchmark ampliados
+
+A preencher na etapa B2 (fuzzing guiado por cobertura com ADR de dependência de
+desenvolvimento; execução do benchmark inter-módulo pré-registrado).

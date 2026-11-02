@@ -30,6 +30,7 @@ dependencies = [
  "rvm-bytecode",
  "rvm-interpreter",
  "rvm-ir",
+ "rvm-link",
  "rvm-runtime",
  "rvm-spec",
  "rvm-text",
@@ -50,6 +51,14 @@ dependencies = [
 name = "rvm-ir"
 version = "0.1.0"
 dependencies = [
+ "rvm-spec",
+]
+
+[[package]]
+name = "rvm-link"
+version = "0.1.0"
+dependencies = [
+ "rvm-ir",
  "rvm-spec",
 ]
 

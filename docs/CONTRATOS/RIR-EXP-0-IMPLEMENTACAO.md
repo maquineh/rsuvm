@@ -18,6 +18,17 @@ Op        = const_i64 | const_bool | bin(op,lhs,rhs) | cmp(op,lhs,rhs) | call(ca
 Term      = return [v] | br(target,args) | cond_br(cond, target, target)
 ~~~
 
+### Declarações externas e ligação estática (ADR-0018)
+
+Uma `Function` com `blocks` vazio é uma **declaração externa**
+(`Function::is_external`): nomeia uma função a ser fornecida por outro módulo. O
+formato textual a cria com `import <nome>`. Declarações externas são aceitas por
+`structure::check`, mas **não** podem ser a função de entrada, e
+`VerifiedModule::verify` rejeita módulos que ainda as contenham. A ligação é feita
+pelo crate `rvm-link`, que resolve cada externa para a função concreta de mesmo
+nome, reescreve os `call_static` para IDs globais e produz um `Module` plano sem
+externas.
+
 ## 2. Invariantes estruturais (`rvm_ir::structure::check`)
 
 Aplicadas antes de qualquer verificação de tipos e antes de alocar memória

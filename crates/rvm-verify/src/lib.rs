@@ -80,6 +80,22 @@ impl VerifiedModule {
     /// de dominância ou de tipo encontrado, na ordem documentada no crate.
     pub fn verify(module: Module, limits: &Limits) -> Result<Self, RvmError> {
         rvm_ir::structure::check(&module, limits)?;
+        // O executor não pode receber declarações externas: elas precisam ser
+        // resolvidas pelo linker (`rvm-link`, ADR-0018) antes da verificação.
+        for function in &module.functions {
+            if function.is_external() {
+                return Err(RvmError::new(
+                    ErrorCode::InvalidModule,
+                    format!(
+                        "função `{}` é uma declaração externa; linke o módulo (rvm-link) antes de verificar",
+                        function.name
+                    ),
+                )
+                .at(Location::Function {
+                    function: function.name.clone(),
+                }));
+            }
+        }
         for function in &module.functions {
             verify_function(&module, function)?;
         }

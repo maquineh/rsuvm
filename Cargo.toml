@@ -17,6 +17,7 @@ members = [
     "crates/rvm-text",
     "crates/rvm-bytecode",
     "crates/rvm-interpreter",
+    "crates/rvm-link",
     "crates/rvm-cli",
     "crates/rvm-conformance",
 ]
@@ -37,6 +38,7 @@ rvm-verify = { path = "crates/rvm-verify" }
 rvm-text = { path = "crates/rvm-text" }
 rvm-bytecode = { path = "crates/rvm-bytecode" }
 rvm-interpreter = { path = "crates/rvm-interpreter" }
+rvm-link = { path = "crates/rvm-link" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

@@ -54,6 +54,21 @@ pub fn check(module: &Module, limits: &Limits) -> Result<(), RvmError> {
             Location::Module,
         ));
     }
+    if let Some(entry_function) = module
+        .functions
+        .get(usize::try_from(module.entry).unwrap_or(usize::MAX))
+    {
+        if entry_function.is_external() {
+            return Err(invalid(
+                ErrorCode::InvalidModule,
+                format!(
+                    "função de entrada `{}` não pode ser uma declaração externa (sem corpo)",
+                    entry_function.name
+                ),
+                Location::Module,
+            ));
+        }
+    }
 
     let mut function_names: BTreeSet<&str> = BTreeSet::new();
     for (index, function) in module.functions.iter().enumerate() {
@@ -119,11 +134,10 @@ fn check_function<'a>(
 
     let block_count = function.blocks.len();
     if block_count == 0 {
-        return Err(invalid(
-            ErrorCode::InvalidModule,
-            format!("função `{}` não declara blocos", function.name),
-            location,
-        ));
+        // Declaração externa: sem corpo a validar. O linker (`rvm-link`) precisa
+        // resolvê-la e o verificador rejeita módulos que ainda tenham externas
+        // (ADR-0018). Parâmetros e nome já foram validados acima.
+        return Ok(());
     }
     if block_count > limit(limits.max_blocks_per_function) {
         return Err(invalid(
@@ -815,5 +829,34 @@ mod tests {
         let error = check(&module, &limits).unwrap_err();
         assert_eq!(error.code(), ErrorCode::InvalidModule);
         assert!(error.detail().contains("valores"));
+    }
+
+    #[test]
+    fn aceita_declaracao_externa_sem_corpo() {
+        let mut module = soma();
+        module.functions.push(Function {
+            id: 2,
+            name: "externa".to_string(),
+            params: Vec::new(),
+            ret: Type::Unit,
+            entry: 0,
+            blocks: Vec::new(),
+        });
+        assert!(
+            check(&module, &Limits::default()).is_ok(),
+            "declaração externa deveria ser estruturalmente aceita"
+        );
+    }
+
+    #[test]
+    fn rejeita_entrada_externa() {
+        let mut module = soma();
+        // `main` (função 0) vira externa e a entrada aponta para ela.
+        if let Some(function) = module.functions.get_mut(0) {
+            function.blocks.clear();
+        }
+        let error = check(&module, &Limits::default()).unwrap_err();
+        assert_eq!(error.code(), ErrorCode::InvalidModule);
+        assert!(error.detail().contains("externa"));
     }
 }

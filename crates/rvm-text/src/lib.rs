@@ -110,6 +110,17 @@ pub fn print(module: &Module) -> String {
     out.push('\n');
 
     for function in &module.functions {
+        if function.is_external() {
+            out.push_str("import ");
+            out.push_str(&function.name);
+            out.push('\n');
+        }
+    }
+
+    for function in &module.functions {
+        if function.is_external() {
+            continue;
+        }
         out.push('\n');
         out.push_str("fn ");
         out.push_str(&function.name);
@@ -421,6 +432,8 @@ struct RawModule {
     version: u16,
     entry: String,
     functions: Vec<RawFunction>,
+    /// Nomes de funções externas (`import <nome>`), resolvidas pelo linker.
+    imports: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -587,16 +600,16 @@ impl Parser {
 
         let mut entry: Option<String> = None;
         let mut functions: Vec<RawFunction> = Vec::new();
+        let mut imports: Vec<String> = Vec::new();
         loop {
             if self.peek() == &Token::Eof {
                 break;
             }
             if self.at_keyword("import") {
-                return Err(RvmError::new(
-                    ErrorCode::UnsupportedFeature,
-                    "imports não existem no EXP-0".to_string(),
-                )
-                .at(Location::Module));
+                self.bump();
+                let name = self.expect_ident("nome da função importada")?;
+                imports.push(name);
+                continue;
             }
             if self.at_keyword("entry") {
                 self.bump();
@@ -627,6 +640,7 @@ impl Parser {
             version,
             entry,
             functions,
+            imports,
         })
     }
 
@@ -853,8 +867,16 @@ impl Parser {
 // ---------------------------------------------------------------------------
 
 fn lower(raw: RawModule, limits: &Limits) -> Result<Module, RvmError> {
+    let RawModule {
+        name,
+        version,
+        entry,
+        functions: raw_functions,
+        imports,
+    } = raw;
+
     let mut function_ids: BTreeMap<String, FnId> = BTreeMap::new();
-    for (index, function) in raw.functions.iter().enumerate() {
+    for (index, function) in raw_functions.iter().enumerate() {
         let id = u32::try_from(index).map_err(|_| {
             RvmError::new(
                 ErrorCode::InvalidModule,
@@ -870,19 +892,43 @@ fn lower(raw: RawModule, limits: &Limits) -> Result<Module, RvmError> {
             .at(Location::Module));
         }
     }
-    let entry = function_ids
-        .get(raw.entry.as_str())
-        .copied()
-        .ok_or_else(|| {
+    // Declarações externas ocupam IDs densos após as funções declaradas; o
+    // linker (`rvm-link`, ADR-0018) as substitui por funções concretas.
+    let declared = u32::try_from(raw_functions.len()).map_err(|_| {
+        RvmError::new(
+            ErrorCode::InvalidModule,
+            "quantidade de funções não representável".to_string(),
+        )
+        .at(Location::Module)
+    })?;
+    for (offset, import) in imports.iter().enumerate() {
+        let offset = u32::try_from(offset).map_err(|_| {
             RvmError::new(
                 ErrorCode::InvalidModule,
-                format!("função de entrada `{}` não declarada", raw.entry),
+                "quantidade de importações não representável".to_string(),
             )
             .at(Location::Module)
         })?;
+        let id = declared.saturating_add(offset);
+        if function_ids.insert(import.clone(), id).is_some() {
+            return Err(RvmError::new(
+                ErrorCode::InvalidModule,
+                format!("função duplicada `{import}`"),
+            )
+            .at(Location::Module));
+        }
+    }
+
+    let entry = function_ids.get(entry.as_str()).copied().ok_or_else(|| {
+        RvmError::new(
+            ErrorCode::InvalidModule,
+            format!("função de entrada `{entry}` não declarada"),
+        )
+        .at(Location::Module)
+    })?;
 
     let mut functions: Vec<Function> = Vec::new();
-    for (index, function) in raw.functions.into_iter().enumerate() {
+    for (index, function) in raw_functions.into_iter().enumerate() {
         let id = u32::try_from(index).map_err(|_| {
             RvmError::new(
                 ErrorCode::InvalidModule,
@@ -892,15 +938,37 @@ fn lower(raw: RawModule, limits: &Limits) -> Result<Module, RvmError> {
         })?;
         functions.push(lower_function(id, function, &function_ids)?);
     }
+    for (offset, import) in imports.into_iter().enumerate() {
+        let offset = u32::try_from(offset).map_err(|_| {
+            RvmError::new(
+                ErrorCode::InvalidModule,
+                "quantidade de importações não representável".to_string(),
+            )
+            .at(Location::Module)
+        })?;
+        functions.push(external_function(declared.saturating_add(offset), import));
+    }
 
     let module = Module {
-        name: raw.name,
-        version: raw.version,
+        name,
+        version,
         entry,
         functions,
     };
     rvm_ir::structure::check(&module, limits)?;
     Ok(module)
+}
+
+/// Cria uma declaração externa: função sem corpo, resolvida pelo linker.
+fn external_function(id: FnId, name: String) -> Function {
+    Function {
+        id,
+        name,
+        params: Vec::new(),
+        ret: Type::Unit,
+        entry: 0,
+        blocks: Vec::new(),
+    }
 }
 
 fn lower_function(
@@ -1268,8 +1336,24 @@ fn escolhe(c: bool) -> i64 {
         );
         assert_eq!(
             error_code("module m version 1\nentry f\nimport x\n"),
-            ErrorCode::UnsupportedFeature
+            ErrorCode::InvalidModule,
+            "entrada `f` não declarada; só a externa `x` existe"
         );
+    }
+
+    #[test]
+    fn import_declara_funcao_externa() {
+        let texto = "module m version 1\nentry main\nimport soma\n\nfn main() -> i64 {\n  entry:\n    v0 = const_i64 10\n    v1 = const_i64 20\n    v2 = call_static soma(v0, v1)\n    return v2\n}\n";
+        let module = parse_ok(texto);
+        let externa = module
+            .function_by_name("soma")
+            .expect("declaração externa existe");
+        assert!(externa.is_external(), "`soma` deveria ser externa");
+        assert_eq!(externa.id, 1, "externa ocupa ID após as declaradas");
+        let printed = print(&module);
+        assert!(printed.contains("import soma"), "{printed}");
+        let reparsed = parse_ok(&printed);
+        assert_eq!(module, reparsed, "import sobrevive ao round-trip");
     }
 
     #[test]

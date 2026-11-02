@@ -9,8 +9,9 @@ sujeita a mudança sem compatibilidade.
 ## 1. Gramática
 
 ~~~text
-arquivo    = comentário* módulo entrada declaração_fn+ EOF ;
+arquivo    = comentário* módulo import* entrada declaração_fn+ EOF ;
 módulo     = "module" ident "version" inteiro ;
+import     = "import" ident ;
 entrada    = "entry" ident ;
 declaração_fn = "fn" ident "(" [parâmetros] ")" "->" tipo bloco+ ;
 parâmetros = parâmetro { "," parâmetro } ;
@@ -49,8 +50,10 @@ terminador de instrução.
    `invalid_number`.
 4. Tipo fora de `unit|bool|i64` é `unknown_type`; instrução/terminador fora da
    gramática é `unknown_opcode`; qualquer outro erro de token é `syntax_error`.
-5. `import` não existe no EXP-0: a palavra é reconhecida e rejeitada com
-   `unsupported_feature`.
+5. `import <nome>` declara uma **função externa** (sem corpo) que a ligação
+   inter-módulo (`rvm-link`, ADR-0018) resolve para a função concreta de mesmo
+   nome em outro módulo. A entrada do módulo não pode ser externa. Um módulo com
+   externas não é executável direto: precisa ser linkado antes da verificação.
 6. Entrada maior que `Limits::max_input_bytes` é rejeitada com
    `input_too_large` **antes** do lexer.
 7. Bloco termina com exatamente um terminador, que precisa ser a última
@@ -83,6 +86,7 @@ depois usos), o que permite referências a definições posteriores — a legali
 ~~~text
 module <nome> version 1
 entry <nome_da_entrada>
+import <nome_da_funcao_externa>   ; opcional, zero ou mais
 
 fn <nome>(<param>: <tipo>, ...) -> <tipo> {
   <rótulo>:
@@ -130,5 +134,7 @@ fn soma(a: i64, b: i64) -> i64 {
 ## 7. Fora do EXP-0
 
 Literais de string, caracteres de escape, arrays, registros, tipos genéricos,
-comentários de bloco, anotações, módulos múltiplos por arquivo, imports e
-qualquer forma de açúcar sintático.
+comentários de bloco, anotações, módulos múltiplos por arquivo, ligação dinâmica,
+imports qualificados por módulo (`modulo.funcao`) e qualquer forma de açúcar
+sintático. A ligação inter-módulo é **estática** e feita pelo crate `rvm-link`
+(ADR-0018), fora do formato textual.

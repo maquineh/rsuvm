@@ -284,6 +284,17 @@ impl Function {
         total
     }
 
+    /// `true` quando a função é uma **declaração externa** (sem blocos).
+    ///
+    /// Uma declaração externa existe para a ligação inter-módulo
+    /// (`rvm-link`, ADR-0018): ela nomeia uma função a ser resolvida por outro
+    /// módulo. O verificador (`rvm-verify`) rejeita módulos que ainda contenham
+    /// externas, então o executor nunca vê uma declaração externa.
+    #[must_use]
+    pub fn is_external(&self) -> bool {
+        self.blocks.is_empty()
+    }
+
     /// Tipo de um valor conhecido.
     ///
     /// Pressupõe que [`structure::check`] já aceitou o módulo (IDs densos). Para

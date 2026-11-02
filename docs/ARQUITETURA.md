@@ -31,6 +31,9 @@ Regras estruturais:
 3. O verificador chama `rvm_ir::structure::check` antes de olhar tipos; o decoder
    binário também chama `structure::check` antes de devolver o módulo.
 4. O texto e o bytecode produzem `Module`; ambos são entradas **não confiáveis**.
+5. A ligação inter-módulo é **opcional e pré-verificação**: `rvm-link::link`
+   combina módulos com declarações externas (`import`) em um único `Module` plano,
+   sem externas, que segue o pipeline normal (ADR-0018).
 
 ## 2. Crates e dependências
 
@@ -43,6 +46,7 @@ Regras estruturais:
 | `rvm-text` | spec, ir | parser e impressão canônica do formato textual experimental |
 | `rvm-bytecode` | spec, ir | codificação linear experimental e decoder limitado |
 | `rvm-interpreter` | spec, ir, runtime, verify | execução determinística com fuel, profundidade e traps |
+| `rvm-link` | spec, ir | ligação estática inter-módulo: resolve externas em um módulo plano |
 | `rvm-cli` | todos acima | binário `rsuvm`; não concede capabilities |
 | `rvm-conformance` | todos (dev) | corpus em dados + testes de conformidade e propriedades |
 

@@ -13,6 +13,7 @@ rvm-ir.workspace = true
 
 [dev-dependencies]
 rvm-ir = { workspace = true, features = ["test-helpers"] }
+rvm-link.workspace = true
 rvm-text.workspace = true
 rvm-verify.workspace = true
 rvm-interpreter.workspace = true

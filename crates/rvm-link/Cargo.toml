@@ -1,0 +1,15 @@
+[package]
+name = "rvm-link"
+description = "Linker estático inter-módulo da RSUVM: resolve declarações externas em um módulo plano."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+rvm-spec.workspace = true
+rvm-ir.workspace = true
+
+[lints]
+workspace = true

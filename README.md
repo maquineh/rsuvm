@@ -34,9 +34,9 @@ cargo run -p rvm-cli -- check examples/soma.rvm
 
 ## Subdirectories & System Boundaries
 
-- [crates](./crates/README.md) — workspace de nove crates acíclicos, sem
+- [crates](./crates/README.md) — workspace de dez crates acíclicos, sem
   dependências externas: spec, ir, runtime, verify, text, bytecode, interpreter,
-  cli e conformance. Os limites de dependência são impostos pelo compilador.
+  link, cli e conformance. Os limites de dependência são impostos pelo compilador.
 - [docs](./docs/ARQUITETURA.md) — arquitetura, contratos (`docs/CONTRATOS/`),
   ADRs deste repositório (`docs/ADRs/`), ADRs da fundação
   (`docs/fundacao/ADRs/`) e relatórios (`docs/RELATORIOS/`).
@@ -96,7 +96,7 @@ cargo run -p rvm-cli -- check examples/soma.rvm
   rodam `fmt --check`, `clippy -D warnings`, `test` e `test --release`; Windows é
   opcional por regra.
 - Resultados atuais e log bruto: [RELATORIO-IMPLEMENTACAO](./docs/RELATORIOS/RELATORIO-IMPLEMENTACAO.md)
-  e [EVIDENCIAS-EXECUCAO](./docs/RELATORIOS/EVIDENCIAS-EXECUCAO.md): 134 testes
+  e [EVIDENCIAS-EXECUCAO](./docs/RELATORIOS/EVIDENCIAS-EXECUCAO.md): 143 testes
   verdes, 19 casos válidos + 23 inválidos no corpus.
 
 ## Segurança (limites declarados)

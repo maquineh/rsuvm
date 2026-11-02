@@ -66,3 +66,10 @@ rvm-spec ── rvm-ir ── rvm-verify ── rvm-interpreter ── rvm-cli
 - A separação só é considerada "validada no escopo" quando existir ao menos um
   frontend externo consumindo `rvm-text`/`rvm-ir` sem alterar o núcleo — hoje
   isso é desconhecido.
+
+## Atualização (2026-11-02)
+
+O **ADR-0018** acrescentou o crate `rvm-link` (ligação estática inter-módulo),
+totalizando **dez** crates. A decisão original (workspace de crates acíclicos,
+zero dependências externas, `rvm-verify` como único produtor de `VerifiedModule`)
+permanece; o grafo vigente está em `crates/README.md` e `docs/ARQUITETURA.md`.
