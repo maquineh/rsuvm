@@ -163,6 +163,8 @@ struct Frame<'a> {
     function: &'a Function,
     depth: u32,
     slots: Vec<Option<Value>>,
+    /// Bytes modelados retidos por cada slot (ADR-0035).
+    slot_bytes: Vec<u64>,
     block: BlockId,
     instr_index: usize,
     /// Slot do frame chamador onde o retorno deve ser gravado; `None` no frame de
@@ -251,6 +253,12 @@ impl<'a> Interpreter<'a> {
                             Some(value_id) => read_slot(&frame, *value_id, &block_site)?,
                             None => Value::Unit,
                         };
+                        let held: u64 = frame
+                            .slot_bytes
+                            .iter()
+                            .copied()
+                            .fold(0u64, u64::saturating_add);
+                        self.release_memory(held);
                         if !value.matches_type(frame.function.ret) {
                             return Err(error_at(
                                 ErrorCode::InvalidModule,
@@ -351,6 +359,7 @@ impl<'a> Interpreter<'a> {
                     self.advance(&mut stack, top, &site)?;
                 }
                 Op::ConstStr(text) => {
+                    self.ensure_memory(u64::try_from(text.len()).unwrap_or(u64::MAX), &site)?;
                     self.write_current(
                         &mut stack,
                         top,
@@ -402,9 +411,9 @@ impl<'a> Interpreter<'a> {
                             &site,
                         ));
                     }
-                    // Cobra os bytes do resultado; é cumulativo (não liberado), o que
-                    // limita crescimento descontrolado em laços (ADR-0025).
-                    self.charge_memory(u64::try_from(len).unwrap_or(u64::MAX), &site)?;
+                    // Pré-checa os bytes retidos do resultado; a cobrança exata
+                    // acontece ao gravar o slot (ADR-0035).
+                    self.ensure_memory(u64::try_from(len).unwrap_or(u64::MAX), &site)?;
                     let mut result = left;
                     result.push_str(&right);
                     self.write_current(&mut stack, top, instr.def, Value::Str(result), &site)?;
@@ -452,11 +461,15 @@ impl<'a> Interpreter<'a> {
                             values.push(read_slot(frame, *id, &site)?);
                         }
                     }
-                    // Cobra os bytes do array; é cumulativo (ADR-0027).
-                    let bytes = u64::try_from(items.len())
+                    // Pré-checa os bytes retidos; a cobrança exata ocorre no slot
+                    // (ADR-0035).
+                    let bytes = u64::try_from(values.len())
                         .unwrap_or(u64::MAX)
-                        .saturating_mul(SLOT_BYTES);
-                    self.charge_memory(bytes, &site)?;
+                        .saturating_mul(SLOT_BYTES)
+                        .saturating_add(values.iter().fold(0u64, |total, value| {
+                            total.saturating_add(value.retained_bytes())
+                        }));
+                    self.ensure_memory(bytes, &site)?;
                     self.write_current(
                         &mut stack,
                         top,
@@ -588,20 +601,16 @@ impl<'a> Interpreter<'a> {
                         if let Some(slot) = updated.get_mut(offset) {
                             *slot = replacement;
                         }
-                        let bytes = u64::try_from(updated.len())
-                            .unwrap_or(u64::MAX)
-                            .saturating_mul(SLOT_BYTES);
-                        (
-                            Value::Array {
-                                ty: array_ty,
-                                items: updated,
-                            },
-                            bytes,
-                        )
+                        let value = Value::Array {
+                            ty: array_ty,
+                            items: updated,
+                        };
+                        let bytes = value.retained_bytes();
+                        (value, bytes)
                     };
-                    // A atualização funcional produz um array novo; cobra os
-                    // bytes novamente (cumulativo, ADR-0028).
-                    self.charge_memory(bytes, &site)?;
+                    // Atualização funcional: pré-checa o array novo; a cobrança
+                    // exata ocorre ao gravar o slot (ADR-0035).
+                    self.ensure_memory(bytes, &site)?;
                     self.write_current(&mut stack, top, instr.def, updated, &site)?;
                     self.advance(&mut stack, top, &site)?;
                 }
@@ -626,10 +635,8 @@ impl<'a> Interpreter<'a> {
                             values.push(read_slot(frame, *id, &site)?);
                         }
                     }
-                    // Cobra os bytes da struct; é cumulativo (ADR-0029).
-                    let bytes = u64::try_from(fields.len())
-                        .unwrap_or(u64::MAX)
-                        .saturating_mul(SLOT_BYTES);
+                    // Pré-checa os bytes retidos; a cobrança exata ocorre no slot
+                    // (ADR-0035).
                     let ty = self
                         .module
                         .find_type(TypeDef::Struct(*struct_id))
@@ -640,18 +647,15 @@ impl<'a> Interpreter<'a> {
                                 &site,
                             )
                         })?;
-                    self.charge_memory(bytes, &site)?;
-                    self.write_current(
-                        &mut stack,
-                        top,
-                        instr.def,
-                        Value::Struct {
-                            ty,
-                            struct_id: *struct_id,
-                            fields: values,
-                        },
-                        &site,
-                    )?;
+                    let value = Value::Struct {
+                        ty,
+                        struct_id: *struct_id,
+                        fields: values,
+                    };
+                    // Pré-checa os bytes retidos; a cobrança exata ocorre no slot.
+                    let bytes = value.retained_bytes();
+                    self.ensure_memory(bytes, &site)?;
+                    self.write_current(&mut stack, top, instr.def, value, &site)?;
                     self.advance(&mut stack, top, &site)?;
                 }
                 Op::FieldGet { object, field } => {
@@ -749,17 +753,13 @@ impl<'a> Interpreter<'a> {
                                 if let Some(slot) = updated.get_mut(index) {
                                     *slot = replacement;
                                 }
-                                let bytes = u64::try_from(updated.len())
-                                    .unwrap_or(u64::MAX)
-                                    .saturating_mul(SLOT_BYTES);
-                                (
-                                    Value::Struct {
-                                        ty: *ty,
-                                        struct_id: *struct_id,
-                                        fields: updated,
-                                    },
-                                    bytes,
-                                )
+                                let value = Value::Struct {
+                                    ty: *ty,
+                                    struct_id: *struct_id,
+                                    fields: updated,
+                                };
+                                let bytes = value.retained_bytes();
+                                (value, bytes)
                             }
                             _ => {
                                 return Err(error_at(
@@ -770,9 +770,9 @@ impl<'a> Interpreter<'a> {
                             }
                         }
                     };
-                    // A atualização funcional produz uma struct nova; cobra os
-                    // bytes novamente (cumulativo, ADR-0032).
-                    self.charge_memory(bytes, &site)?;
+                    // Atualização funcional: pré-checa a struct nova; a cobrança
+                    // exata ocorre ao gravar o slot (ADR-0035).
+                    self.ensure_memory(bytes, &site)?;
                     self.write_current(&mut stack, top, instr.def, updated, &site)?;
                     self.advance(&mut stack, top, &site)?;
                 }
@@ -800,6 +800,7 @@ impl<'a> Interpreter<'a> {
                         })?;
                         read_slot(frame, *value, &site)?
                     };
+                    self.ensure_memory(SLOT_BYTES.saturating_add(payload.retained_bytes()), &site)?;
                     self.write_current(
                         &mut stack,
                         top,
@@ -948,6 +949,7 @@ impl<'a> Interpreter<'a> {
                         })?;
                         read_slot(frame, *value, &site)?
                     };
+                    self.ensure_memory(SLOT_BYTES.saturating_add(payload.retained_bytes()), &site)?;
                     self.write_current(
                         &mut stack,
                         top,
@@ -971,6 +973,7 @@ impl<'a> Interpreter<'a> {
                         })?;
                         read_slot(frame, *value, &site)?
                     };
+                    self.ensure_memory(SLOT_BYTES.saturating_add(payload.retained_bytes()), &site)?;
                     self.write_current(
                         &mut stack,
                         top,
@@ -1146,6 +1149,16 @@ impl<'a> Interpreter<'a> {
                 &function_site,
             ));
         }
+        let mut frame = Frame {
+            function,
+            depth,
+            slots,
+            slot_bytes: vec![0; slot_count],
+            block: function.entry,
+            instr_index: 0,
+            return_slot,
+            cost,
+        };
         for (index, (param, value)) in function.params.iter().zip(args.iter()).enumerate() {
             if !value.matches_type(param.ty) {
                 return Err(error_at(
@@ -1160,25 +1173,10 @@ impl<'a> Interpreter<'a> {
                 ));
             }
             let value_id = u32::try_from(index).unwrap_or(u32::MAX);
-            let slot = slots.get_mut(index).ok_or_else(|| {
-                error_at(
-                    ErrorCode::InvalidModule,
-                    format!("slot v{value_id} não existe no frame de {slot_count} slot(s)"),
-                    &function_site,
-                )
-            })?;
-            *slot = Some(value.clone());
+            self.write_slot_charged(&mut frame, value_id, value.clone(), &function_site)?;
         }
 
-        Ok(Frame {
-            function,
-            depth,
-            slots,
-            block: function.entry,
-            instr_index: 0,
-            return_slot,
-            cost,
-        })
+        Ok(frame)
     }
 
     /// Copia argumentos para os parâmetros do bloco alvo e salta.
@@ -1273,7 +1271,7 @@ impl<'a> Interpreter<'a> {
                     site,
                 ));
             }
-            write_slot(frame, param.value, value.clone(), site)?;
+            self.write_slot_charged(frame, param.value, value.clone(), site)?;
         }
         frame.block = target;
         frame.instr_index = 0;
@@ -1295,7 +1293,8 @@ impl<'a> Interpreter<'a> {
         Ok(())
     }
 
-    /// Grava um valor no slot `value` do frame `top`.
+    /// Grava um valor no slot `value` do frame `top`, cobrando os bytes retidos e
+    /// liberando o valor anterior do mesmo slot (ADR-0035).
     fn write_current(
         &mut self,
         stack: &mut [Frame<'a>],
@@ -1311,7 +1310,59 @@ impl<'a> Interpreter<'a> {
                 site,
             )
         })?;
-        write_slot(frame, value, slot_value, site)
+        self.write_slot_charged(frame, value, slot_value, site)
+    }
+
+    /// Cobra os bytes retidos e grava no slot, liberando o custo anterior.
+    fn write_slot_charged(
+        &mut self,
+        frame: &mut Frame<'a>,
+        value: ValueId,
+        slot_value: Value,
+        site: &Site<'_>,
+    ) -> Result<(), RvmError> {
+        let index = slot_index(value, site)?;
+        let new_cost = slot_value.retained_bytes();
+        // Falha fechada: cobra antes de sobrescrever o slot.
+        self.charge_memory(new_cost, site)?;
+        let old_cost = frame.slot_bytes.get(index).copied().unwrap_or(0);
+        match frame.slots.get_mut(index) {
+            Some(slot) => {
+                *slot = Some(slot_value);
+            }
+            None => {
+                return Err(error_at(
+                    ErrorCode::InvalidModule,
+                    format!(
+                        "slot v{value} não existe no frame de {len} slot(s)",
+                        len = frame.slots.len()
+                    ),
+                    site,
+                ))
+            }
+        }
+        if let Some(cost) = frame.slot_bytes.get_mut(index) {
+            *cost = new_cost;
+        }
+        self.release_memory(old_cost);
+        Ok(())
+    }
+
+    /// Verifica se `bytes` caberiam na quota, sem cobrar (pré-checagem antes de
+    /// alocar, ADR-0035).
+    fn ensure_memory(&self, bytes: u64, site: &Site<'_>) -> Result<(), RvmError> {
+        let proximo = self.memory_live.saturating_add(bytes);
+        if proximo > self.memory_limit {
+            return Err(error_at(
+                ErrorCode::OutOfMemory,
+                format!(
+                    "memória modelada excedida: {proximo} bytes > limite de {limite} bytes",
+                    limite = self.memory_limit
+                ),
+                site,
+            ));
+        }
+        Ok(())
     }
 
     /// Lê um `i64` do frame `top`.
@@ -1463,30 +1514,6 @@ fn slot_index(value: ValueId, site: &Site<'_>) -> Result<usize, RvmError> {
             site,
         )
     })
-}
-
-/// Grava um valor no slot de `value`.
-fn write_slot(
-    frame: &mut Frame<'_>,
-    value: ValueId,
-    slot_value: Value,
-    site: &Site<'_>,
-) -> Result<(), RvmError> {
-    let index = slot_index(value, site)?;
-    match frame.slots.get_mut(index) {
-        Some(slot) => {
-            *slot = Some(slot_value);
-            Ok(())
-        }
-        None => Err(error_at(
-            ErrorCode::InvalidModule,
-            format!(
-                "slot v{value} não existe no frame de {len} slot(s)",
-                len = frame.slots.len()
-            ),
-            site,
-        )),
-    }
 }
 
 /// Lê um valor já inicializado do slot de `value`.

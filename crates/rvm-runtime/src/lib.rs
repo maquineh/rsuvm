@@ -239,6 +239,41 @@ impl Value {
     pub fn matches_type(&self, ty: TypeId) -> bool {
         self.ty() == ty
     }
+
+    /// Bytes modelados retidos pelo valor (ADR-0035).
+    ///
+    /// `unit`/escalares custam 0; `string` custa o tamanho UTF-8; `array` e
+    /// `struct` custam `SLOT_BYTES` por elemento/campo mais o custo recursivo dos
+    /// filhos; `option`/`result` custam `SLOT_BYTES` quando carregam payload. A
+    /// soma satura em [`u64::MAX`] e é determinística.
+    #[must_use]
+    pub fn retained_bytes(&self) -> u64 {
+        match self {
+            Value::Unit | Value::Bool(_) | Value::I64(_) | Value::F64(_) => 0,
+            Value::Str(text) => u64::try_from(text.len()).unwrap_or(u64::MAX),
+            Value::Array { items, .. } => u64::try_from(items.len())
+                .unwrap_or(u64::MAX)
+                .saturating_mul(SLOT_BYTES)
+                .saturating_add(sum_retained(items.iter())),
+            Value::Struct { fields, .. } => u64::try_from(fields.len())
+                .unwrap_or(u64::MAX)
+                .saturating_mul(SLOT_BYTES)
+                .saturating_add(sum_retained(fields.iter())),
+            Value::Option { value, .. } => value
+                .as_deref()
+                .map_or(0, |inner| SLOT_BYTES.saturating_add(inner.retained_bytes())),
+            Value::Result { value, .. } => match value {
+                Ok(inner) | Err(inner) => SLOT_BYTES.saturating_add(inner.retained_bytes()),
+            },
+        }
+    }
+}
+
+/// Soma saturada de [`Value::retained_bytes`].
+fn sum_retained<'a>(values: impl Iterator<Item = &'a Value>) -> u64 {
+    values.fold(0u64, |total, value| {
+        total.saturating_add(value.retained_bytes())
+    })
 }
 
 impl fmt::Display for Value {
@@ -563,6 +598,25 @@ mod tests {
         let config = ExecConfig::default();
         assert_eq!(config.fuel(), DEFAULT_FUEL);
         assert_eq!(config.max_call_depth().get(), 64);
+    }
+
+    #[test]
+    fn bytes_retidos_do_valor_sao_recursivos() {
+        assert_eq!(Value::Unit.retained_bytes(), 0);
+        assert_eq!(Value::I64(7).retained_bytes(), 0);
+        assert_eq!(Value::Str("abc".to_string()).retained_bytes(), 3);
+        let array = Value::Array {
+            ty: 5,
+            items: vec![Value::I64(1), Value::Str("ab".to_string())],
+        };
+        assert_eq!(array.retained_bytes(), 2 * SLOT_BYTES + 2);
+        let option = Value::Option {
+            ty: 6,
+            value: Some(Box::new(Value::Str("ab".to_string()))),
+        };
+        assert_eq!(option.retained_bytes(), SLOT_BYTES + 2);
+        let none = Value::Option { ty: 6, value: None };
+        assert_eq!(none.retained_bytes(), 0);
     }
 
     #[test]

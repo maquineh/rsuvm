@@ -4,6 +4,8 @@
 - **Data:** 2026-11-02
 - **Requisitos:** pedido do mantenedor; ADR-0027 (arrays imutáveis); invariante
   de **SSA puro** do EXP-0 (`docs/CONTRATOS/RIR-EXP-0-IMPLEMENTACAO.md`).
+- **Revisão (ADR-0035):** a cobrança cumulativa do array novo foi substituída pelo
+  modelo de bytes retidos por slot.
 
 ## Contexto
 

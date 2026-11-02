@@ -207,6 +207,9 @@ executados.
 1. **Memória de frames**: quota modelada implementada e testada (ADR-0013).
    Resíduo: o modelo não mede RSS real e vetores transitórios de argumentos de
    chamada/desvio não são contados; a quota limita crescimento, não prova consumo.
+   **Atualização (ADR-0035):** o modelo passou a contabilizar bytes retidos por
+   slot e a liberá-los ao sobrescrever/retornar; buffers transitórios continuam
+   contados (ADR-0016).
 2. **Sem benchmark**: H06 e qualquer alegação de desempenho continuam sem medição.
 3. **Fuzzing limitado e determinístico**: 10 módulos × 200 mutações (bytecode) e
    10 × 200 (texto); não é campanha e não prova ausência de bugs.

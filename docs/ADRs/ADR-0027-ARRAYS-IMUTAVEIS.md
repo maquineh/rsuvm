@@ -4,6 +4,8 @@
 - **Data:** 2026-11-02
 - **Requisitos:** pedido do mantenedor; `docs/ARQUITETURA.md` §3 (que listava
   arrays como fora do EXP-0); ADR-0025 (quota cumulativa para strings).
+- **Revisão (ADR-0035):** a quota cumulativa dos arrays foi substituída pelo modelo
+  de bytes retidos por slot.
 
 ## Contexto
 

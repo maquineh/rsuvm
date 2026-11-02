@@ -1,7 +1,7 @@
 ; id: N-028
 ; expect: limit out_of_memory
 ; memory: 700
-; extra: concatenação cobra bytes cumulativos e estoura a quota (ADR-0025)
+; extra: a string viva cresce e estoura a quota retida (ADR-0035)
 module n028 version 1
 entry cresce
 

@@ -1,0 +1,25 @@
+; id: C-061
+; expect: value str:xxxxxxxx
+; memory: 700
+; extra: memória retida por slot é liberada ao sobrescrever em laço (ADR-0035)
+module c061 version 1
+entry ciclo
+
+fn ciclo() -> string {
+  entry:
+    v0 = const_str ""
+    v1 = const_i64 0
+    br loop(v0, v1)
+  loop(s1: string, i1: i64):
+    v2 = const_i64 100
+    v3 = lt_i64 i1, v2
+    cond_br v3, corpo(s1, i1), fim(s1)
+  corpo(s2: string, i2: i64):
+    v4 = const_str "xxxx"
+    v5 = concat_str v4, v4
+    v6 = const_i64 1
+    v7 = add_i64_checked i2, v6
+    br loop(v5, v7)
+  fim(s3: string):
+    return s3
+}

@@ -451,11 +451,21 @@ A nota sobre `?` continua válida: a propagação não existe no Lift
 (`docs/RELATORIOS/PROPAGACAO-INTERROGACAO.md`); o núcleo a expressa no CFG
 (`C-056`/`C-057`).
 
+### Quota de memória por valor retido (ADR-0035)
+
+O modelo cumulativo de arrays/strings foi substituído por bytes **retidos por
+slot**: `Value::retained_bytes` (string = bytes; array/struct = `itens × 24` +
+filhos; option/result = `24` + payload); a gravação de um slot cobra o valor novo
+e libera o anterior, e o retorno do frame libera os slots. Laços com alocação
+passam a ser limitados pela memória viva. Corpus `C-061` (100 iterações, 8 bytes
+por iteração, `memory: 700`); `N-028` continua trapando. `memory_peak` passa a ser
+pico de memória viva.
+
 ### Verificação (Resultado)
 
 | Comando | Resultado |
 |---|---|
-| `cargo test --workspace` | **148 passed, 0 failed**; corpus 60 válidos + 42 inválidos |
+| `cargo test --workspace` | **149 passed, 0 failed**; corpus 61 válidos + 42 inválidos |
 | `cargo test --manifest-path frontends/lift-rir/Cargo.toml` | 43 passed, 0 failed (34 diferencial + 9 CLI) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | exit 0 |
 | `cargo fmt --all -- --check` | exit 0 |

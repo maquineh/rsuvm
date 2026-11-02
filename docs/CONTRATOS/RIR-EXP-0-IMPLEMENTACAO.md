@@ -166,18 +166,21 @@ terminador por último. O primeiro erro vence.
 - `const_f64`/`Float` operam sobre `f64` com **IEEE-754 sem trap** (divisão por zero
   → `inf`/`NaN`; comparações com `NaN` são falsas exceto `!=`, ADR-0026).
 - `array` cria um array imutável (não-vazio, homogêneo) do tipo declarado no op e
-  cobra `len × 24` bytes na quota (cumulativo); `array_len` devolve o comprimento;
-  `array_get` faz **bounds check** e produz `index_out_of_bounds` fora de `0..len`
-  (ADR-0027).
+  retém `len × 24` bytes mais o custo dos filhos na quota; a cobrança é liberada
+  quando o slot é sobrescrito ou o frame retorna (ADR-0035); `array_len` devolve o
+  comprimento; `array_get` faz **bounds check** e produz `index_out_of_bounds` fora
+  de `0..len` (ADR-0027).
 - `array_set` é uma **atualização funcional**: devolve um array **novo** com o
   elemento substituído e **não altera** o array de origem (não há referências nem
   aliasing no núcleo, ADR-0028). Exige `value` no tipo do elemento e faz bounds
-  check (`index_out_of_bounds`); cobra `len × 24` bytes cumulativos.
+  check (`index_out_of_bounds`); o array novo retém os mesmos bytes e a liberação
+  ocorre ao sobrescrever o slot (ADR-0035).
 - `struct_new` cria um valor de struct (campos de qualquer `TypeId`, ADR-0029/0034)
-  e cobra `campos × 24` bytes cumulativos; `field_get` lê um campo pelo nome (o
-  campo precisa existir e o objeto ser struct); `field_set` é uma **atualização
+  e retém `campos × 24` + filhos; `field_get` lê um campo pelo nome (o campo
+  precisa existir e o objeto ser struct); `field_set` é uma **atualização
   funcional** que devolve uma struct **nova** com o campo substituído, sem alterar
-  a de origem (ADR-0032), cobrando `campos × 24` bytes cumulativos.
+  a de origem (ADR-0032). A memória é liberada ao sobrescrever o slot/retornar
+  (ADR-0035).
 - `option_none`/`option_some` criam `none`/`some` do tipo `option(T)` declarado no
   op (ADR-0030/0034); `option_is_some` testa; `option_unwrap` extrai o payload e
   produz o trap `unwrap_none` sobre `none`; `coalesce` devolve o payload se `some`,

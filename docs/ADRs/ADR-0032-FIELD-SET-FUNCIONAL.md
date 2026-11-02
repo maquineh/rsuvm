@@ -4,6 +4,8 @@
 - **Data:** 2026-11-02
 - **Requisitos:** pedido do mantenedor; ADR-0028 (mutação de array); ADR-0029
   (structs); invariante de SSA puro.
+- **Revisão (ADR-0035):** a cobrança cumulativa da struct nova foi substituída pelo
+  modelo de bytes retidos por slot.
 
 ## Contexto
 

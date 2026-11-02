@@ -4,6 +4,8 @@
 - **Data:** 2026-11-02
 - **Requisitos:** pedido do mantenedor; ADR-0024 (tipo `string`); ADR-0013/ADR-0016
   (quota de memória modelada).
+- **Revisão (ADR-0035):** a quota cumulativa deste ADR foi substituída pelo modelo
+  de bytes retidos por slot (cobra ao gravar, libera ao sobrescrever/retornar).
 
 ## Contexto
 

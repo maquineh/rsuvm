@@ -104,9 +104,12 @@ zero → `inf`/`NaN`, ADR-0026). O comportamento é idêntico em debug e release
   chamadas não pode decidir o uso de pilha nativa do host.
 - **Memória modelada:** custo por frame = `256 + slots × 24` bytes e custo de
   buffer transitório de argumentos = `args × 24` bytes; a cobrança acontece antes
-  de alocar, conta memória viva e libera ao fim; teto padrão de 16 MiB e
-  `out_of_memory` ao exceder (ADR-0013, ADR-0016). É modelo determinístico, não
-  RSS.
+  de alocar, conta memória viva e libera ao fim. O **conteúdo** dos slots também é
+  contabilizado: `string` custa os bytes UTF-8, `array`/`struct` custam
+  `itens × 24` + filhos, `option`/`result` custam `24` + payload; a gravação de um
+  slot cobra o valor novo e libera o anterior, e o retorno do frame libera os
+  slots (ADR-0035). Teto padrão de 16 MiB e `out_of_memory` ao exceder
+  (ADR-0013, ADR-0016, ADR-0035). É modelo determinístico, não RSS.
 
 ## 5. Erros
 
