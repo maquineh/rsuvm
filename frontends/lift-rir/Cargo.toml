@@ -1,0 +1,31 @@
+# Adaptador Lift→RIR (protótipo, ADR-0021).
+#
+# Workspace SEPARADO: não é membro do workspace principal (`exclude =
+# ["frontends"]` em ../../Cargo.toml), então `cargo test --workspace` e o CI
+# estável NÃO compilam isto nem trazem as dependências do Lift para o núcleo.
+#
+# Depende do Lift real (HIR pública) fixado por commit; o núcleo RSUVM continua
+# sem dependências externas.
+[package]
+name = "lift-rir"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+lift_ast = { git = "https://github.com/maquineh/lift", rev = "5e59af55baba7af53f8763140d35c972399d2851" }
+lift_lexer = { git = "https://github.com/maquineh/lift", rev = "5e59af55baba7af53f8763140d35c972399d2851" }
+lift_parser = { git = "https://github.com/maquineh/lift", rev = "5e59af55baba7af53f8763140d35c972399d2851" }
+lift_sema = { git = "https://github.com/maquineh/lift", rev = "5e59af55baba7af53f8763140d35c972399d2851" }
+rvm-spec = { path = "../../crates/rvm-spec" }
+rvm-ir = { path = "../../crates/rvm-ir" }
+
+[dev-dependencies]
+rvm-verify = { path = "../../crates/rvm-verify" }
+rvm-runtime = { path = "../../crates/rvm-runtime" }
+rvm-interpreter = { path = "../../crates/rvm-interpreter" }
+
+[workspace]
+members = ["."]

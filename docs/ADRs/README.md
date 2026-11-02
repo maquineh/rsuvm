@@ -22,6 +22,7 @@ memória/transferência, integração Lift e integração Rio).
 | [0018](ADR-0018-LIGACAO-ESTATICA-INTER-MODULO.md) | Ligação estática inter-módulo (crate `rvm-link`) | Aceito experimentalmente |
 | [0019](ADR-0019-ESTRATEGIA-DE-FUZZING.md) | Estratégia de fuzzing (determinística; cobertura adiada) | Aceito experimentalmente |
 | [0020](ADR-0020-FUZZING-GUIADO-POR-COBERTURA.md) | Fuzzing guiado por cobertura (dependência de dev) | Aceito experimentalmente |
+| [0021](ADR-0021-ADAPTADOR-LIFT-RIR.md) | Adaptador protótipo Lift→RIR (`frontends/lift-rir`) | Aceito experimentalmente |
 
 Estados usados: `Proposto`, `Aceito experimentalmente`, `Validado no escopo`,
 `Rejeitado`, `Substituído`. "Validado no escopo" exige critério e evidência

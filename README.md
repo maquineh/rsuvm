@@ -46,6 +46,8 @@ cargo run -p rvm-cli -- check examples/soma.rvm
   execução; não é artefato de runtime.
 - [fuzz](./fuzz/README.md) — workspace **separado** de fuzzing guiado por cobertura
   (nightly, dependência de dev; não faz parte do workspace principal; ADR-0020).
+- [frontends](./frontends/README.md) — adaptadores de linguagem fora do núcleo;
+  protótipo Lift→RIR (ADR-0021), também workspace separado.
 
 ## Workspace Invariants
 

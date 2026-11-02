@@ -289,3 +289,33 @@ estável.
 | `cargo build --workspace --all-targets` | exit 0 |
 | `cargo clippy --workspace --all-targets -- -D warnings` | exit 0 |
 | `cargo fmt --all -- --check` | exit 0 |
+
+## Adaptador Lift→RIR (ADR-0021)
+
+Primeiro frontend real do repositório: `frontends/lift-rir`, workspace **separado**
+(`exclude = ["frontends"]`), que consome a **HIR pública do Lift** (commit
+`5e59af5`) e emite a RIR do EXP-0 para funções puras `int`/`boolean`/`void`.
+
+### Entregue
+
+- `frontends/lift-rir/src/lib.rs` — `lower_source`/`lower` + `AdapterError`; baixa
+  `let`/`return` (SSA), `if/else` **terminal** (`cond_br` com ambiente como
+  parâmetros de bloco) e `+ - *`/comparações/negação/chamadas.
+- `frontends/lift-rir/tests/diferencial.rs` — 8 testes rodando o pipeline completo
+  Lift→RIR→verificação→execução.
+- ADR-0021, READMEs e relatório `docs/RELATORIOS/ADAPTADOR-LIFT-RIR.md`.
+
+### Teste diferencial (Resultado)
+
+Oráculo do Lift: `cargo run -p lift_cli -- run examples/rsuvm-oracle.lift` →
+`30 5 7 9 3 true false 25 12 55 0`. A RSUVM, sobre a RIR gerada, produz os mesmos
+11 valores (`i64`/`bool`). Detalhes em `ADAPTADOR-LIFT-RIR.md`.
+
+| Comando | Resultado |
+|---|---|
+| `cargo test --manifest-path frontends/lift-rir/Cargo.toml` | 8 passed, 0 failed |
+| `cargo test --workspace` (núcleo) | verde; **não** compila `frontends/` |
+
+Limites: subconjunto estreito (sem `while`, divisão, strings, arrays, objetos,
+closures, `console.log`/`import`); dependência git fixada do Lift no adaptador;
+sem codegen reverso.

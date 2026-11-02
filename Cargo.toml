@@ -12,7 +12,9 @@ resolver = "2"
 # `fuzz/` é um workspace separado (cargo-fuzz) com dependência de desenvolvimento
 # externa (`libfuzzer-sys`, ADR-0020); fica fora do workspace principal para não
 # afetar o build/CI estável nem o invariante de zero dependências do núcleo.
-exclude = ["fuzz"]
+# `frontends/` reúne adaptadores de linguagem (ADR-0001/ADR-0021), também fora do
+# núcleo: o adaptador Lift→RIR depende de crates do Lift.
+exclude = ["fuzz", "frontends"]
 members = [
     "crates/rvm-spec",
     "crates/rvm-ir",
