@@ -276,8 +276,9 @@ estável.
   `MIT OR Apache-2.0`** em 2026-11-02.
 - **Lift**: `LICENSE-MIT`, `LICENSE-APACHE` e campo `license` em todos os
   manifestos; commit `5e59af5` publicado em `main`.
-- **Rio**: commit `fb1a310` na branch local `chore/licenca-mit-apache` (push
-  pendente — rede interna indisponível daqui).
+- **Rio**: commit `fb1a310`; `main` local já avançado por fast-forward; push
+  pendente (rede interna indisponível daqui). Comandos prontos em
+  `LICENSEAMENTO-RIO-LIFT.md`.
 - ADR-0015/ADR-0017 atualizados: o bloqueio de **licença** caiu; os demais
   bloqueios técnicos (modelo não-VM, deps externas, subset) permanecem.
 

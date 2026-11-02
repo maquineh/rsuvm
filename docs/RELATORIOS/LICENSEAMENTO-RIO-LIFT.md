@@ -4,8 +4,8 @@
 - **Objetivo:** registrar que a definição de licença de Rio e Lift **não** é um
   pedido a terceiros, mas uma decisão do próprio mantenedor, e o que isso destrava.
 - **Estado:** **`MIT OR Apache-2.0` declarado pelo mantenedor em 2026-11-02.**
-  Lift: publicado (commit `5e59af5` em `main`). Rio: commit `fb1a310` na branch
-  `chore/licenca-mit-apache` do clone local; **push pendente** (a rede
+  Lift: publicado (commit `5e59af5` em `main`). Rio: commit `fb1a310`; `main` local
+  já avançado por fast-forward; **push pendente** (a rede
   `git.prodam.am.gov.br` não resolve fora da Prodam).
 
 ## 1. Fato: os três projetos têm o mesmo autor
@@ -44,9 +44,13 @@ não uma barreira de terceiros.
 
 - **Lift:** concluído. `LICENSE-MIT`, `LICENSE-APACHE` e campo `license` em todos
   os manifestos; commit `5e59af5` publicado em `main`.
-- **Rio:** commit `fb1a310` pronto na branch `chore/licenca-mit-apache` do clone
-  local (`H:\projetos\rio-lang`). Falta apenas publicar da rede interna:
-  `git -C H:\projetos\rio-lang push origin chore/licenca-mit-apache` (e abrir o
-  merge para `main`).
+- **Rio:** pronto. O `main` **local** do clone (`H:\projetos\rio-lang`) já foi
+  avançado por fast-forward até o commit `fb1a310` (e a branch
+  `chore/licenca-mit-apache` aponta para o mesmo commit). Falta publicar da rede
+  interna:
+  - **Publicar `main` direto (fast-forward):**
+    `git -C H:\projetos\rio-lang push origin main`
+  - **Ou abrir um merge request (GitLab):**
+    `git -C H:\projetos\rio-lang push origin chore/licenca-mit-apache -o merge_request.create -o merge_request.target=main -o merge_request.title="chore: declara licenca MIT OR Apache-2.0"`
 - **RSUVM:** baselines e ADR-0015/ADR-0017 atualizados; a política de reuso deixa
   de ser bloqueada por licença.
