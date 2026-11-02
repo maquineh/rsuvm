@@ -1,4 +1,4 @@
-# Adaptador Lift→RIR (protótipo, ADR-0021).
+# Adaptador Lift→RIR (protótipo, ADR-0021) + binário `lift-run`.
 #
 # Workspace SEPARADO: não é membro do workspace principal (`exclude =
 # ["frontends"]` em ../../Cargo.toml), então `cargo test --workspace` e o CI
@@ -13,6 +13,8 @@ edition = "2021"
 rust-version = "1.75"
 license = "MIT OR Apache-2.0"
 publish = false
+# Só o binário `lift-run`; sem auto-descoberta de `src/bin/*`.
+autobins = false
 
 [dependencies]
 lift_ast = { git = "https://github.com/maquineh/lift", rev = "5e59af55baba7af53f8763140d35c972399d2851" }
@@ -21,11 +23,13 @@ lift_parser = { git = "https://github.com/maquineh/lift", rev = "5e59af55baba7af
 lift_sema = { git = "https://github.com/maquineh/lift", rev = "5e59af55baba7af53f8763140d35c972399d2851" }
 rvm-spec = { path = "../../crates/rvm-spec" }
 rvm-ir = { path = "../../crates/rvm-ir" }
-
-[dev-dependencies]
-rvm-verify = { path = "../../crates/rvm-verify" }
 rvm-runtime = { path = "../../crates/rvm-runtime" }
+rvm-verify = { path = "../../crates/rvm-verify" }
 rvm-interpreter = { path = "../../crates/rvm-interpreter" }
+
+[[bin]]
+name = "lift-run"
+path = "src/bin/lift_run.rs"
 
 [workspace]
 members = ["."]

@@ -91,3 +91,25 @@ cargo test --manifest-path frontends/lift-rir/Cargo.toml
 # oráculo do Lift (requer o clone do Lift)
 cargo run -p lift_cli -- run examples/rsuvm-oracle.lift
 ```
+
+## 5. Binário `lift-run`
+
+Roda um `.lift` ponta a ponta na RVM (o `.lift` deve ser salvo **sem BOM**).
+
+```bash
+cargo run --manifest-path frontends/lift-rir/Cargo.toml --bin lift-run -- \
+    fib.lift fib --arg i64:10
+# i64:55
+```
+
+Contrato de saída e exit codes (espelha o `rsuvm`):
+
+| Situação | Exit | Exemplo |
+|---|---|---|
+| Sucesso | 0 | `fib(10)` → `i64:55` |
+| Módulo (fora do subconjunto / fonte inválida) | 2 | `while` → `AdapterError::Unsupported` |
+| Trap (overflow) | 3 | `i64::MAX + 1` → `integer_overflow` |
+| Limite (fuel/profundidade/memória) | 4 | `--fuel 1` → `out_of_fuel` |
+| Uso/IO | 1 | arquivo inexistente, flag inválida |
+
+Testes do binário: `frontends/lift-rir/tests/cli.rs` (5 testes, cobrindo 0/2/3/4).

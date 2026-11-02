@@ -16,6 +16,9 @@ workspace separado (ADR-0021).
   (`src/lib.rs:lower`) — baixa uma HIR já analisada.
 - `pub enum AdapterError { LiftPipeline(String), Unsupported(String) }`
   (`src/lib.rs:AdapterError`).
+- Binário **`lift-run`** (`src/bin/lift_run.rs`): CLI que roda um `.lift` ponta a
+  ponta na RVM e imprime o valor (`i64:30`, `bool:true`, `unit`), com os mesmos
+  códigos de exit do `rsuvm` (0/2/3/4/1).
 
 ## Invariants
 
@@ -40,5 +43,5 @@ workspace separado (ADR-0021).
 ## Verification
 
 - `cargo test --manifest-path frontends/lift-rir/Cargo.toml` (8 testes em
-  `tests/diferencial.rs`).
+  `tests/diferencial.rs` e 5 em `tests/cli.rs`).
 - Oráculo do Lift e comparação: `docs/RELATORIOS/ADAPTADOR-LIFT-RIR.md`.

@@ -39,6 +39,12 @@ pode importar Lift: adaptadores ficam fora de `crates/`.
 6. **Teste diferencial**: o valor executado na RSUVM é comparado com o **oráculo do
    Lift** (mesmo programa rodado pelo compilador do Lift), registrado em
    `docs/RELATORIOS/ADAPTADOR-LIFT-RIR.md`.
+7. O adaptador inclui o binário **`lift-run`** (`src/bin/lift_run.rs`) para rodar
+   um `.lift` ponta a ponta na RVM:
+   `cargo run --manifest-path frontends/lift-rir/Cargo.toml --bin lift-run --
+   <arquivo.lift> <entry> [--arg i64:10]... [--fuel N] [--max-depth N] [--memory N]`.
+   Ele imprime o valor no formato do `rsuvm` e usa os mesmos códigos de exit
+   (0 ok, 2 módulo, 3 trap, 4 limite, 1 uso/IO).
 
 ## Alternativas
 
@@ -64,9 +70,10 @@ pode importar Lift: adaptadores ficam fora de `crates/`.
 
 ## Validação
 
-- `cargo test --manifest-path frontends/lift-rir/Cargo.toml`: 8 testes (soma,
-  `if/else` terminal, comparação→`boolean`, `let`, chamadas encadeadas, recursão
-  `fib`, e rejeição de `while`).
+- `cargo test --manifest-path frontends/lift-rir/Cargo.toml`: **13 testes**
+  (`tests/diferencial.rs`: 8; `tests/cli.rs`: 5) — soma, `if/else` terminal,
+  comparação→`boolean`, `let`, chamadas encadeadas, recursão `fib`, rejeição de
+  `while`, e códigos de exit do `lift-run` (0/2/3/4).
 - **Diferencial**: `cargo run -p lift_cli -- run examples/rsuvm-oracle.lift` no
   Lift produz `30 5 7 9 3 true false 25 12 55 0`, idêntico ao executado na RSUVM
   (`docs/RELATORIOS/ADAPTADOR-LIFT-RIR.md`).
