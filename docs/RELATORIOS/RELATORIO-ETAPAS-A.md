@@ -237,3 +237,38 @@ Decisão de fuzzing em `docs/ADRs/ADR-0019-ESTRATEGIA-DE-FUZZING.md`.
 
 Limites: fuzzing **não** guiado por cobertura (ADR-0019); H06 pendente de medição
 estável.
+
+## Próximos passos — execução
+
+### 1. Benchmark em runner dedicado (H06)
+
+- Harness endurecido: 11 amostras × 20 000 execuções, `k` até 256, aquecimento
+  longo, mediana e dispersão (`crates/rvm-interpreter/benches/chamada.rs`).
+- Resultado na máquina de desenvolvimento (**não isolada**): dispersão máxima
+  **65%**; H06 permanece **inconclusiva** pela regra pré-registrada. Nenhum limiar
+  foi ajustado.
+- Caminho de runner dedicado: workflow **manual** `.github/workflows/bench.yml`
+  (GitHub-hosted, `workflow_dispatch`) publica o log como artefato `bench-log`.
+
+### 2. Fuzzing guiado por cobertura (decisão)
+
+- `docs/ADRs/ADR-0020-FUZZING-GUIADO-POR-COBERTURA.md` (**Proposto**): fixa
+  `libfuzzer-sys` **0.4.13** (licença `(MIT OR Apache-2.0) AND NCSA`) e
+  `cargo-fuzz` **0.13.2** (licença `MIT OR Apache-2.0`), uso de **nightly**,
+  isolamento em `fuzz/` como workspace separado e excluído.
+- **Não implementado**: exige aprovação explícita do mantenedor (regra 12).
+  A campanha determinística do ADR-0019 permanece.
+
+### 3. Licença de Rio e Lift
+
+- `docs/RELATORIOS/PEDIDO-LICENCA-RIO-LIFT.md`: pedido pronto para envio, com
+  fatos, usos contemplados e perguntas. É **ação humana**; nada foi copiado.
+
+### Verificação (Resultado)
+
+| Comando | Resultado |
+|---|---|
+| `cargo bench -p rvm-interpreter --bench chamada` | executou; dispersão até 65%; H06 inconclusiva |
+| `cargo build --workspace --all-targets` | exit 0 |
+| `cargo clippy --workspace --all-targets -- -D warnings` | exit 0 |
+| `cargo fmt --all -- --check` | exit 0 |

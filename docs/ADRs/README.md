@@ -21,6 +21,7 @@ memória/transferência, integração Lift e integração Rio).
 | [0017](ADR-0017-INTEGRACAO-LIFT-BLOQUEADA.md) | Integração Lift bloqueada com evidência (LIFT-BASELINE-001) | Aceito experimentalmente |
 | [0018](ADR-0018-LIGACAO-ESTATICA-INTER-MODULO.md) | Ligação estática inter-módulo (crate `rvm-link`) | Aceito experimentalmente |
 | [0019](ADR-0019-ESTRATEGIA-DE-FUZZING.md) | Estratégia de fuzzing (determinística; cobertura adiada) | Aceito experimentalmente |
+| [0020](ADR-0020-FUZZING-GUIADO-POR-COBERTURA.md) | Fuzzing guiado por cobertura (dependência de dev) | Proposto (aguarda aprovação) |
 
 Estados usados: `Proposto`, `Aceito experimentalmente`, `Validado no escopo`,
 `Rejeitado`, `Substituído`. "Validado no escopo" exige critério e evidência
