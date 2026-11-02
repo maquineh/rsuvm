@@ -42,7 +42,7 @@ use rvm_ir::{
     Block, BlockId, BlockParam, BranchTarget, FnId, Function, Instr, Module, Op, Param, Terminator,
     ValueId,
 };
-use rvm_spec::{BinOp, CmpOp, Type, IR_VERSION};
+use rvm_spec::{BinOp, CmpOp, FloatOp, Type, IR_VERSION};
 
 /// Erro do adaptador.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -141,6 +141,7 @@ fn map_type(ty: &ResolvedType) -> Result<Type, AdapterError> {
         ResolvedType::Boolean => Ok(Type::Bool),
         ResolvedType::Void => Ok(Type::Unit),
         ResolvedType::String => Ok(Type::Str),
+        ResolvedType::Number => Ok(Type::F64),
         other => Err(AdapterError::Unsupported(format!("tipo `{other}`"))),
     }
 }
@@ -615,6 +616,7 @@ impl FuncLower {
             HirExprKind::IntegerLiteral(value) => self.emit(Op::ConstI64(*value)),
             HirExprKind::BooleanLiteral(value) => self.emit(Op::ConstBool(*value)),
             HirExprKind::StringLiteral(text) => self.emit(Op::ConstStr(text.clone())),
+            HirExprKind::NumberLiteral(value) => self.emit(Op::ConstF64(value.to_bits())),
             HirExprKind::Local { id, name } => env
                 .get(id)
                 .map(|(value, _)| *value)
@@ -626,13 +628,23 @@ impl FuncLower {
             } => self.lower_expr(names, inner, env),
             HirExprKind::Unary { operator, operand } => match operator {
                 UnaryOperator::Negate => {
-                    let zero = self.emit(Op::ConstI64(0))?;
-                    let value = self.lower_expr(names, operand, env)?;
-                    self.emit(Op::Bin {
-                        op: BinOp::SubI64Checked,
-                        lhs: zero,
-                        rhs: value,
-                    })
+                    if matches!(operand.ty, ResolvedType::Number) {
+                        let zero = self.emit(Op::ConstF64(0.0_f64.to_bits()))?;
+                        let value = self.lower_expr(names, operand, env)?;
+                        self.emit(Op::Float {
+                            op: FloatOp::Sub,
+                            lhs: zero,
+                            rhs: value,
+                        })
+                    } else {
+                        let zero = self.emit(Op::ConstI64(0))?;
+                        let value = self.lower_expr(names, operand, env)?;
+                        self.emit(Op::Bin {
+                            op: BinOp::SubI64Checked,
+                            lhs: zero,
+                            rhs: value,
+                        })
+                    }
                 }
                 UnaryOperator::Not => self.lower_not(names, operand, env),
             },
@@ -652,10 +664,21 @@ impl FuncLower {
                 let lhs = self.lower_expr(names, left, env)?;
                 let rhs = self.lower_expr(names, right, env)?;
                 let string_operands = matches!(left.ty, ResolvedType::String);
+                let number_operands = matches!(left.ty, ResolvedType::Number);
                 let op = match operator {
                     BinaryOperator::Add if string_operands => Op::ConcatStr { lhs, rhs },
+                    BinaryOperator::Add if number_operands => Op::Float {
+                        op: FloatOp::Add,
+                        lhs,
+                        rhs,
+                    },
                     BinaryOperator::Add => Op::Bin {
                         op: BinOp::AddI64Checked,
+                        lhs,
+                        rhs,
+                    },
+                    BinaryOperator::Subtract if number_operands => Op::Float {
+                        op: FloatOp::Sub,
                         lhs,
                         rhs,
                     },
@@ -664,8 +687,18 @@ impl FuncLower {
                         lhs,
                         rhs,
                     },
+                    BinaryOperator::Multiply if number_operands => Op::Float {
+                        op: FloatOp::Mul,
+                        lhs,
+                        rhs,
+                    },
                     BinaryOperator::Multiply => Op::Bin {
                         op: BinOp::MulI64Checked,
+                        lhs,
+                        rhs,
+                    },
+                    BinaryOperator::Divide if number_operands => Op::Float {
+                        op: FloatOp::Div,
                         lhs,
                         rhs,
                     },
@@ -681,6 +714,36 @@ impl FuncLower {
                     },
                     BinaryOperator::Equal if string_operands => Op::StrEq { lhs, rhs },
                     BinaryOperator::NotEqual if string_operands => Op::StrNe { lhs, rhs },
+                    BinaryOperator::Equal if number_operands => Op::Float {
+                        op: FloatOp::Eq,
+                        lhs,
+                        rhs,
+                    },
+                    BinaryOperator::NotEqual if number_operands => Op::Float {
+                        op: FloatOp::Ne,
+                        lhs,
+                        rhs,
+                    },
+                    BinaryOperator::Less if number_operands => Op::Float {
+                        op: FloatOp::Lt,
+                        lhs,
+                        rhs,
+                    },
+                    BinaryOperator::LessEqual if number_operands => Op::Float {
+                        op: FloatOp::Le,
+                        lhs,
+                        rhs,
+                    },
+                    BinaryOperator::Greater if number_operands => Op::Float {
+                        op: FloatOp::Gt,
+                        lhs,
+                        rhs,
+                    },
+                    BinaryOperator::GreaterEqual if number_operands => Op::Float {
+                        op: FloatOp::Ge,
+                        lhs,
+                        rhs,
+                    },
                     BinaryOperator::Equal => Op::Cmp {
                         op: CmpOp::Eq,
                         lhs,

@@ -101,8 +101,8 @@ cargo run -p rvm-cli -- check examples/soma.rvm
   opcional por regra. Workflows auxiliares **manuais**: `bench.yml` (benchmark
   pré-registrado) e `fuzz.yml` (fuzzing guiado por cobertura, nightly).
 - Resultados atuais e log bruto: [RELATORIO-IMPLEMENTACAO](./docs/RELATORIOS/RELATORIO-IMPLEMENTACAO.md)
-  e [EVIDENCIAS-EXECUCAO](./docs/RELATORIOS/EVIDENCIAS-EXECUCAO.md): 147 testes
-  verdes, 31 casos válidos + 27 inválidos no corpus.
+  e [EVIDENCIAS-EXECUCAO](./docs/RELATORIOS/EVIDENCIAS-EXECUCAO.md): 148 testes
+  verdes, 33 casos válidos + 27 inválidos no corpus.
 
 ## Segurança (limites declarados)
 

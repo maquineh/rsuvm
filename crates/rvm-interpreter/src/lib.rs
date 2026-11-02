@@ -56,12 +56,12 @@
 
 use rvm_ir::{BlockId, FnId, Function, Module, Op, Terminator, ValueId};
 use rvm_runtime::{arg_buffer_cost, frame_cost, ExecConfig, Value};
-use rvm_spec::{BinOp, ErrorCode, Location, RvmError};
+use rvm_spec::{BinOp, ErrorCode, Location, RvmError, Type};
 
 use rvm_verify::VerifiedModule;
 
 /// Resultado de uma execução bem-sucedida.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct RunOutcome {
     /// Valor devolvido pela função de entrada.
     pub value: Value,
@@ -410,6 +410,27 @@ impl<'a> Interpreter<'a> {
                     self.write_current(&mut stack, top, instr.def, Value::Str(result), &site)?;
                     self.advance(&mut stack, top, &site)?;
                 }
+                Op::ConstF64(bits) => {
+                    self.write_current(
+                        &mut stack,
+                        top,
+                        instr.def,
+                        Value::F64(f64::from_bits(*bits)),
+                        &site,
+                    )?;
+                    self.advance(&mut stack, top, &site)?;
+                }
+                Op::Float { op, lhs, rhs } => {
+                    let left = self.read_f64(&stack, top, *lhs, &site)?;
+                    let right = self.read_f64(&stack, top, *rhs, &site)?;
+                    let value = if op.result_type() == Type::F64 {
+                        Value::F64(op.eval_f64(left, right))
+                    } else {
+                        Value::Bool(op.eval_cmp(left, right))
+                    };
+                    self.write_current(&mut stack, top, instr.def, value, &site)?;
+                    self.advance(&mut stack, top, &site)?;
+                }
                 Op::Call { callee, args } => {
                     let callee_function = self.callee(*callee, &site)?;
                     // O buffer de argumentos é cobrado antes de alocar (falha
@@ -704,6 +725,20 @@ impl<'a> Interpreter<'a> {
         read_str(frame, value, site)
     }
 
+    /// Lê um `f64` do frame `top`.
+    fn read_f64(
+        &self,
+        stack: &[Frame<'a>],
+        top: usize,
+        value: ValueId,
+        site: &Site<'_>,
+    ) -> Result<f64, RvmError> {
+        let frame = stack
+            .get(top)
+            .ok_or_else(|| error_at(ErrorCode::InvalidModule, "frame ausente ao ler f64", site))?;
+        read_f64(frame, value, site)
+    }
+
     /// Resolve uma função do módulo (o verificador garante a existência).
     fn callee(&self, callee: FnId, site: &Site<'_>) -> Result<&'a Function, RvmError> {
         let module: &'a Module = self.module;
@@ -869,6 +904,18 @@ fn read_str(frame: &Frame<'_>, value: ValueId, site: &Site<'_>) -> Result<String
             site,
         )),
     }
+}
+
+/// Lê um slot exigindo `f64`.
+fn read_f64(frame: &Frame<'_>, value: ValueId, site: &Site<'_>) -> Result<f64, RvmError> {
+    let slot = read_slot(frame, value, site)?;
+    slot.as_f64().ok_or_else(|| {
+        error_at(
+            ErrorCode::InvalidModule,
+            format!("slot v{value} contém `{}`, esperado `f64`", slot.ty()),
+            site,
+        )
+    })
 }
 
 /// Avalia os argumentos de uma chamada em um vetor novo.

@@ -93,8 +93,10 @@ impl Default for MemoryLimit {
 /// Valor de runtime do subset EXP-0.
 ///
 /// Um `Value` sempre conhece seu [`Type`] e nunca carrega ponteiro, referência ou
-/// handle do processo hospedeiro. `Str` carrega o texto UTF-8 por valor (ADR-0024).
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// handle do processo hospedeiro. `Str` carrega o texto UTF-8 por valor (ADR-0024)
+/// e `F64` um ponto flutuante IEEE-754 (ADR-0026). Não implementa `Eq` por causa
+/// de `NaN`.
+#[derive(Clone, Debug, PartialEq)]
 pub enum Value {
     /// Valor do tipo `unit`.
     Unit,
@@ -104,6 +106,8 @@ pub enum Value {
     I64(i64),
     /// Valor do tipo `string` (texto UTF-8 imutável).
     Str(String),
+    /// Valor do tipo `f64` (IEEE-754).
+    F64(f64),
 }
 
 impl Value {
@@ -115,6 +119,7 @@ impl Value {
             Value::Bool(_) => Type::Bool,
             Value::I64(_) => Type::I64,
             Value::Str(_) => Type::Str,
+            Value::F64(_) => Type::F64,
         }
     }
 
@@ -145,6 +150,15 @@ impl Value {
         }
     }
 
+    /// Conteúdo `f64`, se o valor for `f64`.
+    #[must_use]
+    pub const fn as_f64(&self) -> Option<f64> {
+        match self {
+            Value::F64(value) => Some(*value),
+            _ => None,
+        }
+    }
+
     /// `true` se o valor pertence ao tipo declarado (sem conversão implícita).
     #[must_use]
     pub fn matches_type(&self, ty: Type) -> bool {
@@ -154,19 +168,21 @@ impl Value {
                 | (Value::Bool(_), Type::Bool)
                 | (Value::I64(_), Type::I64)
                 | (Value::Str(_), Type::Str)
+                | (Value::F64(_), Type::F64)
         )
     }
 }
 
 impl fmt::Display for Value {
     /// Formato estável usado pelo CLI e pelo corpus: `unit`, `bool:true`,
-    /// `i64:30`, `str:<texto>`.
+    /// `i64:30`, `str:<texto>`, `f64:<valor>`.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Value::Unit => f.write_str("unit"),
             Value::Bool(value) => write!(f, "bool:{value}"),
             Value::I64(value) => write!(f, "i64:{value}"),
             Value::Str(value) => write!(f, "str:{value}"),
+            Value::F64(value) => write!(f, "f64:{value}"),
         }
     }
 }

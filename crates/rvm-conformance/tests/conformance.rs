@@ -94,6 +94,11 @@ fn parse_value(text: &str) -> Value {
             "false" => Value::Bool(false),
             other => panic!("bool inválido `{other}`"),
         },
+        "f64" => Value::F64(
+            raw.trim()
+                .parse::<f64>()
+                .unwrap_or_else(|error| panic!("f64 inválido `{raw}`: {error}")),
+        ),
         other => panic!("tipo de argumento não suportado no corpus: `{other}`"),
     }
 }
@@ -349,6 +354,7 @@ fn corpus_valido_executa_e_reproduz() {
     for required in [
         "C-001", "C-006", "C-010", "C-011", "C-016", "C-017", "C-018", "C-019", "C-020", "C-021",
         "C-022", "C-023", "C-024", "C-025", "C-026", "C-027", "C-028", "C-029", "C-030", "C-031",
+        "C-032", "C-033",
     ] {
         assert!(
             ids.contains(required),

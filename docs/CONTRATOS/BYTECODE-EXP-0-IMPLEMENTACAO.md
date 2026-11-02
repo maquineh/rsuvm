@@ -79,6 +79,17 @@ terminator:
 | 21 | `str_ne` | `u32 lhs`, `u32 rhs` |
 | 22 | `str_len` | `u32 operand` |
 | 23 | `concat_str` | `u32 lhs`, `u32 rhs` |
+| 24 | `const_f64` | `i64` (bits IEEE-754) |
+| 25 | `add_f64` | `u32 lhs`, `u32 rhs` |
+| 26 | `sub_f64` | `u32 lhs`, `u32 rhs` |
+| 27 | `mul_f64` | `u32 lhs`, `u32 rhs` |
+| 28 | `div_f64` | `u32 lhs`, `u32 rhs` |
+| 29 | `eq_f64` | `u32 lhs`, `u32 rhs` |
+| 30 | `ne_f64` | `u32 lhs`, `u32 rhs` |
+| 31 | `lt_f64` | `u32 lhs`, `u32 rhs` |
+| 32 | `le_f64` | `u32 lhs`, `u32 rhs` |
+| 33 | `gt_f64` | `u32 lhs`, `u32 rhs` |
+| 34 | `ge_f64` | `u32 lhs`, `u32 rhs` |
 
 Código desconhecido ⇒ `unknown_opcode`.
 
@@ -106,8 +117,8 @@ Código desconhecido ⇒ `unknown_opcode`.
    comparada com o limite estrutural correspondente **e** com os bytes restantes
    antes de reservar memória. Contagem maior que os bytes restantes ⇒
    `truncated_input` (cada item consome ao menos 1 byte).
-6. Tag de tipo fora de `0..=3` (`unit`, `bool`, `i64`, `string`) ⇒ `unknown_type`;
-   `const_bool` fora de `0|1` ⇒
+6. Tag de tipo fora de `0..=4` (`unit`, `bool`, `i64`, `string`, `f64`) ⇒
+   `unknown_type`; `const_bool` fora de `0|1` ⇒
    `invalid_number`.
 7. Ao final, bytes excedentes ⇒ `invalid_module`.
 8. O módulo decodificado passa por `rvm_ir::structure::check` antes de ser

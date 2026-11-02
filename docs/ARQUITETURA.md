@@ -56,22 +56,24 @@ linguagem (ADR-0009).
 
 ## 3. Subset semântico (EXP-0)
 
-- Tipos: `unit`, `bool`, `i64`, `string`. Sem coerção implícita.
-- Operações: `const_i64`, `const_bool`, `const_str`, `add_i64_checked`,
+- Tipos: `unit`, `bool`, `i64`, `string`, `f64`. Sem coerção implícita.
+- Operações: `const_i64`, `const_bool`, `const_str`, `const_f64`, `add_i64_checked`,
   `sub_i64_checked`, `mul_i64_checked`, `div_i64_checked`, `rem_i64_checked`,
   `shl_i64_checked`, `shr_i64_checked`, `and_i64`, `or_i64`, `xor_i64`, `eq_i64`,
   `ne_i64`, `lt_i64`, `le_i64`, `gt_i64`, `ge_i64`, `str_eq`, `str_ne`, `str_len`,
-  `concat_str`, `call_static`.
+  `concat_str`, `add_f64`, `sub_f64`, `mul_f64`, `div_f64`, `eq_f64`, `ne_f64`,
+  `lt_f64`, `le_f64`, `gt_f64`, `ge_f64`, `call_static`.
 - Terminadores: `return`, `br`, `cond_br`.
 - Merge por parâmetros de bloco (phi explícito).
-- Fora do EXP-0: `f64`, arrays, registros, referências, closures, `unsafe`, FFI,
-  exceções recuperáveis, threads, async. Concatenação/slicing de `string` também
-  ficam fora (ADR-0024).
+- Fora do EXP-0: arrays, registros, referências, closures, `unsafe`, FFI,
+  exceções recuperáveis, threads, async. `f64` existe (ADR-0026) sem `%`, `pow` nem
+  conversões; concatenação/slicing de `string` também ficam fora (ADR-0025).
 
 Semântica aritmética: `i64::checked_*`; resultado fora de `[-2^63, 2^63-1]`
 produz o trap `integer_overflow`, divisão/resto por zero produz
 `division_by_zero` (ADR-0022) e deslocamento com quantidade fora de `0..=63`
-produz `invalid_shift` (ADR-0023). O comportamento é idêntico em debug e release
+produz `invalid_shift` (ADR-0023). `f64` usa **IEEE-754 sem trap** (divisão por
+zero → `inf`/`NaN`, ADR-0026). O comportamento é idêntico em debug e release
 (`overflow-checks = true` também no perfil release, como defesa extra).
 
 ## 4. Quotas

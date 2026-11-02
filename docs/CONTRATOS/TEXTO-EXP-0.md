@@ -22,11 +22,13 @@ instrução  = ident "=" operação ;
 operação   = "const_i64" inteiro
            | "const_bool" ( "true" | "false" )
            | "const_str" string
+           | "const_f64" real
            | op_binário valor "," valor
            | "str_eq" valor "," valor
            | "str_ne" valor "," valor
            | "str_len" valor
            | "concat_str" valor "," valor
+           | op_f64 valor "," valor
            | "call_static" ident "(" [valores] ")" ;
 op_binário = "add_i64_checked" | "sub_i64_checked" | "mul_i64_checked"
            | "div_i64_checked" | "rem_i64_checked"
@@ -40,6 +42,9 @@ terminador = "return" [ valor ]
            | "cond_br" valor "," alvo "," alvo ;
 alvo       = ident [ "(" [valores] ")" ] ;
 inteiro    = [ "-" ] dígito+ ;
+real       = [ "-" ] dígito+ "." dígito+ ;
+op_f64     = "add_f64" | "sub_f64" | "mul_f64" | "div_f64"
+           | "eq_f64" | "ne_f64" | "lt_f64" | "le_f64" | "gt_f64" | "ge_f64" ;
 string     = '"' { caractere | escape } '"' ;
 escape     = "\\" ( '"' | "\\" | "n" | "r" | "t" ) ;
 ident      = ( letra | "_" ) { letra | dígito | "_" } ;

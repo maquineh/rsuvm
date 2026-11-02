@@ -32,7 +32,7 @@
     )
 )]
 
-use rvm_spec::{BinOp, CmpOp, Type};
+use rvm_spec::{BinOp, CmpOp, FloatOp, Type};
 
 pub mod structure;
 #[cfg(any(test, feature = "test-helpers"))]
@@ -147,6 +147,8 @@ pub enum Op {
     ConstBool(bool),
     /// Define uma constante `string` (`const_str`). O literal vive no módulo.
     ConstStr(String),
+    /// Define uma constante `f64` (`const_f64`), guardada como bits IEEE-754.
+    ConstF64(u64),
     /// Aplica [`BinOp`] a dois `i64`; transbordo produz `integer_overflow`.
     Bin {
         /// Operação aritmética verificada.
@@ -191,6 +193,15 @@ pub enum Op {
         /// Operando direito.
         rhs: ValueId,
     },
+    /// Aplica [`FloatOp`] a dois `f64` (`add_f64`, `lt_f64`, …), ADR-0026.
+    Float {
+        /// Operação sobre `f64`.
+        op: FloatOp,
+        /// Operando esquerdo.
+        lhs: ValueId,
+        /// Operando direito.
+        rhs: ValueId,
+    },
     /// Chama estaticamente uma função do mesmo módulo (`call_static`).
     Call {
         /// Função chamada; resolvida estaticamente pelo verificador.
@@ -208,11 +219,13 @@ impl Op {
             Op::ConstI64(_) => Type::I64,
             Op::ConstBool(_) => Type::Bool,
             Op::ConstStr(_) => Type::Str,
+            Op::ConstF64(_) => Type::F64,
             Op::Bin { op, .. } => op.result_type(),
             Op::Cmp { op, .. } => op.result_type(),
             Op::StrEq { .. } | Op::StrNe { .. } => Type::Bool,
             Op::StrLen { .. } => Type::I64,
             Op::ConcatStr { .. } => Type::Str,
+            Op::Float { op, .. } => op.result_type(),
             Op::Call { .. } => Type::I64, // substituído pelo tipo de retorno no verificador
         }
     }
@@ -224,12 +237,13 @@ impl Op {
     #[must_use]
     pub fn operand_ids(&self) -> Vec<ValueId> {
         match self {
-            Op::ConstI64(_) | Op::ConstBool(_) | Op::ConstStr(_) => Vec::new(),
+            Op::ConstI64(_) | Op::ConstBool(_) | Op::ConstStr(_) | Op::ConstF64(_) => Vec::new(),
             Op::Bin { lhs, rhs, .. }
             | Op::Cmp { lhs, rhs, .. }
             | Op::StrEq { lhs, rhs }
             | Op::StrNe { lhs, rhs }
-            | Op::ConcatStr { lhs, rhs } => vec![*lhs, *rhs],
+            | Op::ConcatStr { lhs, rhs }
+            | Op::Float { lhs, rhs, .. } => vec![*lhs, *rhs],
             Op::StrLen { operand } => vec![*operand],
             Op::Call { args, .. } => args.clone(),
         }

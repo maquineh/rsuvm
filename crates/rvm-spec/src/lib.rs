@@ -51,6 +51,8 @@ pub enum Type {
     /// Texto UTF-8 imutável (ADR-0024). Literais vivem no módulo; não há
     /// concatenação nem alocação em execução no EXP-0.
     Str,
+    /// Ponto flutuante IEEE-754 de 64 bits (ADR-0026).
+    F64,
 }
 
 impl Type {
@@ -62,6 +64,7 @@ impl Type {
             Type::Bool => "bool",
             Type::I64 => "i64",
             Type::Str => "string",
+            Type::F64 => "f64",
         }
     }
 
@@ -76,6 +79,7 @@ impl Type {
             "bool" => Some(Type::Bool),
             "i64" => Some(Type::I64),
             "string" => Some(Type::Str),
+            "f64" => Some(Type::F64),
             _ => None,
         }
     }
@@ -276,6 +280,114 @@ impl CmpOp {
 }
 
 impl fmt::Display for CmpOp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+/// Operação sobre `f64` (ADR-0026): aritmética e comparações IEEE-754.
+///
+/// Não há trap: divisão por zero produz `inf`/`NaN`, e comparações com `NaN`
+/// seguem a IEEE-754 (todas falsas, exceto `!=`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum FloatOp {
+    /// Soma (`add_f64`).
+    Add,
+    /// Subtração (`sub_f64`).
+    Sub,
+    /// Multiplicação (`mul_f64`).
+    Mul,
+    /// Divisão (`div_f64`).
+    Div,
+    /// Igualdade (`eq_f64`).
+    Eq,
+    /// Desigualdade (`ne_f64`).
+    Ne,
+    /// Menor que (`lt_f64`).
+    Lt,
+    /// Menor ou igual (`le_f64`).
+    Le,
+    /// Maior que (`gt_f64`).
+    Gt,
+    /// Maior ou igual (`ge_f64`).
+    Ge,
+}
+
+impl FloatOp {
+    /// Nome estável da operação no formato textual.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            FloatOp::Add => "add_f64",
+            FloatOp::Sub => "sub_f64",
+            FloatOp::Mul => "mul_f64",
+            FloatOp::Div => "div_f64",
+            FloatOp::Eq => "eq_f64",
+            FloatOp::Ne => "ne_f64",
+            FloatOp::Lt => "lt_f64",
+            FloatOp::Le => "le_f64",
+            FloatOp::Gt => "gt_f64",
+            FloatOp::Ge => "ge_f64",
+        }
+    }
+
+    /// Converte o nome estável em [`FloatOp`]; fora da tabela é `unknown_opcode`.
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "add_f64" => Some(FloatOp::Add),
+            "sub_f64" => Some(FloatOp::Sub),
+            "mul_f64" => Some(FloatOp::Mul),
+            "div_f64" => Some(FloatOp::Div),
+            "eq_f64" => Some(FloatOp::Eq),
+            "ne_f64" => Some(FloatOp::Ne),
+            "lt_f64" => Some(FloatOp::Lt),
+            "le_f64" => Some(FloatOp::Le),
+            "gt_f64" => Some(FloatOp::Gt),
+            "ge_f64" => Some(FloatOp::Ge),
+            _ => None,
+        }
+    }
+
+    /// Tipo do resultado: `f64` para aritmética, `bool` para comparação.
+    #[must_use]
+    pub const fn result_type(self) -> Type {
+        match self {
+            FloatOp::Add | FloatOp::Sub | FloatOp::Mul | FloatOp::Div => Type::F64,
+            FloatOp::Eq | FloatOp::Ne | FloatOp::Lt | FloatOp::Le | FloatOp::Gt | FloatOp::Ge => {
+                Type::Bool
+            }
+        }
+    }
+
+    /// Aplica a operação aritmética (IEEE-754). Para comparação devolve `NaN`.
+    #[must_use]
+    pub fn eval_f64(self, lhs: f64, rhs: f64) -> f64 {
+        match self {
+            FloatOp::Add => lhs + rhs,
+            FloatOp::Sub => lhs - rhs,
+            FloatOp::Mul => lhs * rhs,
+            FloatOp::Div => lhs / rhs,
+            _ => f64::NAN,
+        }
+    }
+
+    /// Aplica a comparação (IEEE-754). Para aritmética devolve `false`.
+    #[must_use]
+    pub fn eval_cmp(self, lhs: f64, rhs: f64) -> bool {
+        match self {
+            FloatOp::Eq => lhs == rhs,
+            FloatOp::Ne => lhs != rhs,
+            FloatOp::Lt => lhs < rhs,
+            FloatOp::Le => lhs <= rhs,
+            FloatOp::Gt => lhs > rhs,
+            FloatOp::Ge => lhs >= rhs,
+            _ => false,
+        }
+    }
+}
+
+impl fmt::Display for FloatOp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.name())
     }
@@ -726,7 +838,7 @@ mod tests {
 
     #[test]
     fn nomes_de_tipo_e_operacao_sao_bidirecionais() {
-        for ty in [Type::Unit, Type::Bool, Type::I64] {
+        for ty in [Type::Unit, Type::Bool, Type::I64, Type::Str, Type::F64] {
             assert_eq!(Type::from_name(ty.name()), Some(ty));
         }
         for op in [
@@ -755,7 +867,7 @@ mod tests {
             assert_eq!(op.result_type(), Type::Bool);
             assert_eq!(op.operand_type(), Type::I64);
         }
-        assert_eq!(Type::from_name("f64"), None);
+        assert_eq!(Type::from_name("f32"), None);
         assert_eq!(BinOp::from_name("div_i64"), None);
     }
 
@@ -831,5 +943,32 @@ mod tests {
         assert!(limits.max_instrs_per_block > 0);
         assert!(limits.max_values_per_function > 0);
         assert!(limits.max_input_bytes > 0);
+    }
+
+    #[test]
+    fn operacoes_f64_sao_bidirecionais_e_ieee() {
+        for op in [
+            FloatOp::Add,
+            FloatOp::Sub,
+            FloatOp::Mul,
+            FloatOp::Div,
+            FloatOp::Eq,
+            FloatOp::Ne,
+            FloatOp::Lt,
+            FloatOp::Le,
+            FloatOp::Gt,
+            FloatOp::Ge,
+        ] {
+            assert_eq!(FloatOp::from_name(op.name()), Some(op));
+        }
+        assert_eq!(FloatOp::Add.eval_f64(1.5, 2.25), 3.75);
+        assert_eq!(FloatOp::Div.eval_f64(1.0, 0.0), f64::INFINITY);
+        assert!(FloatOp::Div.eval_f64(0.0, 0.0).is_nan());
+        assert!(FloatOp::Lt.eval_cmp(1.0, 2.0));
+        assert!(!FloatOp::Lt.eval_cmp(f64::NAN, 2.0));
+        assert!(FloatOp::Ne.eval_cmp(f64::NAN, f64::NAN));
+        assert_eq!(FloatOp::Add.result_type(), Type::F64);
+        assert_eq!(FloatOp::Lt.result_type(), Type::Bool);
+        assert_eq!(FloatOp::from_name("add_i64_checked"), None);
     }
 }

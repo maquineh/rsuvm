@@ -293,10 +293,31 @@ fn concatenacao_de_strings() {
 }
 
 #[test]
+fn f64_aritmetica_e_comparacoes() {
+    let source = "function media(a: number, b: number): number { return (a + b) / 2.0; } function menor(a: number, b: number): boolean { return a < b; } function nega(a: number): number { return -a; }";
+    assert_eq!(
+        executar(source, "media", &[Value::F64(1.0), Value::F64(2.0)]),
+        Value::F64(1.5)
+    );
+    assert_eq!(
+        executar(source, "menor", &[Value::F64(1.0), Value::F64(2.0)]),
+        Value::Bool(true)
+    );
+    assert_eq!(
+        executar(source, "menor", &[Value::F64(2.0), Value::F64(1.0)]),
+        Value::Bool(false)
+    );
+    assert_eq!(
+        executar(source, "nega", &[Value::F64(2.5)]),
+        Value::F64(-2.5)
+    );
+}
+
+#[test]
 fn construto_fora_do_subconjunto_e_rejeitado() {
-    // `number` (f64) ainda não existe no núcleo EXP-0.
-    let source = "function metade(a: number): number { return a / 2.0; }";
-    let error = lower_source(source, "metade").expect_err("`number` está fora do subconjunto");
+    // Arrays ainda não existem no núcleo EXP-0.
+    let source = "function tamanho(xs: int[]): int { return 0; }";
+    let error = lower_source(source, "tamanho").expect_err("array está fora do subconjunto");
     assert!(
         matches!(error, AdapterError::Unsupported(_)),
         "erro inesperado: {error:?}"

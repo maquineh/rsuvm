@@ -14,9 +14,9 @@ Param     { name, ty }                       // ValueId implícito = índice
 Block     { id = índice, label, params: Vec<BlockParam>, instrs, term }
 BlockParam{ value: ValueId, name, ty }
 Instr     { def: ValueId, op: Op }
-Op        = const_i64 | const_bool | const_str | bin(op,lhs,rhs) | cmp(op,lhs,rhs)
+Op        = const_i64 | const_bool | const_str | const_f64 | bin(op,lhs,rhs) | cmp(op,lhs,rhs)
           | str_eq(lhs,rhs) | str_ne(lhs,rhs) | str_len(operand) | concat_str(lhs,rhs)
-          | call(callee,args)
+          | float(op,lhs,rhs) | call(callee,args)
 Term      = return [v] | br(target,args) | cond_br(cond, target, target)
 ~~~
 
@@ -87,6 +87,9 @@ Depois de `structure::check`:
    | `str_eq`, `str_ne` | `string`, `string` | `bool` |
    | `str_len` | `string` | `i64` |
    | `concat_str` | `string`, `string` | `string` |
+   | `const_f64` | — | `f64` |
+   | `add_f64`/`sub_f64`/`mul_f64`/`div_f64` | `f64`, `f64` | `f64` |
+   | `eq_f64`/`ne_f64`/`lt_f64`/`le_f64`/`gt_f64`/`ge_f64` | `f64`, `f64` | `bool` |
    | comparações `*_i64` | `i64`, `i64` | `bool` |
    | `call_static` | casam com `params` do alvo | `ret` do alvo |
    Qualquer divergência ⇒ `invalid_type`.
@@ -121,6 +124,8 @@ terminador por último. O primeiro erro vence.
 - `const_str`/`str_eq`/`str_ne`/`str_len` operam sobre `string`; `concat_str`
   cobra os bytes do resultado na quota (cumulativo) e falha com `out_of_memory`
   (quota) ou `string_too_long` (acima de `ExecConfig::max_string_bytes`, ADR-0025).
+- `const_f64`/`Float` operam sobre `f64` com **IEEE-754 sem trap** (divisão por zero
+  → `inf`/`NaN`; comparações com `NaN` são falsas exceto `!=`, ADR-0026).
 - `br`/`cond_br` copiam os argumentos para os slots dos parâmetros do bloco alvo
   antes de saltar (phi explícito).
 - `return` devolve `Value::Unit` quando não há valor.

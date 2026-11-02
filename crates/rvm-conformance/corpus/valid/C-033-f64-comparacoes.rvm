@@ -1,0 +1,17 @@
+; id: C-033
+; expect: value bool:true
+; args: f64:3.5, f64:3.5
+; extra: comparações f64 (eq/ne/lt/le/gt/ge, ADR-0026)
+module c033 version 1
+entry compara
+
+fn compara(a: f64, b: f64) -> bool {
+  entry:
+    v2 = eq_f64 a, b
+    v3 = ne_f64 a, b
+    v4 = lt_f64 a, b
+    v5 = le_f64 a, b
+    v6 = gt_f64 a, b
+    v7 = ge_f64 a, b
+    return v7
+}

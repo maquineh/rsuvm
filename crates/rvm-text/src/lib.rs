@@ -57,7 +57,7 @@ use rvm_ir::{
     Block, BlockId, BlockParam, BranchTarget, FnId, Function, Instr, Module, Op, Param, Terminator,
     ValueId,
 };
-use rvm_spec::{BinOp, CmpOp, ErrorCode, Limits, Location, RvmError, Type, IR_VERSION};
+use rvm_spec::{BinOp, CmpOp, ErrorCode, FloatOp, Limits, Location, RvmError, Type, IR_VERSION};
 
 /// Converte o texto experimental em um módulo RIR estruturalmente válido.
 ///
@@ -207,6 +207,16 @@ fn print_escaped(text: &str, out: &mut String) {
     }
 }
 
+/// Formata um `f64` como literal reparseável (garante `.` ou expoente).
+fn format_f64(value: f64) -> String {
+    let text = format!("{value}");
+    if text.contains('.') || text.contains('e') || text.contains('E') {
+        text
+    } else {
+        format!("{text}.0")
+    }
+}
+
 fn print_op(module: &Module, function: &Function, op: &Op, out: &mut String) {
     match op {
         Op::ConstI64(value) => {
@@ -221,6 +231,17 @@ fn print_op(module: &Module, function: &Function, op: &Op, out: &mut String) {
             out.push_str("const_str \"");
             print_escaped(text, out);
             out.push('"');
+        }
+        Op::ConstF64(bits) => {
+            out.push_str("const_f64 ");
+            out.push_str(&format_f64(f64::from_bits(*bits)));
+        }
+        Op::Float { op, lhs, rhs } => {
+            out.push_str(op.name());
+            out.push(' ');
+            print_value(function, *lhs, out);
+            out.push_str(", ");
+            print_value(function, *rhs, out);
         }
         Op::StrEq { lhs, rhs } => {
             out.push_str("str_eq ");
@@ -326,6 +347,7 @@ fn print_value(function: &Function, value: ValueId, out: &mut String) {
 enum Token {
     Ident(String),
     Int(i64),
+    Float(FloatBits),
     Str(String),
     LBrace,
     RBrace,
@@ -433,17 +455,49 @@ fn lex_number(input: &str, bytes: &[u8], start: usize) -> Result<(Token, usize),
     while let Some(b'0'..=b'9') = bytes.get(end).copied() {
         end += 1;
     }
+    // Parte fracionária exige ao menos um dígito após o ponto; senão é inteiro.
+    let mut is_float = false;
+    if bytes.get(end).copied() == Some(b'.')
+        && matches!(bytes.get(end + 1).copied(), Some(b'0'..=b'9'))
+    {
+        is_float = true;
+        end += 1;
+        while let Some(b'0'..=b'9') = bytes.get(end).copied() {
+            end += 1;
+        }
+    }
     let slice = input
         .get(start..end)
         .ok_or_else(|| syntax_error(format!("número inválido no byte {start}")))?;
-    let value = slice.parse::<i64>().map_err(|_| {
-        RvmError::new(
-            ErrorCode::InvalidNumber,
-            format!("literal `{slice}` não cabe em i64"),
-        )
-        .at(Location::Module)
-    })?;
-    Ok((Token::Int(value), end))
+    if is_float {
+        let value = slice.parse::<f64>().map_err(|_| {
+            RvmError::new(
+                ErrorCode::InvalidNumber,
+                format!("literal `{slice}` não é um f64 válido"),
+            )
+            .at(Location::Module)
+        })?;
+        Ok((Token::Float(FloatBits(value.to_bits())), end))
+    } else {
+        let value = slice.parse::<i64>().map_err(|_| {
+            RvmError::new(
+                ErrorCode::InvalidNumber,
+                format!("literal `{slice}` não cabe em i64"),
+            )
+            .at(Location::Module)
+        })?;
+        Ok((Token::Int(value), end))
+    }
+}
+
+/// Bits IEEE-754 de um literal `f64` (permite `Eq` em [`Token`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct FloatBits(u64);
+
+impl FloatBits {
+    fn value(self) -> f64 {
+        f64::from_bits(self.0)
+    }
 }
 
 fn lex_ident(input: &str, bytes: &[u8], start: usize) -> Result<(Token, usize), RvmError> {
@@ -567,8 +621,10 @@ enum RawOp {
     ConstI64(i64),
     ConstBool(bool),
     ConstStr(String),
+    ConstF64(u64),
     Bin(BinOp, String, String),
     Cmp(CmpOp, String, String),
+    Float(FloatOp, String, String),
     StrEq(String, String),
     StrNe(String, String),
     StrLen(String),
@@ -658,6 +714,17 @@ impl Parser {
                 let text = text.clone();
                 self.bump();
                 Ok(text)
+            }
+            _ => Err(self.syntax(format!("esperado {what}"))),
+        }
+    }
+
+    fn expect_float(&mut self, what: &str) -> Result<f64, RvmError> {
+        match self.peek() {
+            Token::Float(bits) => {
+                let value = bits.value();
+                self.bump();
+                Ok(value)
             }
             _ => Err(self.syntax(format!("esperado {what}"))),
         }
@@ -922,6 +989,7 @@ impl Parser {
                 }
             }
             "const_str" => RawOp::ConstStr(self.expect_string("literal string")?),
+            "const_f64" => RawOp::ConstF64(self.expect_float("literal f64")?.to_bits()),
             "str_eq" => {
                 let lhs = self.expect_ident("operando esquerdo")?;
                 self.expect_token(Token::Comma, "`,` entre operandos")?;
@@ -969,6 +1037,11 @@ impl Parser {
                     self.expect_token(Token::Comma, "`,` entre operandos")?;
                     let rhs = self.expect_ident("operando direito")?;
                     RawOp::Cmp(cmp, lhs, rhs)
+                } else if let Some(float) = FloatOp::from_name(other) {
+                    let lhs = self.expect_ident("operando esquerdo")?;
+                    self.expect_token(Token::Comma, "`,` entre operandos")?;
+                    let rhs = self.expect_ident("operando direito")?;
+                    RawOp::Float(float, lhs, rhs)
                 } else {
                     return Err(RvmError::new(
                         ErrorCode::UnknownOpcode,
@@ -1265,6 +1338,12 @@ fn lower_op(
         RawOp::ConstI64(value) => Op::ConstI64(*value),
         RawOp::ConstBool(value) => Op::ConstBool(*value),
         RawOp::ConstStr(text) => Op::ConstStr(text.clone()),
+        RawOp::ConstF64(bits) => Op::ConstF64(*bits),
+        RawOp::Float(op, lhs, rhs) => Op::Float {
+            op: *op,
+            lhs: value(lhs)?,
+            rhs: value(rhs)?,
+        },
         RawOp::StrEq(lhs, rhs) => Op::StrEq {
             lhs: value(lhs)?,
             rhs: value(rhs)?,
@@ -1480,7 +1559,7 @@ fn escolhe(c: bool) -> i64 {
         );
         assert_eq!(
             error_code(
-                "module m version 1\nentry f\nfn f(a: f64) -> unit {\n  entry:\n    return\n}\n"
+                "module m version 1\nentry f\nfn f(a: f32) -> unit {\n  entry:\n    return\n}\n"
             ),
             ErrorCode::UnknownType
         );

@@ -24,21 +24,22 @@ pode importar Lift: adaptadores ficam fora de `crates/`.
    `lift_parser`, `lift_sema`) e de `rvm-spec`/`rvm-ir` por path. O **núcleo**
    permanece sem dependências externas.
 3. **Subconjunto** suportado: funções com parâmetros/retorno `int` (`i64`),
-   `boolean` (`bool`), `string` (`string`) ou `void` (`unit`); `let`/`const`,
-   **atribuição**, `return`, `if`/`else if`/`else` (inclusive **merge** e `if` sem
-   `else`) e **`while`**; expressões `int`/`boolean`/`string` literais, locais,
-   `+ - * / %`, comparações `== != < <= > >=` (`==`/`!=` de `string` por conteúdo;
-   `+` de `string` é concatenação), negação `-x`, lógica `!`/`&&`/`||`
-   (**curto-circuito**) e chamadas a funções do próprio programa.
+   `boolean` (`bool`), `string` (`string`), `number` (`f64`) ou `void` (`unit`);
+   `let`/`const`, **atribuição**, `return`, `if`/`else if`/`else` (inclusive
+   **merge** e `if` sem `else`) e **`while`**; expressões `int`/`boolean`/`string`/
+   `number` literais, locais, `+ - * / %`, comparações `== != < <= > >=` (`==`/`!=`
+   de `string` por conteúdo; `+` de `string` é concatenação; `f64` usa IEEE-754),
+   negação `-x`, lógica `!`/`&&`/`||` (**curto-circuito**) e chamadas a funções do
+   próprio programa.
 4. **Lowering CFG/SSA**: cada binding Lift (`BindingId`) é rastreado para o
    `ValueId` corrente; `if/else` e `while` viram blocos com **parâmetros de bloco**
    que carregam o ambiente (phi explícito) no merge do `if` e no cabeçalho do
    `while`; `+ - *` usam `*_i64_checked` (overflow vira trap), como no EXP-0.
-5. Fora do subconjunto (`coalesce`, `f64`, arrays, objetos, closures,
-   `console.log`, `import`, `struct`, statements de topo) devolve
+5. Fora do subconjunto (`coalesce`, arrays, objetos, closures, `console.log`,
+   `import`, `struct`, statements de topo) devolve
    [`AdapterError::Unsupported`], nunca um módulo incorreto. Divisão/resto foram
-   habilitadas pela **ADR-0022** e `string` pela **ADR-0024** (tipos/ops novos no
-   núcleo).
+   habilitadas pela **ADR-0022**, `string` pela **ADR-0024**/ADR-0025 e `f64` pela
+   **ADR-0026** (tipos/ops novos no núcleo).
 6. **Teste diferencial**: o valor executado na RSUVM é comparado com o **oráculo do
    Lift** (mesmo programa rodado pelo compilador do Lift), registrado em
    `docs/RELATORIOS/ADAPTADOR-LIFT-RIR.md`.
@@ -73,12 +74,11 @@ pode importar Lift: adaptadores ficam fora de `crates/`.
 
 ## Validação
 
-- `cargo test --manifest-path frontends/lift-rir/Cargo.toml`: **29 testes**
-  (`tests/diferencial.rs`: 20; `tests/cli.rs`: 9) — inclui `while` + atribuição,
+- `cargo test --manifest-path frontends/lift-rir/Cargo.toml`: **30 testes**
+  (`tests/diferencial.rs`: 21; `tests/cli.rs`: 9) — inclui `while` + atribuição,
   `if`/`else if`/`else` com merge, `&&`/`||`/`!` com curto-circuito, recursão
-  `fib`, `/` e `%`, `string` (literal, `==`/`!=` e `+` → concatenação), o trap de
-  divisão por zero, rejeição de `number` (f64) e os códigos de exit do `lift-run`
-  (0/2/3/4).
+  `fib`, `/` e `%`, `string` (literal, `==`/`!=` e `+`), `f64` (`number`), o trap de
+  divisão por zero, rejeição de array e os códigos de exit do `lift-run` (0/2/3/4).
 - **Diferencial**: `cargo run -p lift_cli -- run examples/rsuvm-oracle.lift` no
   Lift produz `30 5 7 9 3 true false 25 12 55 0`; `rsuvm-oracle2.lift` produz
   `15 0 7 0 1 2 10 3 6 0` — idênticos ao executado na RSUVM

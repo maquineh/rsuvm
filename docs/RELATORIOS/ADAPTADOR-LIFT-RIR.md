@@ -159,20 +159,36 @@ Saída do Lift (oráculo): `ola true false true`.
 O caso `junta` usa o oráculo `rsuvm-oracle6.lift` (o `+` de `string` do Lift é
 concatenação; ver ADR-0025).
 
+### 2.5 `f64` (`number`)
+
+Sexto programa de referência (`rsuvm-oracle7.lift`):
+
+```bash
+cargo run -p lift_cli -- run examples/rsuvm-oracle7.lift
+```
+
+Saída do Lift (oráculo): `1.5 true false`.
+
+| Caso (Lift) | Chamada | Oráculo Lift | RSUVM (RIR) | Igual? |
+|---|---|---|---|---|
+| `media` (`number` aritmética) | `media(1.0, 2.0)` | 1.5 | `f64:1.5` | sim |
+| `menor` (`<` de number) | `(1.0, 2.0)` | true | `bool:true` | sim |
+| `menor` | `(2.0, 1.0)` | false | `bool:false` | sim |
+
 Comando de verificação:
 
 ```bash
 cargo test --manifest-path frontends/lift-rir/Cargo.toml
 ```
 
-Resultado: `20 passed` (diferencial) + `9 passed` (CLI) = **29 passed; 0 failed**.
+Resultado: `21 passed` (diferencial) + `9 passed` (CLI) = **30 passed; 0 failed**.
 
 ## 3. Limitações
 
-1. Subconjunto ainda estreito: **sem** `coalesce`, `f64`, strings, arrays,
-   objetos, closures, `console.log`/`import`. Fora disso,
-   `AdapterError::Unsupported`. Divisão/resto e lógica curto-circuitada são
-   suportadas; strings exigiriam um tipo novo no núcleo.
+1. Subconjunto ainda estreito: **sem** `coalesce`, arrays, objetos, closures,
+   `console.log`/`import`. Fora disso, `AdapterError::Unsupported`. Divisão/resto,
+   `string` (com concatenação) e `f64` (`number`) são suportados; arrays exigiriam
+   um tipo novo no núcleo.
 2. O adaptador é um **workspace separado** e depende do Lift por git fixado; o
    núcleo RSUVM continua sem dependências externas.
 3. O teste compara com o oráculo do Lift **registrado**; não invoca o compilador do

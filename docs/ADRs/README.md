@@ -27,6 +27,7 @@ memória/transferência, integração Lift e integração Rio).
 | [0023](ADR-0023-DESLOCAMENTOS-E-BIT-A-BIT.md) | Deslocamentos e bit a bit inteiros no núcleo | Aceito experimentalmente |
 | [0024](ADR-0024-TIPO-STRING.md) | Tipo `string` (texto UTF-8 imutável) no núcleo | Aceito experimentalmente |
 | [0025](ADR-0025-CONCATENACAO-DE-STRING.md) | Concatenação de `string` com contabilização de memória | Aceito experimentalmente |
+| [0026](ADR-0026-TIPO-F64.md) | Tipo `f64` (ponto flutuante IEEE-754) no núcleo | Aceito experimentalmente |
 
 Estados usados: `Proposto`, `Aceito experimentalmente`, `Validado no escopo`,
 `Rejeitado`, `Substituído`. "Validado no escopo" exige critério e evidência

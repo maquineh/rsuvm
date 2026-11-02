@@ -36,7 +36,7 @@ use rvm_ir::structure;
 use rvm_ir::{
     Block, BlockParam, BranchTarget, Function, Instr, Module, Op, Param, Terminator, ValueId,
 };
-use rvm_spec::{BinOp, CmpOp, ErrorCode, Limits, RvmError, Type};
+use rvm_spec::{BinOp, CmpOp, ErrorCode, FloatOp, Limits, RvmError, Type};
 
 /// Magic bytes no início de todo arquivo codificado: `RSVMB1`.
 pub const MAGIC: [u8; 6] = *b"RSVMB1";
@@ -49,6 +49,7 @@ const TAG_UNIT: u8 = 0;
 const TAG_BOOL: u8 = 1;
 const TAG_I64: u8 = 2;
 const TAG_STR: u8 = 3;
+const TAG_F64: u8 = 4;
 
 // Opcodes de instrução (tabela de `BYTECODE-EXP-0-IMPLEMENTACAO.md` §1).
 const OP_CONST_I64: u8 = 0;
@@ -75,6 +76,17 @@ const OP_STR_EQ: u8 = 20;
 const OP_STR_NE: u8 = 21;
 const OP_STR_LEN: u8 = 22;
 const OP_CONCAT_STR: u8 = 23;
+const OP_CONST_F64: u8 = 24;
+const OP_ADD_F64: u8 = 25;
+const OP_SUB_F64: u8 = 26;
+const OP_MUL_F64: u8 = 27;
+const OP_DIV_F64: u8 = 28;
+const OP_EQ_F64: u8 = 29;
+const OP_NE_F64: u8 = 30;
+const OP_LT_F64: u8 = 31;
+const OP_LE_F64: u8 = 32;
+const OP_GT_F64: u8 = 33;
+const OP_GE_F64: u8 = 34;
 
 // Tipos de terminador (tabela de `BYTECODE-EXP-0-IMPLEMENTACAO.md` §1).
 const TERM_RETURN: u8 = 0;
@@ -262,6 +274,15 @@ fn encode_instr(out: &mut Vec<u8>, instr: &Instr) {
             push_u32(out, *lhs);
             push_u32(out, *rhs);
         }
+        Op::ConstF64(bits) => {
+            push_u8(out, OP_CONST_F64);
+            push_i64(out, *bits as i64);
+        }
+        Op::Float { op, lhs, rhs } => {
+            push_u8(out, float_opcode(*op));
+            push_u32(out, *lhs);
+            push_u32(out, *rhs);
+        }
         Op::Bin { op, lhs, rhs } => {
             push_u8(out, bin_opcode(*op));
             push_u32(out, *lhs);
@@ -423,6 +444,17 @@ fn read_instr(reader: &mut Reader<'_>, limits: &Limits) -> Result<Instr, RvmErro
             lhs: reader.read_u32("operando concat_str")?,
             rhs: reader.read_u32("operando concat_str")?,
         },
+        OP_CONST_F64 => Op::ConstF64(reader.read_i64("imediato const_f64")? as u64),
+        OP_ADD_F64 => read_float_operands(reader, FloatOp::Add)?,
+        OP_SUB_F64 => read_float_operands(reader, FloatOp::Sub)?,
+        OP_MUL_F64 => read_float_operands(reader, FloatOp::Mul)?,
+        OP_DIV_F64 => read_float_operands(reader, FloatOp::Div)?,
+        OP_EQ_F64 => read_float_operands(reader, FloatOp::Eq)?,
+        OP_NE_F64 => read_float_operands(reader, FloatOp::Ne)?,
+        OP_LT_F64 => read_float_operands(reader, FloatOp::Lt)?,
+        OP_LE_F64 => read_float_operands(reader, FloatOp::Le)?,
+        OP_GT_F64 => read_float_operands(reader, FloatOp::Gt)?,
+        OP_GE_F64 => read_float_operands(reader, FloatOp::Ge)?,
         OP_ADD_I64_CHECKED => read_bin_operands(reader, BinOp::AddI64Checked)?,
         OP_SUB_I64_CHECKED => read_bin_operands(reader, BinOp::SubI64Checked)?,
         OP_MUL_I64_CHECKED => read_bin_operands(reader, BinOp::MulI64Checked)?,
@@ -466,6 +498,13 @@ fn read_cmp_operands(reader: &mut Reader<'_>, op: CmpOp) -> Result<Op, RvmError>
     let lhs = reader.read_u32("operando esquerdo")?;
     let rhs = reader.read_u32("operando direito")?;
     Ok(Op::Cmp { op, lhs, rhs })
+}
+
+/// Lê os dois operandos `u32` de uma operação sobre `f64`.
+fn read_float_operands(reader: &mut Reader<'_>, op: FloatOp) -> Result<Op, RvmError> {
+    let lhs = reader.read_u32("operando esquerdo")?;
+    let rhs = reader.read_u32("operando direito")?;
+    Ok(Op::Float { op, lhs, rhs })
 }
 
 /// Lê o terminador; tipo fora da tabela é `unknown_opcode`.
@@ -514,6 +553,7 @@ fn read_type(reader: &mut Reader<'_>, what: &'static str) -> Result<Type, RvmErr
         TAG_BOOL => Ok(Type::Bool),
         TAG_I64 => Ok(Type::I64),
         TAG_STR => Ok(Type::Str),
+        TAG_F64 => Ok(Type::F64),
         tag => Err(decode_error(
             ErrorCode::UnknownType,
             format!("{what}: tag de tipo {tag} desconhecida"),
@@ -528,6 +568,7 @@ const fn type_tag(ty: Type) -> u8 {
         Type::Bool => TAG_BOOL,
         Type::I64 => TAG_I64,
         Type::Str => TAG_STR,
+        Type::F64 => TAG_F64,
     }
 }
 
@@ -556,6 +597,22 @@ const fn cmp_opcode(op: CmpOp) -> u8 {
         CmpOp::Le => OP_LE_I64,
         CmpOp::Gt => OP_GT_I64,
         CmpOp::Ge => OP_GE_I64,
+    }
+}
+
+/// Mapeia [`FloatOp`] para o opcode do layout.
+const fn float_opcode(op: FloatOp) -> u8 {
+    match op {
+        FloatOp::Add => OP_ADD_F64,
+        FloatOp::Sub => OP_SUB_F64,
+        FloatOp::Mul => OP_MUL_F64,
+        FloatOp::Div => OP_DIV_F64,
+        FloatOp::Eq => OP_EQ_F64,
+        FloatOp::Ne => OP_NE_F64,
+        FloatOp::Lt => OP_LT_F64,
+        FloatOp::Le => OP_LE_F64,
+        FloatOp::Gt => OP_GT_F64,
+        FloatOp::Ge => OP_GE_F64,
     }
 }
 

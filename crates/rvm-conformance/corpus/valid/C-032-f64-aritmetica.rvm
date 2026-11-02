@@ -1,0 +1,17 @@
+; id: C-032
+; expect: value f64:3.75
+; args: f64:7.5, f64:2.0
+; extra: aritmética f64 (const_f64/add/sub/mul/div, ADR-0026)
+module c032 version 1
+entry calcula
+
+fn calcula(a: f64, b: f64) -> f64 {
+  entry:
+    v2 = const_f64 0.5
+    v3 = add_f64 a, b
+    v4 = sub_f64 a, b
+    v5 = mul_f64 a, b
+    v6 = div_f64 a, b
+    v7 = add_f64 v4, v2
+    return v6
+}

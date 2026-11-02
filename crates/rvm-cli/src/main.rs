@@ -197,8 +197,11 @@ fn parse_argument(raw: &str) -> Result<Value, Failure> {
             other => Err(Failure::Usage(format!("bool inválido `{other}`"))),
         },
         "str" => Ok(Value::Str(value.to_string())),
+        "f64" => Ok(Value::F64(value.trim().parse().map_err(|error| {
+            Failure::Usage(format!("f64 inválido em `{raw}`: {error}"))
+        })?)),
         other => Err(Failure::Usage(format!(
-            "tipo de argumento não suportado `{other}` (use i64, bool, str ou unit)"
+            "tipo de argumento não suportado `{other}` (use i64, bool, f64, str ou unit)"
         ))),
     }
 }

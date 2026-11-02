@@ -124,12 +124,9 @@ fn string_executa_e_imprime() {
 
 #[test]
 fn construto_fora_do_subconjunto_sai_com_codigo_de_modulo() {
-    // `number` (f64) ainda não existe no núcleo EXP-0.
-    let file = temp_lift(
-        "numero",
-        "function metade(a: number): number { return a / 2; }",
-    );
-    let result = run(&[file.to_str().unwrap(), "metade", "--arg", "i64:10"]);
+    // Arrays ainda não existem no núcleo EXP-0.
+    let file = temp_lift("array", "function tamanho(xs: int[]): int { return 0; }");
+    let result = run(&[file.to_str().unwrap(), "tamanho"]);
     assert_eq!(result.code, Some(2), "esperava exit 2 (módulo)");
     let _ = fs::remove_file(file);
 }

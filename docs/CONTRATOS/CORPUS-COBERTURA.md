@@ -31,6 +31,17 @@ com valor esperado, e cada terminador em pelo menos um caso v√°lido. A verifica√
 | `str_ne` | C-029 |
 | `str_len` | C-028 |
 | `concat_str` | C-031 |
+| `const_f64` | C-032, C-033 |
+| `add_f64` | C-032 |
+| `sub_f64` | C-032 |
+| `mul_f64` | C-032 |
+| `div_f64` | C-032 |
+| `eq_f64` | C-033 |
+| `ne_f64` | C-033 |
+| `lt_f64` | C-033 |
+| `le_f64` | C-033 |
+| `gt_f64` | C-033 |
+| `ge_f64` | C-033 |
 | `eq_i64` | C-002 |
 | `ne_i64` | C-012 |
 | `lt_i64` | C-008 |

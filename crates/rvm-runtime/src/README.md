@@ -9,9 +9,10 @@ crate toca sistema operacional. Depende apenas de `rvm-spec`.
 
 ## Interface
 
-- `Value` — `Unit`, `Bool(bool)`, `I64(i64)`, `Str(String)` (Clone, não `Copy`);
-  `ty`, `as_bool`, `as_i64`, `as_str`, `matches_type`, `Display` estável
-  (`i64:30`, `bool:true`, `unit`, `str:<texto>`) (`lib.rs:Value`).
+- `Value` — `Unit`, `Bool(bool)`, `I64(i64)`, `Str(String)`, `F64(f64)` (Clone,
+  não `Copy` nem `Eq`); `ty`, `as_bool`, `as_i64`, `as_str`, `as_f64`,
+  `matches_type`, `Display` estável (`i64:30`, `bool:true`, `unit`, `str:<texto>`,
+  `f64:1.5`) (`lib.rs:Value`).
 - `DEFAULT_FUEL` — saldo padrão de execução (`100_000`).
 - `DEFAULT_MEMORY_LIMIT_BYTES` (16 MiB), `FRAME_BASE_BYTES` (256), `SLOT_BYTES`
   (24), `frame_cost(slots) -> u64` e `arg_buffer_cost(args) -> u64` — modelo
