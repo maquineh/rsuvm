@@ -122,6 +122,8 @@ Guia completo: [GUIA-USUARIO](./docs/GUIA-USUARIO.md). Para incorporar a VM:
   e [EVIDENCIAS-EXECUCAO](./docs/RELATORIOS/EVIDENCIAS-EXECUCAO.md): 176 testes
   verdes (o teste de symlink é `cfg(unix)` e o de junção é `cfg(windows)`),
   62 casos válidos + 42 inválidos no corpus.
+- Empacotamento e instalação limpa: [DRYRUN-RELEASE-0.1.0-alpha.1](./docs/RELATORIOS/DRYRUN-RELEASE-0.1.0-alpha.1.md).
+- Fuzzing curto: [FUZZING-EXP-0](./docs/RELATORIOS/FUZZING-EXP-0.md) §7.
 
 ## Segurança (limites declarados)
 
@@ -131,10 +133,11 @@ Canal privado para vulnerabilidades: [SECURITY.md](./SECURITY.md).
   isolamento de processo/OS; uso multi-tenant hostil exigiria isolamento externo
   revisado.
 - "Zero panic no corpus" descreve a rodada de testes, não ausência de
-  vulnerabilidade. Fuzzing de campanha e auditoria independente **não** foram
-  executados. O benchmark pré-registrado tem medições registradas (runner
-  dedicado e reexecução local pós ADR-0034/0035); H06 foi confirmada nos runs
-  `41429076866` e `41520845695`; ver
+  vulnerabilidade. Fuzzing de campanha **longa** e auditoria independente **não**
+  foram executados; houve campanha curta (3 × 120 s, run `41543777109`, 24,75 M
+  execuções, 0 crashes observados), que não prova ausência de falhas. O benchmark
+  pré-registrado tem medições registradas (runner dedicado e reexecução local pós
+  ADR-0034/0035); H06 foi confirmada nos runs `41429076866` e `41520845695`; ver
   [BENCHMARKS-PREREGISTRADOS](./docs/RELATORIOS/BENCHMARKS-PREREGISTRADOS.md).
 - Integração Lift/Rio **não** foi feita: bloqueios técnicos registrados em
   [BASELINE-RIO](./docs/RELATORIOS/BASELINE-RIO.md) e

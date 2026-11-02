@@ -94,3 +94,29 @@ Ferramenta: `cargo-fuzz` **0.13.2** + `libfuzzer-sys` **=0.4.13**, toolchain
   (`STATUS_DLL_NOT_FOUND`); o caminho é o job de CI em Linux.
 - "0 crashes em 120 s por alvo" descreve **apenas esta rodada**; não prova ausência
   de vulnerabilidade nem substitui auditoria.
+
+## 7. Campanha curta do alpha 0.1.0-alpha.1 — run 41543777109
+
+- **Data:** 2026-11-02
+- **Commit:** `49c8cbe`
+- **Ambiente:** GitHub Actions `ubuntu-latest`, toolchain nightly 1.101.0,
+  `cargo-fuzz` 0.13.2, `libfuzzer-sys` 0.4.13.
+- **Orçamento:** **120 s por alvo** (3 alvos; 363 s no total).
+- **Alvos:** `texto` (`rvm_text::parse`), `decoder` (`rvm_bytecode::decode`),
+  `verificador` (`parse` + `verify`).
+
+| Alvo | Execuções | Exec/s | Cobertura final (`cov`) | Corpus final | Unidades novas | Crashes |
+|---|---:|---:|---:|---:|---:|---:|
+| `texto` | 7 718 215 | 63 786 | 1 691 | 908 / 248 KB | 8 472 | 0 |
+| `decoder` | 9 693 927 | 80 115 | 897 | 873 / 159 KB | 5 380 | 0 |
+| `verificador` | 7 339 383 | 60 656 | 1 957 | 944 / 203 KB | 8 433 | 0 |
+
+- **Total:** **24 751 525 execuções**, **0 crashes observados**; nenhum diretório
+  `artifacts/` foi gerado, apenas corpus.
+- O corpus atualizado foi publicado como artefato `fuzz-artifacts` do run
+  `41543777109`; não foi mesclado ao repositório.
+- Execução local no Windows continua sem suporte à DLL de runtime do libFuzzer
+  (`STATUS_DLL_NOT_FOUND`); a campanha rodou no CI Linux.
+- **Limitações:** 2 minutos por alvo é uma campanha curta, não uma campanha de
+  longa duração; "0 crashes" não prova ausência de vulnerabilidade, não substitui
+  auditoria independente e não cobre caminhos fora do corpus/limites padrão.

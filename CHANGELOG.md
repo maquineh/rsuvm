@@ -32,6 +32,9 @@ compatibilidade entre versões.
   recusa de symlink/junção para fora e apenas arquivo regular.
 - Teto de 1 MiB por leitura e reserva de quota antes do IO.
 - `unsafe` proibido no workspace; nenhuma dependência externa no núcleo.
+- Campanha curta de fuzzing guiada por cobertura (run `41543777109`, 3 × 120 s,
+  **24 751 525 execuções, 0 crashes observados**); não é campanha de longa
+  duração nem auditoria.
 
 ### Limitações conhecidas
 
