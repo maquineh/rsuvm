@@ -141,4 +141,36 @@ bloqueado pela ausência de ligação estática (ADR pendente).
 
 ## A4 — Lift (item 7)
 
-A preencher na etapa A4.
+- Auditoria executada: `docs/RELATORIOS/BASELINE-LIFT.md` (LIFT-BASELINE-001),
+  commit imutável `691c344880ac85056bc4bc85bf1e513654769bb1`.
+- Licença **desconhecida** (sem `LICENSE`/`COPYING`/`NOTICE`, sem campo `license`);
+  AST/HIR públicas, mas execução por compilação nativa + Cargo (não VM); 6
+  dependências externas; subset incompatível.
+- Decisão: integração Lift **bloqueada** para este repositório —
+  `docs/ADRs/ADR-0017-INTEGRACAO-LIFT-BLOQUEADA.md`. ADR-0007 da fundação
+  preservado intacto. Nenhum código do Lift foi copiado.
+
+### Verificação (Resultado)
+
+| Comando | Resultado |
+|---|---|
+| `git ls-remote https://github.com/maquineh/lift` | `HEAD = 691c3448…` |
+| inspeção estática (arquivos, deps, `unsafe`, CI) | registrada em `BASELINE-LIFT.md` |
+| `cargo test --workspace` | 134 passed, 0 failed |
+| `cargo clippy --workspace --all-targets -- -D warnings` | exit 0 |
+| `cargo fmt --all -- --check` | exit 0 |
+
+Limite: a auditoria é **inspeção estática**; o Lift não foi compilado nem
+executado, e a licença continua pendente de decisão do mantenedor.
+
+## Próximas etapas (B1/B2)
+
+B1/B2 tomam as lacunas remanescentes do `RELATORIO-IMPLEMENTACAO.md` (§9). Recorte
+proposto a confirmar com o mantenedor:
+
+- **B1 — ligação estática inter-módulo**: decidir em ADR e implementar a chamada
+  entre módulos para destravar H03/H06 (hoje `call_static` só alcança o próprio
+  módulo).
+- **B2 — campanha ampliada de fuzzing/benchmark**: fuzzer guiado por cobertura
+  (com ADR de dependência de desenvolvimento) e execução do benchmark
+  inter-módulo pré-registrado.

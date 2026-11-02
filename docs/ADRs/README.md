@@ -18,6 +18,7 @@ memória/transferência, integração Lift e integração Rio).
 | [0014](ADR-0014-LICENCA-DO-REPOSITORIO.md) | Licença dupla `MIT OR Apache-2.0` do repositório | Aceito experimentalmente |
 | [0015](ADR-0015-POLITICA-DE-REUSO-DO-RIO.md) | Política de reuso do Rio (referência comportamental) | Aceito experimentalmente |
 | [0016](ADR-0016-MEMORIA-DE-BUFFERS-DE-ARGUMENTOS.md) | Buffers transitórios de argumentos na quota de memória | Aceito experimentalmente |
+| [0017](ADR-0017-INTEGRACAO-LIFT-BLOQUEADA.md) | Integração Lift bloqueada com evidência (LIFT-BASELINE-001) | Aceito experimentalmente |
 
 Estados usados: `Proposto`, `Aceito experimentalmente`, `Validado no escopo`,
 `Rejeitado`, `Substituído`. "Validado no escopo" exige critério e evidência

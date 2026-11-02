@@ -108,7 +108,8 @@ cargo run -p rvm-cli -- check examples/soma.rvm
   vulnerabilidade. Fuzzing de campanha, benchmark e auditoria independente **não**
   foram executados.
 - Integração Lift/Rio está bloqueada com evidência: ver
-  [BASELINE-RIO](./docs/RELATORIOS/BASELINE-RIO.md).
+  [BASELINE-RIO](./docs/RELATORIOS/BASELINE-RIO.md) e
+  [BASELINE-LIFT](./docs/RELATORIOS/BASELINE-LIFT.md).
 
 ## Licença
 
