@@ -8,9 +8,9 @@
 
 use std::collections::BTreeSet;
 
-use rvm_spec::{ErrorCode, Limits, Location, RvmError, IR_VERSION};
+use rvm_spec::{ErrorCode, Limits, Location, RvmError, Type, IR_VERSION};
 
-use crate::{BranchTarget, Function, Module, Op, Terminator};
+use crate::{BranchTarget, Function, Module, Op, StructDef, Terminator};
 
 /// Resultado da checagem estrutural: `Ok(())` ou o primeiro diagnóstico.
 ///
@@ -28,6 +28,7 @@ pub fn check(module: &Module, limits: &Limits) -> Result<(), RvmError> {
         ));
     }
     check_name(&module.name, "nome do módulo", &Location::Module, limits)?;
+    check_structs(module, limits)?;
 
     let function_count = module.functions.len();
     if function_count == 0 {
@@ -72,7 +73,103 @@ pub fn check(module: &Module, limits: &Limits) -> Result<(), RvmError> {
 
     let mut function_names: BTreeSet<&str> = BTreeSet::new();
     for (index, function) in module.functions.iter().enumerate() {
-        check_function(function, index, function_count, limits, &mut function_names)?;
+        check_function(
+            function,
+            index,
+            function_count,
+            &module.structs,
+            limits,
+            &mut function_names,
+        )?;
+    }
+    Ok(())
+}
+
+/// Valida a tabela de structs: IDs densos, nomes e campos válidos, campos escalares.
+fn check_structs(module: &Module, limits: &Limits) -> Result<(), RvmError> {
+    if module.structs.len() > limit(limits.max_structs) {
+        return Err(invalid(
+            ErrorCode::InvalidModule,
+            format!(
+                "limite de structs excedido: {} > {}",
+                module.structs.len(),
+                limits.max_structs
+            ),
+            Location::Module,
+        ));
+    }
+    let mut names: BTreeSet<&str> = BTreeSet::new();
+    for (index, def) in module.structs.iter().enumerate() {
+        if def.id as usize != index {
+            return Err(invalid(
+                ErrorCode::InvalidModule,
+                format!(
+                    "ID de struct {} não é denso: esperado {index} na posição {index}",
+                    def.id
+                ),
+                Location::Module,
+            ));
+        }
+        check_name(&def.name, "nome de struct", &Location::Module, limits)?;
+        if !names.insert(def.name.as_str()) {
+            return Err(invalid(
+                ErrorCode::InvalidModule,
+                format!("nome de struct duplicado `{}`", def.name),
+                Location::Module,
+            ));
+        }
+        if def.fields.len() > limit(limits.max_fields_per_struct) {
+            return Err(invalid(
+                ErrorCode::InvalidModule,
+                format!(
+                    "limite de campos excedido na struct `{}`: {} > {}",
+                    def.name,
+                    def.fields.len(),
+                    limits.max_fields_per_struct
+                ),
+                Location::Module,
+            ));
+        }
+        let mut field_names: BTreeSet<&str> = BTreeSet::new();
+        for field in &def.fields {
+            check_name(&field.name, "nome de campo", &Location::Module, limits)?;
+            if !field_names.insert(field.name.as_str()) {
+                return Err(invalid(
+                    ErrorCode::InvalidModule,
+                    format!("campo duplicado `{}` na struct `{}`", field.name, def.name),
+                    Location::Module,
+                ));
+            }
+            if !is_scalar_field(field.ty) {
+                return Err(invalid(
+                    ErrorCode::InvalidType,
+                    format!(
+                        "campo `{}` da struct `{}` tem tipo {}; campos precisam ser escalares",
+                        field.name, def.name, field.ty
+                    ),
+                    Location::Module,
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Campo de struct precisa ser escalar (`bool`/`i64`/`string`/`f64`).
+fn is_scalar_field(ty: Type) -> bool {
+    matches!(ty, Type::Bool | Type::I64 | Type::Str | Type::F64)
+}
+
+/// Exige que um `Type::Struct(id)` referencie uma struct existente.
+fn check_type_ref(ty: Type, structs: &[StructDef], location: &Location) -> Result<(), RvmError> {
+    if let Type::Struct(id) = ty {
+        if !index_in_range(id, structs.len()) {
+            return Err(invalid(
+                ErrorCode::InvalidModule,
+                format!("struct {id} referenciada não existe no módulo"),
+                location.clone(),
+            ));
+        }
     }
     Ok(())
 }
@@ -81,6 +178,7 @@ fn check_function<'a>(
     function: &'a Function,
     index: usize,
     module_function_count: usize,
+    structs: &[StructDef],
     limits: &Limits,
     function_names: &mut BTreeSet<&'a str>,
 ) -> Result<(), RvmError> {
@@ -106,6 +204,7 @@ fn check_function<'a>(
             location,
         ));
     }
+    check_type_ref(function.ret, structs, &location)?;
     if function.params.len() > limit(limits.max_params) {
         return Err(invalid(
             ErrorCode::InvalidModule,
@@ -123,6 +222,7 @@ fn check_function<'a>(
     for param in &function.params {
         check_name(&param.name, "nome de parâmetro", &location, limits)?;
         reject_reserved(&param.name, &location)?;
+        check_type_ref(param.ty, structs, &location)?;
         if !named_values.insert(param.name.as_str()) {
             return Err(invalid(
                 ErrorCode::InvalidModule,
@@ -216,6 +316,7 @@ fn check_function<'a>(
                 limits,
             )?;
             reject_reserved(&param.name, &block_location)?;
+            check_type_ref(param.ty, structs, &block_location)?;
             if !named_values.insert(param.name.as_str()) {
                 return Err(invalid(
                     ErrorCode::InvalidModule,
@@ -308,6 +409,26 @@ fn check_function<'a>(
                             "array literal com {} elemento(s); esperado 1..={}",
                             items.len(),
                             limits.max_array_len
+                        ),
+                        instr_location.clone(),
+                    ));
+                }
+            }
+            if let Op::StructNew { struct_id, fields } = &instr.op {
+                if !index_in_range(*struct_id, structs.len()) {
+                    return Err(invalid(
+                        ErrorCode::InvalidModule,
+                        format!("struct {struct_id} construída não existe no módulo"),
+                        instr_location.clone(),
+                    ));
+                }
+                if fields.len() > limit(limits.max_fields_per_struct) {
+                    return Err(invalid(
+                        ErrorCode::InvalidModule,
+                        format!(
+                            "limite de campos excedido em struct_new: {} > {}",
+                            fields.len(),
+                            limits.max_fields_per_struct
                         ),
                         instr_location.clone(),
                     ));
@@ -739,6 +860,7 @@ mod tests {
             name: "m".to_string(),
             version: IR_VERSION,
             entry: 0,
+            structs: Vec::new(),
             functions: vec![Function {
                 id: 0,
                 name: "main".to_string(),

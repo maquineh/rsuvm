@@ -4,10 +4,11 @@
 - **Adaptador:** `frontends/lift-rir` (workspace separado; ADR-0021)
 - **Lift de origem:** commit `5e59af55baba7af53f8763140d35c972399d2851`
   (`https://github.com/maquineh/lift`, licença `MIT OR Apache-2.0`)
-- **Escopo:** subconjunto de funções `int`/`boolean`/`string`/`number`/`void` e
-  arrays de escalares, com `let`/`const`, **atribuição** (a binding e a elemento de
-  array), `return`, `if`/`else if`/`else` (com merge), **`while`** e lógica
-  `!`/`&&`/`||` com curto-circuito (ver ADR-0021)
+- **Escopo:** subconjunto de funções `int`/`boolean`/`string`/`number`/`void`,
+  arrays de escalares e structs (`interface`) com campos escalares, com
+  `let`/`const`, **atribuição** (a binding e a elemento de array), `return`,
+  `if`/`else if`/`else` (com merge), **`while`** e lógica `!`/`&&`/`||` com
+  curto-circuito (ver ADR-0021)
 
 ## 1. Pipeline
 
@@ -220,14 +221,36 @@ usado só como objeto de indexação); arrays possivelmente aliasados devolvem
 
 Resultado: `25 passed` (diferencial) + `9 passed` (CLI) = **34 passed; 0 failed**.
 
+### 2.8 Structs (`interface`)
+
+Nono programa de referência (`rsuvm-oracle10.lift`):
+
+```bash
+cargo run -p lift_cli -- run examples/rsuvm-oracle10.lift
+```
+
+Saída do Lift (oráculo): `7 ana 42`.
+
+| Caso (Lift) | Chamada | Oráculo Lift | RSUVM (RIR) | Igual? |
+|---|---|---|---|---|
+| `soma` (literal + `p.x`) | `soma()` | 7 | `i64:7` | sim |
+| `nome` (campos `string`/`boolean`) | `nome()` | ana | `str:ana` | sim |
+| `usa` (struct como parâmetro) | `usa()` | 42 | `i64:42` | sim |
+
+O adaptador mapeia `interface Nome { … }` para a tabela de structs, o literal
+`{ campo: valor }` para `struct_new` (na ordem declarada) e `obj.campo` para
+`field_get` (ADR-0029). Campos não escalares (arrays, structs) são rejeitados.
+
+Resultado: `27 passed` (diferencial) + `9 passed` (CLI) = **36 passed; 0 failed**.
+
 ## 3. Limitações
 
-1. Subconjunto ainda estreito: **sem** `coalesce`, objetos/structs, closures,
+1. Subconjunto ainda estreito: **sem** `coalesce`, closures,
    `console.log`/`import`. Fora disso, `AdapterError::Unsupported`. Divisão/resto,
-   `string` (com concatenação), `f64` (`number`) e arrays (literal, índice e
-   `xs[i] = v`) são suportados; a atribuição a elemento exige que o array seja um
-   local não-aliasado (ADR-0028) e objetos/structs ainda exigiriam um tipo novo no
-   núcleo.
+   `string` (com concatenação), `f64` (`number`), arrays (literal, índice e
+   `xs[i] = v`) e structs (`interface`, literal e `obj.campo`) são suportados; a
+   atribuição a elemento exige que o array seja um local não-aliasado (ADR-0028) e
+   structs só aceitam campos escalares (ADR-0029).
 2. O adaptador é um **workspace separado** e depende do Lift por git fixado; o
    núcleo RSUVM continua sem dependências externas.
 3. O teste compara com o oráculo do Lift **registrado**; não invoca o compilador do

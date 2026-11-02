@@ -83,6 +83,9 @@ aparecem durante a execução de um `VerifiedModule`.
 | N-029 índice de array fora dos limites | `index_out_of_bounds` | execução (trap) |
 | N-030 `array_set` fora dos limites | `index_out_of_bounds` | execução (trap) |
 | N-031 `array_set` com valor de tipo errado | `invalid_type` | verificação |
+| N-032 `field_get` sobre não-struct | `invalid_type` | verificação |
+| N-033 `field_get` com campo inexistente | `invalid_type` | verificação |
+| N-034 `struct_new` com valor de tipo errado | `invalid_type` | verificação |
 
 `invalid_module` também cobre limite estrutural excedido: a distinção entre
 "estrutura inválida" e "quota de execução" é feita por `class`, não pelo texto.

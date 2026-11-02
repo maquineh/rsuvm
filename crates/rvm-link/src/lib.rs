@@ -62,6 +62,12 @@ pub fn link(
                 module.name
             )));
         }
+        if !module.structs.is_empty() {
+            return Err(module_error(format!(
+                "módulo `{}` declara structs; ligação com structs ainda não é suportada (ADR-0029)",
+                module.name
+            )));
+        }
     }
 
     // ID global de cada função concreta e mapa nome -> ID (`None` = ambíguo).
@@ -164,6 +170,7 @@ pub fn link(
         name: format!("linked_{entry_module_name}"),
         version: IR_VERSION,
         entry,
+        structs: Vec::new(),
         functions: global_functions,
     };
     rvm_ir::structure::check(&linked, limits)?;

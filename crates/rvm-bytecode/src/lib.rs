@@ -34,7 +34,8 @@
 
 use rvm_ir::structure;
 use rvm_ir::{
-    Block, BlockParam, BranchTarget, Function, Instr, Module, Op, Param, Terminator, ValueId,
+    Block, BlockParam, BranchTarget, FieldDef, Function, Instr, Module, Op, Param, StructDef,
+    Terminator, ValueId,
 };
 use rvm_spec::{ArrayElem, BinOp, CmpOp, ErrorCode, FloatOp, Limits, RvmError, Type};
 
@@ -51,6 +52,7 @@ const TAG_I64: u8 = 2;
 const TAG_STR: u8 = 3;
 const TAG_F64: u8 = 4;
 const TAG_ARRAY: u8 = 5;
+const TAG_STRUCT: u8 = 6;
 
 // Opcodes de instrução (tabela de `BYTECODE-EXP-0-IMPLEMENTACAO.md` §1).
 const OP_CONST_I64: u8 = 0;
@@ -92,6 +94,8 @@ const OP_ARRAY: u8 = 35;
 const OP_ARRAY_LEN: u8 = 36;
 const OP_ARRAY_GET: u8 = 37;
 const OP_ARRAY_SET: u8 = 38;
+const OP_STRUCT_NEW: u8 = 39;
+const OP_FIELD_GET: u8 = 40;
 
 // Tipos de terminador (tabela de `BYTECODE-EXP-0-IMPLEMENTACAO.md` §1).
 const TERM_RETURN: u8 = 0;
@@ -118,6 +122,10 @@ pub fn encode(module: &Module) -> Vec<u8> {
     push_string(&mut out, &module.name);
     push_u16(&mut out, module.version);
     push_u32(&mut out, module.entry);
+    push_u16(&mut out, len_u16(module.structs.len()));
+    for def in &module.structs {
+        encode_struct(&mut out, def);
+    }
     push_u32(&mut out, len_u32(module.functions.len()));
     for function in &module.functions {
         encode_function(&mut out, function);
@@ -180,6 +188,12 @@ pub fn decode(bytes: &[u8], limits: &Limits) -> Result<Module, RvmError> {
     let module_version = reader.read_u16("module_version")?;
     let entry = reader.read_u32("entry_fn")?;
 
+    let struct_count = reader.read_count_u16(limits.max_structs, "contagem de structs")?;
+    let mut structs = Vec::with_capacity(struct_count);
+    for _ in 0..struct_count {
+        structs.push(read_struct(&mut reader, limits)?);
+    }
+
     // Contagem antes da alocação (invariante 5): `read_count_u32` compara com os
     // bytes restantes e com `max_functions` antes do `with_capacity` abaixo.
     let function_count = reader.read_count_u32(limits.max_functions, "contagem de funções")?;
@@ -201,6 +215,7 @@ pub fn decode(bytes: &[u8], limits: &Limits) -> Result<Module, RvmError> {
         name,
         version: module_version,
         entry,
+        structs,
         functions,
     };
     // Invariante 8: nenhum `Module` é devolvido sem a checagem estrutural. Ela
@@ -208,6 +223,17 @@ pub fn decode(bytes: &[u8], limits: &Limits) -> Result<Module, RvmError> {
     // IDs densos, nomes, alvos de desvio e limites.
     structure::check(&module, limits)?;
     Ok(module)
+}
+
+/// Escreve uma struct na ordem do layout (ADR-0029).
+fn encode_struct(out: &mut Vec<u8>, def: &StructDef) {
+    push_u32(out, def.id);
+    push_string(out, &def.name);
+    push_u16(out, len_u16(def.fields.len()));
+    for field in &def.fields {
+        push_string(out, &field.name);
+        push_type(out, field.ty);
+    }
 }
 
 /// Escreve os campos de uma função na ordem do layout.
@@ -314,6 +340,19 @@ fn encode_instr(out: &mut Vec<u8>, instr: &Instr) {
             push_u32(out, *index);
             push_u32(out, *value);
         }
+        Op::StructNew { struct_id, fields } => {
+            push_u8(out, OP_STRUCT_NEW);
+            push_u32(out, *struct_id);
+            push_u16(out, len_u16(fields.len()));
+            for field in fields {
+                push_u32(out, *field);
+            }
+        }
+        Op::FieldGet { object, field } => {
+            push_u8(out, OP_FIELD_GET);
+            push_u32(out, *object);
+            push_string(out, field);
+        }
         Op::Bin { op, lhs, rhs } => {
             push_u8(out, bin_opcode(*op));
             push_u32(out, *lhs);
@@ -404,6 +443,23 @@ fn read_function(reader: &mut Reader<'_>, limits: &Limits) -> Result<Function, R
         entry,
         blocks,
     })
+}
+
+/// Lê uma struct, já com contagens validadas antes de alocar (ADR-0029).
+fn read_struct(reader: &mut Reader<'_>, limits: &Limits) -> Result<StructDef, RvmError> {
+    let id = reader.read_u32("id de struct")?;
+    let name = reader.read_name(limits, "nome de struct")?;
+    let field_count = reader.read_count_u16(limits.max_fields_per_struct, "contagem de campos")?;
+    let mut fields = Vec::with_capacity(field_count);
+    for _ in 0..field_count {
+        let field_name = reader.read_name(limits, "nome de campo")?;
+        let ty = read_type(reader, "tipo de campo")?;
+        fields.push(FieldDef {
+            name: field_name,
+            ty,
+        });
+    }
+    Ok(StructDef { id, name, fields })
 }
 
 /// Lê um bloco inteiro, já com contagens validadas antes de alocar.
@@ -506,6 +562,20 @@ fn read_instr(reader: &mut Reader<'_>, limits: &Limits) -> Result<Instr, RvmErro
             index: reader.read_u32("índice de array_set")?,
             value: reader.read_u32("valor de array_set")?,
         },
+        OP_STRUCT_NEW => {
+            let struct_id = reader.read_u32("struct de struct_new")?;
+            let count =
+                reader.read_count_u16(limits.max_fields_per_struct, "campos de struct_new")?;
+            let mut fields: Vec<u32> = Vec::with_capacity(count);
+            for _ in 0..count {
+                fields.push(reader.read_u32("campo de struct_new")?);
+            }
+            Op::StructNew { struct_id, fields }
+        }
+        OP_FIELD_GET => Op::FieldGet {
+            object: reader.read_u32("operando field_get")?,
+            field: reader.read_name(limits, "campo de field_get")?,
+        },
         OP_ADD_I64_CHECKED => read_bin_operands(reader, BinOp::AddI64Checked)?,
         OP_SUB_I64_CHECKED => read_bin_operands(reader, BinOp::SubI64Checked)?,
         OP_MUL_I64_CHECKED => read_bin_operands(reader, BinOp::MulI64Checked)?,
@@ -606,6 +676,7 @@ fn read_type(reader: &mut Reader<'_>, what: &'static str) -> Result<Type, RvmErr
         TAG_STR => Ok(Type::Str),
         TAG_F64 => Ok(Type::F64),
         TAG_ARRAY => Ok(Type::Array(read_elem(reader, what)?)),
+        TAG_STRUCT => Ok(Type::Struct(reader.read_u32("id de struct do tipo")?)),
         tag => Err(decode_error(
             ErrorCode::UnknownType,
             format!("{what}: tag de tipo {tag} desconhecida"),
@@ -622,14 +693,17 @@ const fn type_tag(ty: Type) -> u8 {
         Type::Str => TAG_STR,
         Type::F64 => TAG_F64,
         Type::Array(_) => TAG_ARRAY,
+        Type::Struct(_) => TAG_STRUCT,
     }
 }
 
-/// Escreve um [`Type`]; arrays escrevem também a tag do elemento.
+/// Escreve um [`Type`]; arrays escrevem também a tag do elemento e structs o id.
 fn push_type(out: &mut Vec<u8>, ty: Type) {
     push_u8(out, type_tag(ty));
-    if let Type::Array(element) = ty {
-        push_u8(out, type_tag(element.ty()));
+    match ty {
+        Type::Array(element) => push_u8(out, type_tag(element.ty())),
+        Type::Struct(id) => push_u32(out, id),
+        _ => {}
     }
 }
 
@@ -988,6 +1062,7 @@ mod tests {
         expected.extend_from_slice(b"unidade");
         expected.extend_from_slice(&1u16.to_le_bytes()); // module_version
         expected.extend_from_slice(&0u32.to_le_bytes()); // entry_fn
+        expected.extend_from_slice(&0u16.to_le_bytes()); // struct_count
         expected.extend_from_slice(&1u32.to_le_bytes()); // function_count
         expected.extend_from_slice(&0u32.to_le_bytes()); // id da função
         expected.extend_from_slice(&4u16.to_le_bytes()); // comprimento de "main"

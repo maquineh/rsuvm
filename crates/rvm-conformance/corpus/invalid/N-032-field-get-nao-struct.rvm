@@ -1,0 +1,16 @@
+; id: N-032
+; expect: error invalid_type
+; extra: field_get exige operando struct (ADR-0029)
+module n032 version 1
+entry f
+
+struct Ponto {
+  x: i64
+}
+
+fn f() -> i64 {
+  entry:
+    v0 = const_i64 1
+    v1 = field_get v0, x
+    return v1
+}

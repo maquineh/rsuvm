@@ -1,0 +1,19 @@
+; id: C-040
+; expect: value str:ana
+; extra: struct com campos string e bool (ADR-0029)
+module c040 version 1
+entry nome
+
+struct Usuario {
+  nome: string
+  ativo: bool
+}
+
+fn nome() -> string {
+  entry:
+    v0 = const_str "ana"
+    v1 = const_bool true
+    v2 = struct_new Usuario v0, v1
+    v3 = field_get v2, nome
+    return v3
+}

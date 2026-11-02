@@ -18,17 +18,29 @@ arquivo:
   module_name      string
   module_version   u16 = 1
   entry_fn         u32
+  struct_count     u16
+  structs[]        struct_count vezes
   function_count   u32
   funções[]        function_count vezes
   -- fim do arquivo; bytes excedentes são rejeitados --
 
+struct:
+  id               u32
+  name             string
+  field_count      u16
+  fields[]         field_count vezes { name: string, ty: type }
+
+type:
+  tag              u8  (0=unit, 1=bool, 2=i64, 3=string, 4=f64, 5=array, 6=struct)
+  payload          array: u8 elem_tag; struct: u32 struct_id; senão: —
+
 function:
   id               u32
   name             string
-  ret_type         u8  (0=unit, 1=bool, 2=i64)
+  ret_type         type
   entry_block      u32
   param_count      u16
-  params[]         param_count vezes { name: string, ty: u8 }
+  params[]         param_count vezes { name: string, ty: type }
   block_count      u32
   blocks[]         block_count vezes
 
@@ -36,7 +48,7 @@ block:
   id               u32
   label            string
   block_param_count u16
-  block_params[]   { value_id: u32, name: string, ty: u8 }
+  block_params[]   { value_id: u32, name: string, ty: type }
   instr_count      u32
   instrs[]         instr_count vezes
   terminator       terminator
@@ -94,6 +106,8 @@ terminator:
 | 36 | `array_len` | `u32 array` |
 | 37 | `array_get` | `u32 array`, `u32 index` |
 | 38 | `array_set` | `u32 array`, `u32 index`, `u32 value` |
+| 39 | `struct_new` | `u32 struct_id`, `u16 count`, `u32 fields[count]` |
+| 40 | `field_get` | `u32 object`, `string field` |
 
 Código desconhecido ⇒ `unknown_opcode`.
 
@@ -121,7 +135,8 @@ Código desconhecido ⇒ `unknown_opcode`.
    comparada com o limite estrutural correspondente **e** com os bytes restantes
    antes de reservar memória. Contagem maior que os bytes restantes ⇒
    `truncated_input` (cada item consome ao menos 1 byte).
-6. Tag de tipo fora de `0..=5` (`unit`, `bool`, `i64`, `string`, `f64`, `array`) ⇒
+6. Tag de tipo fora de `0..=6` (`unit`, `bool`, `i64`, `string`, `f64`, `array`,
+   `struct`) ⇒
    `unknown_type`; `const_bool` fora de `0|1` ⇒
    `invalid_number`.
 7. Ao final, bytes excedentes ⇒ `invalid_module`.

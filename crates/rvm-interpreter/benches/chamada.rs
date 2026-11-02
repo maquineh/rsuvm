@@ -99,6 +99,7 @@ fn cadeia(k: u32) -> Module {
         name: format!("cadeia{k}"),
         version: IR_VERSION,
         entry: 0,
+        structs: Vec::new(),
         functions: vec![main, funcao_inc(1)],
     }
 }
@@ -133,6 +134,7 @@ fn app_externo(k: u32) -> Module {
         name: "app".to_string(),
         version: IR_VERSION,
         entry: 0,
+        structs: Vec::new(),
         functions: vec![main, externa],
     }
 }
@@ -143,6 +145,7 @@ fn prov() -> Module {
         name: "prov".to_string(),
         version: IR_VERSION,
         entry: 0,
+        structs: Vec::new(),
         functions: vec![funcao_inc(0)],
     }
 }

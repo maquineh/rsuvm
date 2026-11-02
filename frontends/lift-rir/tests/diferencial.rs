@@ -359,6 +359,31 @@ fn array_set_fora_dos_limites_trapa() {
 }
 
 #[test]
+fn struct_literal_e_acesso() {
+    // Oráculo do Lift (`rsuvm-oracle10.lift`): `7`, `ana`, `42`.
+    let source = "interface Ponto { x: int, y: int } \
+        interface Usuario { nome: string, ativo: boolean } \
+        interface Caixa { valor: int } \
+        function soma(): int { const p: Ponto = { x: 3, y: 4 }; return p.x + p.y; } \
+        function nome(): string { const u: Usuario = { nome: \"ana\", ativo: true }; return u.nome; } \
+        function soma_caixa(c: Caixa): int { return c.valor + 1; } \
+        function usa(): int { const c: Caixa = { valor: 41 }; return soma_caixa(c); }";
+    assert_eq!(executar(source, "soma", &[]), Value::I64(7));
+    assert_eq!(executar(source, "nome", &[]), Value::Str("ana".to_string()));
+    assert_eq!(executar(source, "usa", &[]), Value::I64(42));
+}
+
+#[test]
+fn struct_com_campo_nao_escalar_e_rejeitado() {
+    let source = "interface Bag { xs: int[] } function f(): int { return 0; }";
+    let error = lower_source(source, "f").expect_err("campo não escalar");
+    assert!(
+        matches!(error, AdapterError::Unsupported(_)),
+        "erro inesperado: {error:?}"
+    );
+}
+
+#[test]
 fn construto_fora_do_subconjunto_e_rejeitado() {
     // `console.log` (efeito de host) está fora do subconjunto.
     let source = "function f(): int { console.log(\"x\"); return 0; }";

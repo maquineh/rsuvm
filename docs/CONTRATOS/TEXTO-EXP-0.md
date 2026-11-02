@@ -9,14 +9,17 @@ sujeita a mudança sem compatibilidade.
 ## 1. Gramática
 
 ~~~text
-arquivo    = comentário* módulo import* entrada declaração_fn+ EOF ;
+arquivo    = comentário* módulo declaração_struct* import* entrada declaração_fn+ EOF ;
 módulo     = "module" ident "version" inteiro ;
+declaração_struct = "struct" ident "{" campo+ "}" ;
+campo      = ident ":" tipo_escalar ;
 import     = "import" ident ;
 entrada    = "entry" ident ;
 declaração_fn = "fn" ident "(" [parâmetros] ")" "->" tipo bloco+ ;
 parâmetros = parâmetro { "," parâmetro } ;
 parâmetro  = ident ":" tipo ;
-tipo       = "unit" | "bool" | "i64" | "string" ;
+tipo       = "unit" | "bool" | "i64" | "string" | "f64" | "struct" ident ;
+tipo_escalar = "bool" | "i64" | "string" | "f64" ;
 bloco      = rótulo [ "(" parâmetros ")" ] ":" instrução* terminador ;
 instrução  = ident "=" operação ;
 operação   = "const_i64" inteiro
@@ -33,6 +36,8 @@ operação   = "const_i64" inteiro
            | "array_len" valor
            | "array_get" valor "," valor
            | "array_set" valor "," valor "," valor
+           | "struct_new" ident valor { "," valor }
+           | "field_get" valor "," ident
            | "call_static" ident "(" [valores] ")" ;
 op_binário = "add_i64_checked" | "sub_i64_checked" | "mul_i64_checked"
            | "div_i64_checked" | "rem_i64_checked"
@@ -107,6 +112,8 @@ module <nome> version 1
 entry <nome_da_entrada>
 import <nome_da_funcao_externa>   ; opcional, zero ou mais
 
+struct <Nome> { <campo>: <tipo> ... }   ; opcional, zero ou mais
+
 fn <nome>(<param>: <tipo>, ...) -> <tipo> {
   <rótulo>:
     v<id> = <operação> <operandos>
@@ -156,8 +163,9 @@ linha dentro do literal é `syntax_error`; literal maior que
 
 ## 7. Fora do EXP-0
 
-Literais de string com interpolação, caracteres de escape não listados, arrays,
-registros, tipos genéricos, comentários de bloco, anotações, módulos múltiplos por
+Literais de string com interpolação, caracteres de escape não listados, arrays
+aninhados, structs aninhadas, tipos genéricos, comentários de bloco, anotações,
+módulos múltiplos por
 arquivo, ligação dinâmica, imports qualificados por módulo (`modulo.funcao`) e
 qualquer forma de açúcar sintático. A ligação inter-módulo é **estática** e feita
 pelo crate `rvm-link` (ADR-0018), fora do formato textual.

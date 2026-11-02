@@ -52,9 +52,9 @@
 )]
 
 use rvm_ir::{
-    Block, BlockId, BranchTarget, FnId, Function, Instr, Module, Op, Terminator, ValueId,
+    Block, BlockId, BranchTarget, FnId, Function, Instr, Module, Op, StructDef, Terminator, ValueId,
 };
-use rvm_spec::{ArrayElem, ErrorCode, Limits, Location, RvmError, Type};
+use rvm_spec::{ArrayElem, ErrorCode, Limits, Location, RvmError, StructId, Type};
 
 /// Módulo que passou pela verificação completa.
 ///
@@ -296,6 +296,40 @@ impl<'a> FunctionFacts<'a> {
                 self.check_operand_type(*index, Type::I64, location)?;
                 self.check_operand_type(*value, element.ty(), location)
             }
+            Op::StructNew { struct_id, fields } => {
+                for field in fields {
+                    self.check_use(block_index, instr_index, *field, location)?;
+                }
+                let def = self.struct_def(*struct_id, location)?;
+                if fields.len() != def.fields.len() {
+                    return Err(invalid(
+                        ErrorCode::InvalidType,
+                        format!(
+                            "struct_new de `{}` espera {} campo(s), recebeu {}",
+                            def.name,
+                            def.fields.len(),
+                            fields.len()
+                        ),
+                        location.clone(),
+                    ));
+                }
+                for (field, declared) in fields.iter().zip(def.fields.iter()) {
+                    self.check_operand_type(*field, declared.ty, location)?;
+                }
+                Ok(())
+            }
+            Op::FieldGet { object, field } => {
+                self.check_use(block_index, instr_index, *object, location)?;
+                let def = self.object_struct_def(*object, location)?;
+                if def.field(field).is_none() {
+                    return Err(invalid(
+                        ErrorCode::InvalidType,
+                        format!("struct `{}` não tem campo `{field}`", def.name),
+                        location.clone(),
+                    ));
+                }
+                Ok(())
+            }
             Op::Call { callee, args } => {
                 let target = self.module.function(*callee).ok_or_else(|| {
                     invalid(
@@ -501,6 +535,33 @@ impl<'a> FunctionFacts<'a> {
             other => Err(invalid(
                 ErrorCode::InvalidType,
                 format!("valor v{value} tem tipo {other}, esperado array"),
+                location.clone(),
+            )),
+        }
+    }
+
+    /// Definição da struct `id`, exigindo que exista no módulo.
+    fn struct_def(&self, id: StructId, location: &Location) -> Result<&StructDef, RvmError> {
+        self.module.struct_def(id).ok_or_else(|| {
+            invalid(
+                ErrorCode::InvalidModule,
+                format!("struct {id} não existe no módulo"),
+                location.clone(),
+            )
+        })
+    }
+
+    /// Definição da struct do tipo de `value`, exigindo que seja uma struct.
+    fn object_struct_def(
+        &self,
+        value: ValueId,
+        location: &Location,
+    ) -> Result<&StructDef, RvmError> {
+        match self.type_of_value(value, location)? {
+            Type::Struct(id) => self.struct_def(id, location),
+            other => Err(invalid(
+                ErrorCode::InvalidType,
+                format!("valor v{value} tem tipo {other}, esperado struct"),
                 location.clone(),
             )),
         }
@@ -856,6 +917,45 @@ fn build_values(
                         }
                     }
                 }
+                Op::StructNew { struct_id, .. } => Type::Struct(*struct_id),
+                Op::FieldGet { object, field } => {
+                    let object_index = value_index(*object, location)?;
+                    let object_ty =
+                        types.get(object_index).copied().flatten().ok_or_else(|| {
+                            invalid(
+                                ErrorCode::InvalidModule,
+                                "tipo do objeto desconhecido".to_string(),
+                                location.clone(),
+                            )
+                        })?;
+                    match object_ty {
+                        Type::Struct(id) => {
+                            let def = module.struct_def(id).ok_or_else(|| {
+                                invalid(
+                                    ErrorCode::InvalidModule,
+                                    format!("struct {id} não existe no módulo"),
+                                    location.clone(),
+                                )
+                            })?;
+                            def.field(field)
+                                .map(|declared| declared.ty)
+                                .ok_or_else(|| {
+                                    invalid(
+                                        ErrorCode::InvalidType,
+                                        format!("struct `{}` não tem campo `{field}`", def.name),
+                                        location.clone(),
+                                    )
+                                })?
+                        }
+                        _ => {
+                            return Err(invalid(
+                                ErrorCode::InvalidType,
+                                "field_get sobre valor que não é struct".to_string(),
+                                location.clone(),
+                            ))
+                        }
+                    }
+                }
                 other => operation_type(module, other, location)?,
             };
             record_type(&mut types, index, ty, location)?;
@@ -886,6 +986,9 @@ fn operation_type(module: &Module, op: &Op, location: &Location) -> Result<Type,
         Op::ArrayLen { .. } => Ok(Type::I64),
         Op::ArrayGet { .. } => Ok(Type::I64),
         Op::ArraySet { .. } => Ok(Type::Array(ArrayElem::I64)),
+        Op::StructNew { struct_id, .. } => Ok(Type::Struct(*struct_id)),
+        // `FieldGet` é resolvido em `build_values` (depende do tipo do objeto).
+        Op::FieldGet { .. } => Ok(Type::Unit),
         Op::Call { callee, .. } => module
             .function(*callee)
             .map(|target| target.ret)
@@ -1055,6 +1158,7 @@ mod tests {
             name: "entrada".to_string(),
             version: IR_VERSION,
             entry: 0,
+            structs: Vec::new(),
             functions: vec![Function {
                 id: 0,
                 name: "main".to_string(),

@@ -97,6 +97,7 @@ fn modulo_concat() -> Module {
         name: "concat".to_string(),
         version: IR_VERSION,
         entry: 0,
+        structs: Vec::new(),
         functions: vec![Function {
             id: 0,
             name: "junta".to_string(),

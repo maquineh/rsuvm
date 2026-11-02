@@ -1,0 +1,21 @@
+; id: C-039
+; expect: value i64:7
+; extra: struct_new e field_get sobre campos i64 (ADR-0029)
+module c039 version 1
+entry le
+
+struct Ponto {
+  x: i64
+  y: i64
+}
+
+fn le() -> i64 {
+  entry:
+    v0 = const_i64 3
+    v1 = const_i64 4
+    v2 = struct_new Ponto v0, v1
+    v3 = field_get v2, x
+    v4 = field_get v2, y
+    v5 = add_i64_checked v3, v4
+    return v5
+}

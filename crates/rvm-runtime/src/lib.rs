@@ -24,7 +24,7 @@
 
 use core::fmt;
 
-use rvm_spec::{ArrayElem, ErrorCode, RvmError, Type};
+use rvm_spec::{ArrayElem, ErrorCode, RvmError, StructId, Type};
 
 /// Fuel padrão de uma execução quando o host não especifica outro valor.
 pub const DEFAULT_FUEL: u64 = 100_000;
@@ -110,6 +110,14 @@ pub enum Value {
     F64(f64),
     /// Valor do tipo `array` (imutável, elementos escalares, ADR-0027).
     Array(Vec<Value>),
+    /// Valor de struct: id da struct e valores dos campos na ordem de declaração
+    /// (ADR-0029).
+    Struct {
+        /// Struct da qual o valor é instância.
+        ty: StructId,
+        /// Valores dos campos, na ordem de declaração.
+        fields: Vec<Value>,
+    },
 }
 
 impl Value {
@@ -131,6 +139,7 @@ impl Value {
                     .unwrap_or(Type::Unit),
                 None => Type::Unit,
             },
+            Value::Struct { ty, .. } => Type::Struct(*ty),
         }
     }
 
@@ -179,6 +188,15 @@ impl Value {
         }
     }
 
+    /// Campos, se o valor for struct.
+    #[must_use]
+    pub fn as_struct(&self) -> Option<&[Value]> {
+        match self {
+            Value::Struct { fields, .. } => Some(fields.as_slice()),
+            _ => None,
+        }
+    }
+
     /// `true` se o valor pertence ao tipo declarado (sem conversão implícita).
     #[must_use]
     pub fn matches_type(&self, ty: Type) -> bool {
@@ -186,6 +204,7 @@ impl Value {
             (Value::Array(items), Type::Array(elem)) => {
                 items.iter().all(|item| item.matches_type(elem.ty()))
             }
+            (Value::Struct { ty: id, .. }, Type::Struct(expected)) => *id == expected,
             _ => matches!(
                 (self, ty),
                 (Value::Unit, Type::Unit)
@@ -200,7 +219,8 @@ impl Value {
 
 impl fmt::Display for Value {
     /// Formato estável usado pelo CLI e pelo corpus: `unit`, `bool:true`,
-    /// `i64:30`, `str:<texto>`, `f64:<valor>`, `array:[<elementos>]`.
+    /// `i64:30`, `str:<texto>`, `f64:<valor>`, `array:[<elementos>]`,
+    /// `struct:<id>[<campos>]`.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Value::Unit => f.write_str("unit"),
@@ -215,6 +235,16 @@ impl fmt::Display for Value {
                         f.write_str(", ")?;
                     }
                     write!(f, "{item}")?;
+                }
+                f.write_str("]")
+            }
+            Value::Struct { ty, fields } => {
+                write!(f, "struct:{ty}[")?;
+                for (index, field) in fields.iter().enumerate() {
+                    if index > 0 {
+                        f.write_str(", ")?;
+                    }
+                    write!(f, "{field}")?;
                 }
                 f.write_str("]")
             }

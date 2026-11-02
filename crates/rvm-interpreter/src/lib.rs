@@ -589,6 +589,90 @@ impl<'a> Interpreter<'a> {
                     self.write_current(&mut stack, top, instr.def, updated, &site)?;
                     self.advance(&mut stack, top, &site)?;
                 }
+                Op::StructNew { struct_id, fields } => {
+                    let mut values: Vec<Value> = Vec::new();
+                    {
+                        let frame = stack.get(top).ok_or_else(|| {
+                            error_at(
+                                ErrorCode::InvalidModule,
+                                "frame ausente ao construir struct",
+                                &site,
+                            )
+                        })?;
+                        values.try_reserve_exact(fields.len()).map_err(|_| {
+                            error_at(
+                                ErrorCode::InvalidModule,
+                                "não foi possível alocar a struct",
+                                &site,
+                            )
+                        })?;
+                        for id in fields {
+                            values.push(read_slot(frame, *id, &site)?);
+                        }
+                    }
+                    // Cobra os bytes da struct; é cumulativo (ADR-0029).
+                    let bytes = u64::try_from(fields.len())
+                        .unwrap_or(u64::MAX)
+                        .saturating_mul(SLOT_BYTES);
+                    self.charge_memory(bytes, &site)?;
+                    self.write_current(
+                        &mut stack,
+                        top,
+                        instr.def,
+                        Value::Struct {
+                            ty: *struct_id,
+                            fields: values,
+                        },
+                        &site,
+                    )?;
+                    self.advance(&mut stack, top, &site)?;
+                }
+                Op::FieldGet { object, field } => {
+                    let value = {
+                        let frame = stack.get(top).ok_or_else(|| {
+                            error_at(
+                                ErrorCode::InvalidModule,
+                                "frame ausente ao ler campo",
+                                &site,
+                            )
+                        })?;
+                        let object_value = read_slot(frame, *object, &site)?;
+                        match &object_value {
+                            Value::Struct { ty, fields } => {
+                                let def = self.module.struct_def(*ty).ok_or_else(|| {
+                                    error_at(
+                                        ErrorCode::InvalidModule,
+                                        format!("struct {ty} não existe no módulo"),
+                                        &site,
+                                    )
+                                })?;
+                                let index = def.field_index(field).ok_or_else(|| {
+                                    error_at(
+                                        ErrorCode::InvalidType,
+                                        format!("struct `{}` não tem campo `{field}`", def.name),
+                                        &site,
+                                    )
+                                })?;
+                                fields.get(index).cloned().ok_or_else(|| {
+                                    error_at(
+                                        ErrorCode::InvalidModule,
+                                        "campo ausente na struct",
+                                        &site,
+                                    )
+                                })?
+                            }
+                            _ => {
+                                return Err(error_at(
+                                    ErrorCode::InvalidModule,
+                                    format!("v{object} não é uma struct"),
+                                    &site,
+                                ))
+                            }
+                        }
+                    };
+                    self.write_current(&mut stack, top, instr.def, value, &site)?;
+                    self.advance(&mut stack, top, &site)?;
+                }
                 Op::Call { callee, args } => {
                     let callee_function = self.callee(*callee, &site)?;
                     // O buffer de argumentos é cobrado antes de alocar (falha

@@ -46,6 +46,8 @@ com valor esperado, e cada terminador em pelo menos um caso válido. A verifica�
 | `array_len` | C-034 |
 | `array_get` | C-035, C-036 |
 | `array_set` | C-036, C-037, C-038 |
+| `struct_new` | C-039, C-040, C-041 |
+| `field_get` | C-039, C-040, C-041 |
 | `eq_i64` | C-002 |
 | `ne_i64` | C-012 |
 | `lt_i64` | C-008 |
@@ -68,7 +70,7 @@ com a expectativa declarada. A verificação é executada por
 
 | Código | Caso(s) inválido(s) |
 |---|---|
-| `invalid_type` | N-001, N-002, N-007, N-015, N-017, N-031 |
+| `invalid_type` | N-001, N-002, N-007, N-015, N-017, N-031, N-032, N-033, N-034 |
 | `invalid_module` | N-003, N-004, N-022, N-023 |
 | `invalid_control_flow` | N-005, N-006, N-013, N-016, N-018 |
 | `unknown_opcode` | N-008 |

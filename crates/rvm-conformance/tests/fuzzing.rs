@@ -349,6 +349,7 @@ fn modulo_provedor() -> Module {
         name: "prov".to_string(),
         version: rvm_spec::IR_VERSION,
         entry: 0,
+        structs: Vec::new(),
         functions: vec![Function {
             id: 0,
             name: "alvo".to_string(),
@@ -388,6 +389,7 @@ fn modulo_com_import() -> Module {
         name: "app".to_string(),
         version: rvm_spec::IR_VERSION,
         entry: 0,
+        structs: Vec::new(),
         functions: vec![
             Function {
                 id: 0,

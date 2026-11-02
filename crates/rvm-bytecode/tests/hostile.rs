@@ -55,6 +55,7 @@ impl Fixture {
         push_u16(&mut bytes, 1);
         let entry = bytes.len();
         push_u32(&mut bytes, 0);
+        push_u16(&mut bytes, 0); // struct_count
         let function_count = bytes.len();
         push_u32(&mut bytes, 1);
 

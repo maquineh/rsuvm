@@ -321,7 +321,7 @@ Oráculo do Lift: `cargo run -p lift_cli -- run examples/rsuvm-oracle.lift` →
 |---|---|
 | `cargo test --manifest-path frontends/lift-rir/Cargo.toml` | 31 passed, 0 failed (22 diferencial + 9 CLI) |
 | `cargo run --bin lift-run -- fib.lift fib --arg i64:10` | `i64:55` (exit 0) |
-| oráculo do Lift (`rsuvm-oracle*.lift`) | `30 5 7 9 3 true false 25 12 55 0` / `15 0 7 0 1 2 10 3 6 0` / `3 -3 2 -2` / `-1 0 1 true false false true false true false true true true` / `ola true false true` / `ola mundo` / `1.5 true false` / `20` / `9 14 6` |
+| oráculo do Lift (`rsuvm-oracle*.lift`) | `30 5 7 9 3 true false 25 12 55 0` / `15 0 7 0 1 2 10 3 6 0` / `3 -3 2 -2` / `-1 0 1 true false false true false true false true true true` / `ola true false true` / `ola mundo` / `1.5 true false` / `20` / `9 14 6` / `7 ana 42` |
 | `cargo test --workspace` (núcleo) | verde; **não** compila `frontends/` |
 
 Limites: o subconjunto do adaptador ainda **não** cobre strings/arrays/objetos,
@@ -378,11 +378,20 @@ e quota cumulativa `len × 24`. Corpus `C-036`/`C-037`/`C-038`/`N-030`/`N-031`. 
 adaptador mapeia `xs[i] = v` quando `xs` é um local não-aliasado (rejeita alias);
 oráculo (`rsuvm-oracle9.lift`): `9 14 6` — bate.
 
+### Objetos/structs (ADR-0029)
+
+Núcleo ganhou `Type::Struct` + tabela de structs no módulo, `Value::Struct` e as
+operações `struct_new`/`field_get` (campos **escalares**; sem `field_set` nem
+aninhamento); quota cumulativa `campos × 24`. Corpus
+`C-039`/`C-040`/`C-041`/`N-032`/`N-033`/`N-034`. O adaptador mapeia `interface`
+Lift, o literal `{ campo: valor }` e `obj.campo`; oráculo (`rsuvm-oracle10.lift`):
+`7 ana 42` — bate.
+
 ### Verificação (Resultado)
 
 | Comando | Resultado |
 |---|---|
-| `cargo test --workspace` | **148 passed, 0 failed**; corpus 38 válidos + 30 inválidos |
-| `cargo test --manifest-path frontends/lift-rir/Cargo.toml` | 34 passed, 0 failed (25 diferencial + 9 CLI) |
+| `cargo test --workspace` | **148 passed, 0 failed**; corpus 41 válidos + 33 inválidos |
+| `cargo test --manifest-path frontends/lift-rir/Cargo.toml` | 36 passed, 0 failed (27 diferencial + 9 CLI) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | exit 0 |
 | `cargo fmt --all -- --check` | exit 0 |

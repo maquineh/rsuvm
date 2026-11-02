@@ -54,10 +54,12 @@
 use std::collections::BTreeMap;
 
 use rvm_ir::{
-    Block, BlockId, BlockParam, BranchTarget, FnId, Function, Instr, Module, Op, Param, Terminator,
-    ValueId,
+    Block, BlockId, BlockParam, BranchTarget, FieldDef, FnId, Function, Instr, Module, Op, Param,
+    StructDef, Terminator, ValueId,
 };
-use rvm_spec::{BinOp, CmpOp, ErrorCode, FloatOp, Limits, Location, RvmError, Type, IR_VERSION};
+use rvm_spec::{
+    BinOp, CmpOp, ErrorCode, FloatOp, Limits, Location, RvmError, StructId, Type, IR_VERSION,
+};
 
 /// Converte o texto experimental em um módulo RIR estruturalmente válido.
 ///
@@ -109,6 +111,20 @@ pub fn print(module: &Module) -> String {
     }
     out.push('\n');
 
+    for def in &module.structs {
+        out.push('\n');
+        out.push_str("struct ");
+        out.push_str(&def.name);
+        out.push_str(" {");
+        for field in &def.fields {
+            out.push(' ');
+            out.push_str(&field.name);
+            out.push_str(": ");
+            print_type(module, field.ty, &mut out);
+        }
+        out.push_str(" }\n");
+    }
+
     for function in &module.functions {
         if function.is_external() {
             out.push_str("import ");
@@ -131,10 +147,10 @@ pub fn print(module: &Module) -> String {
             }
             out.push_str(&param.name);
             out.push_str(": ");
-            out.push_str(param.ty.name());
+            print_type(module, param.ty, &mut out);
         }
         out.push_str(") -> ");
-        out.push_str(function.ret.name());
+        print_type(module, function.ret, &mut out);
         out.push_str(" {\n");
 
         for block in &function.blocks {
@@ -148,7 +164,7 @@ pub fn print(module: &Module) -> String {
                     }
                     out.push_str(&param.name);
                     out.push_str(": ");
-                    out.push_str(param.ty.name());
+                    print_type(module, param.ty, &mut out);
                 }
                 out.push(')');
             }
@@ -214,6 +230,20 @@ fn format_f64(value: f64) -> String {
         text
     } else {
         format!("{text}.0")
+    }
+}
+
+/// Escreve um [`Type`]; structs usam a forma `struct <Nome>` (ADR-0029).
+fn print_type(module: &Module, ty: Type, out: &mut String) {
+    match ty {
+        Type::Struct(id) => {
+            out.push_str("struct ");
+            match module.struct_def(id) {
+                Some(def) => out.push_str(&def.name),
+                None => out.push_str(&id.to_string()),
+            }
+        }
+        other => out.push_str(other.name()),
     }
 }
 
@@ -295,6 +325,23 @@ fn print_op(module: &Module, function: &Function, op: &Op, out: &mut String) {
             print_value(function, *index, out);
             out.push_str(", ");
             print_value(function, *value, out);
+        }
+        Op::StructNew { struct_id, fields } => {
+            out.push_str("struct_new ");
+            match module.struct_def(*struct_id) {
+                Some(def) => out.push_str(&def.name),
+                None => out.push_str(&struct_id.to_string()),
+            }
+            for (index, field) in fields.iter().enumerate() {
+                out.push_str(if index == 0 { " " } else { ", " });
+                print_value(function, *field, out);
+            }
+        }
+        Op::FieldGet { object, field } => {
+            out.push_str("field_get ");
+            print_value(function, *object, out);
+            out.push_str(", ");
+            out.push_str(field);
         }
         Op::Bin { op, lhs, rhs } => {
             out.push_str(op.name());
@@ -620,9 +667,17 @@ struct RawModule {
     name: String,
     version: u16,
     entry: String,
+    /// Structs declaradas, na ordem do arquivo.
+    structs: Vec<RawStruct>,
     functions: Vec<RawFunction>,
     /// Nomes de funções externas (`import <nome>`), resolvidas pelo linker.
     imports: Vec<String>,
+}
+
+#[derive(Debug)]
+struct RawStruct {
+    name: String,
+    fields: Vec<(String, Type)>,
 }
 
 #[derive(Debug)]
@@ -664,6 +719,8 @@ enum RawOp {
     ArrayLen(String),
     ArrayGet(String, String),
     ArraySet(String, String, String),
+    StructNew(String, Vec<String>),
+    FieldGet(String, String),
     Call(String, Vec<String>),
 }
 
@@ -691,11 +748,17 @@ struct RawTarget {
 struct Parser {
     tokens: Vec<Token>,
     index: usize,
+    /// Structs já declaradas, para resolver `struct <Nome>` em tipos.
+    structs: BTreeMap<String, StructId>,
 }
 
 impl Parser {
     fn new(tokens: Vec<Token>) -> Self {
-        Self { tokens, index: 0 }
+        Self {
+            tokens,
+            index: 0,
+            structs: BTreeMap::new(),
+        }
     }
 
     fn peek(&self) -> &Token {
@@ -790,7 +853,19 @@ impl Parser {
     }
 
     fn parse_type(&mut self) -> Result<Type, RvmError> {
-        let name = self.expect_ident("tipo (`unit`, `bool` ou `i64`)")?;
+        let name =
+            self.expect_ident("tipo (`unit`, `bool`, `i64`, `string`, `f64` ou `struct Nome`)")?;
+        if name == "struct" {
+            let struct_name = self.expect_ident("nome de struct após `struct`")?;
+            let id = self.structs.get(&struct_name).copied().ok_or_else(|| {
+                RvmError::new(
+                    ErrorCode::UnknownType,
+                    format!("struct desconhecida `{struct_name}`"),
+                )
+                .at(Location::Module)
+            })?;
+            return Ok(Type::Struct(id));
+        }
         Type::from_name(&name).ok_or_else(|| {
             RvmError::new(
                 ErrorCode::UnknownType,
@@ -798,6 +873,41 @@ impl Parser {
             )
             .at(Location::Module)
         })
+    }
+
+    fn parse_struct(&mut self) -> Result<RawStruct, RvmError> {
+        self.expect_keyword("struct")?;
+        let name = self.expect_ident("nome de struct")?;
+        let id = u32::try_from(self.structs.len()).map_err(|_| {
+            RvmError::new(ErrorCode::InvalidModule, "structs demais").at(Location::Module)
+        })?;
+        if self.structs.insert(name.clone(), id).is_some() {
+            return Err(RvmError::new(
+                ErrorCode::InvalidModule,
+                format!("struct duplicada `{name}`"),
+            )
+            .at(Location::Module));
+        }
+        self.expect_token(Token::LBrace, "`{` na struct")?;
+        let mut fields: Vec<(String, Type)> = Vec::new();
+        while self.peek() != &Token::RBrace {
+            if self.peek() == &Token::Eof {
+                return Err(self.syntax("struct sem `}`"));
+            }
+            let field_name = self.expect_ident("nome de campo")?;
+            self.expect_token(Token::Colon, "`:` entre campo e tipo")?;
+            let ty = self.parse_type()?;
+            fields.push((field_name, ty));
+        }
+        self.expect_token(Token::RBrace, "`}` no fim da struct")?;
+        if fields.is_empty() {
+            return Err(RvmError::new(
+                ErrorCode::InvalidModule,
+                format!("struct `{name}` sem campos"),
+            )
+            .at(Location::Module));
+        }
+        Ok(RawStruct { name, fields })
     }
 
     fn parse_module(&mut self) -> Result<RawModule, RvmError> {
@@ -823,9 +933,14 @@ impl Parser {
         let mut entry: Option<String> = None;
         let mut functions: Vec<RawFunction> = Vec::new();
         let mut imports: Vec<String> = Vec::new();
+        let mut structs: Vec<RawStruct> = Vec::new();
         loop {
             if self.peek() == &Token::Eof {
                 break;
+            }
+            if self.at_keyword("struct") {
+                structs.push(self.parse_struct()?);
+                continue;
             }
             if self.at_keyword("import") {
                 self.bump();
@@ -850,7 +965,7 @@ impl Parser {
                 functions.push(self.parse_function()?);
                 continue;
             }
-            return Err(self.syntax("esperado `entry`, `fn` ou fim do arquivo"));
+            return Err(self.syntax("esperado `struct`, `entry`, `fn` ou fim do arquivo"));
         }
 
         let entry = entry.ok_or_else(|| {
@@ -861,6 +976,7 @@ impl Parser {
             name,
             version,
             entry,
+            structs,
             functions,
             imports,
         })
@@ -1071,6 +1187,25 @@ impl Parser {
                 let value = self.expect_ident("valor do elemento")?;
                 RawOp::ArraySet(array, index, value)
             }
+            "struct_new" => {
+                let struct_name = self.expect_ident("nome da struct")?;
+                let mut fields: Vec<String> = Vec::new();
+                loop {
+                    fields.push(self.expect_ident("campo da struct")?);
+                    if self.peek() == &Token::Comma {
+                        self.bump();
+                    } else {
+                        break;
+                    }
+                }
+                RawOp::StructNew(struct_name, fields)
+            }
+            "field_get" => {
+                let object = self.expect_ident("operando struct")?;
+                self.expect_token(Token::Comma, "`,` entre operandos")?;
+                let field = self.expect_ident("nome do campo")?;
+                RawOp::FieldGet(object, field)
+            }
             "call_static" => {
                 let callee = self.expect_ident("nome da função chamada")?;
                 self.expect_token(Token::LParen, "`(` na chamada")?;
@@ -1146,9 +1281,32 @@ fn lower(raw: RawModule, limits: &Limits) -> Result<Module, RvmError> {
         name,
         version,
         entry,
+        structs: raw_structs,
         functions: raw_functions,
         imports,
     } = raw;
+
+    let mut struct_ids: BTreeMap<String, StructId> = BTreeMap::new();
+    let mut structs: Vec<StructDef> = Vec::new();
+    for (index, raw_struct) in raw_structs.into_iter().enumerate() {
+        let id = u32::try_from(index).map_err(|_| {
+            RvmError::new(
+                ErrorCode::InvalidModule,
+                "quantidade de structs não representável".to_string(),
+            )
+            .at(Location::Module)
+        })?;
+        struct_ids.insert(raw_struct.name.clone(), id);
+        structs.push(StructDef {
+            id,
+            name: raw_struct.name,
+            fields: raw_struct
+                .fields
+                .into_iter()
+                .map(|(name, ty)| FieldDef { name, ty })
+                .collect(),
+        });
+    }
 
     let mut function_ids: BTreeMap<String, FnId> = BTreeMap::new();
     for (index, function) in raw_functions.iter().enumerate() {
@@ -1211,7 +1369,7 @@ fn lower(raw: RawModule, limits: &Limits) -> Result<Module, RvmError> {
             )
             .at(Location::Module)
         })?;
-        functions.push(lower_function(id, function, &function_ids)?);
+        functions.push(lower_function(id, function, &function_ids, &struct_ids)?);
     }
     for (offset, import) in imports.into_iter().enumerate() {
         let offset = u32::try_from(offset).map_err(|_| {
@@ -1228,6 +1386,7 @@ fn lower(raw: RawModule, limits: &Limits) -> Result<Module, RvmError> {
         name,
         version,
         entry,
+        structs,
         functions,
     };
     rvm_ir::structure::check(&module, limits)?;
@@ -1250,6 +1409,7 @@ fn lower_function(
     id: FnId,
     raw: RawFunction,
     function_ids: &BTreeMap<String, FnId>,
+    struct_ids: &BTreeMap<String, StructId>,
 ) -> Result<Function, RvmError> {
     let function_name = raw.name.clone();
     let location = Location::Function {
@@ -1334,7 +1494,13 @@ fn lower_function(
                 )
                 .at(block_location.clone())
             })?;
-            let op = lower_op(&raw_instr.op, &names, function_ids, &block_location)?;
+            let op = lower_op(
+                &raw_instr.op,
+                &names,
+                function_ids,
+                struct_ids,
+                &block_location,
+            )?;
             instrs.push(Instr { def, op });
         }
 
@@ -1385,6 +1551,7 @@ fn lower_op(
     raw: &RawOp,
     names: &BTreeMap<String, ValueId>,
     function_ids: &BTreeMap<String, FnId>,
+    struct_ids: &BTreeMap<String, StructId>,
     location: &Location,
 ) -> Result<Op, RvmError> {
     let value = |name: &str| -> Result<ValueId, RvmError> {
@@ -1439,6 +1606,30 @@ fn lower_op(
             array: value(array)?,
             index: value(index)?,
             value: value(element)?,
+        },
+        RawOp::StructNew(struct_name, fields) => {
+            let struct_id = struct_ids
+                .get(struct_name.as_str())
+                .copied()
+                .ok_or_else(|| {
+                    RvmError::new(
+                        ErrorCode::InvalidModule,
+                        format!("struct `{struct_name}` não declarada"),
+                    )
+                    .at(location.clone())
+                })?;
+            let mut resolved: Vec<ValueId> = Vec::new();
+            for field in fields {
+                resolved.push(value(field)?);
+            }
+            Op::StructNew {
+                struct_id,
+                fields: resolved,
+            }
+        }
+        RawOp::FieldGet(object, field) => Op::FieldGet {
+            object: value(object)?,
+            field: field.clone(),
         },
         RawOp::Bin(op, lhs, rhs) => Op::Bin {
             op: *op,

@@ -25,8 +25,8 @@ mutação), sobre arquivos `.rvm` em `corpus/valid` e `corpus/invalid`.
 
 ## Invariants
 
-- O corpus é **dado**, não código: casos válidos (C-001..C-038) e inválidos
-  (N-001..N-011, N-013..N-031) vivem em arquivos `.rvm`; N-012
+- O corpus é **dado**, não código: casos válidos (C-001..C-041) e inválidos
+  (N-001..N-011, N-013..N-034) vivem em arquivos `.rvm`; N-012
   (truncamento/`length` excessivo) é exercitado no decoder binário
   (`crates/rvm-bytecode/tests/hostile.rs`). A meta de cobertura por operação está
   em `docs/CONTRATOS/CORPUS-COBERTURA.md` e é verificada por

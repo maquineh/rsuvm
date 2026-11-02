@@ -41,4 +41,4 @@ executor aceita.
   declarações externas em um módulo plano (ADR-0018). Depende de spec e ir.
 - [rvm-cli](./rvm-cli/README.md) — binário `rsuvm` (`run`, `run-bc`, `check`,
   `fmt`, `encode`); não concede capabilities.
-- [rvm-conformance](./rvm-conformance/README.md) — corpus em dados (38 válidos, 30 inválidos) e testes de conformidade/propriedades.
+- [rvm-conformance](./rvm-conformance/README.md) — corpus em dados (41 válidos, 33 inválidos) e testes de conformidade/propriedades.

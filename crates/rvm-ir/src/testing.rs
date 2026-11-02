@@ -56,6 +56,7 @@ fn modulo(name: &str, entry: u32, functions: Vec<Function>) -> Module {
         name: name.to_string(),
         version: IR_VERSION,
         entry,
+        structs: Vec::new(),
         functions,
     }
 }

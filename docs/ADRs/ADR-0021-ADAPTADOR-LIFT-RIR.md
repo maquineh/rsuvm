@@ -25,11 +25,13 @@ pode importar Lift: adaptadores ficam fora de `crates/`.
    permanece sem dependências externas.
 3. **Subconjunto** suportado: funções com parâmetros/retorno `int` (`i64`),
    `boolean` (`bool`), `string` (`string`), `number` (`f64`), arrays desses tipos
-   (`array`) ou `void` (`unit`); `let`/`const`, **atribuição** (a binding e a
+   (`array`), structs (`interface`) com campos escalares ou `void` (`unit`);
+   `let`/`const`, **atribuição** (a binding e a
    **elemento de array** `xs[i] = v`), `return`, `if`/`else if`/`else` (inclusive
    **merge** e `if` sem `else`) e **`while`**;
    expressões `int`/`boolean`/`string`/`number` literais, **literais de array**
-   `[...]`, **indexação** `xs[i]`, locais, `+ - * / %`, comparações `== != < <= >
+   `[...]`, **indexação** `xs[i]`, **literais de struct** `{ campo: valor }` e
+   **acesso a campo** `obj.campo`, locais, `+ - * / %`, comparações `== != < <= >
    >=` (`==`/`!=` de `string` por conteúdo; `+` de `string` é concatenação; `f64`
    usa IEEE-754), negação `-x`, lógica `!`/`&&`/`||` (**curto-circuito**) e chamadas
    a funções do próprio programa.
@@ -37,12 +39,13 @@ pode importar Lift: adaptadores ficam fora de `crates/`.
    `ValueId` corrente; `if/else` e `while` viram blocos com **parâmetros de bloco**
    que carregam o ambiente (phi explícito) no merge do `if` e no cabeçalho do
    `while`; `+ - *` usam `*_i64_checked` (overflow vira trap), como no EXP-0.
-5. Fora do subconjunto (`coalesce`, objetos/structs, closures, `console.log`,
+5. Fora do subconjunto (`coalesce`, closures, `console.log`,
    `import`, statements de topo) devolve [`AdapterError::Unsupported`], nunca um
    módulo incorreto. Divisão/resto (ADR-0022), `string` (ADR-0024/0025), `f64`
-   (ADR-0026) e arrays (ADR-0027) foram habilitadas por tipos/ops novos no núcleo.
-   Arrays do adaptador cobrem literais, indexação e **atribuição a elemento**
-   `xs[i] = v` (ADR-0028), esta última só quando `xs` é um local **não-aliasado**.
+   (ADR-0026), arrays (ADR-0027/0028) e structs (ADR-0029) foram habilitadas por
+   tipos/ops novos no núcleo. Arrays do adaptador cobrem literais, indexação e
+   **atribuição a elemento** `xs[i] = v` (só quando `xs` é um local não-aliasado);
+   structs cobrem `interface`, literal e `obj.campo` (campos escalares).
 6. **Teste diferencial**: o valor executado na RSUVM é comparado com o **oráculo do
    Lift** (mesmo programa rodado pelo compilador do Lift), registrado em
    `docs/RELATORIOS/ADAPTADOR-LIFT-RIR.md`.
@@ -78,13 +81,13 @@ pode importar Lift: adaptadores ficam fora de `crates/`.
 
 ## Validação
 
-- `cargo test --manifest-path frontends/lift-rir/Cargo.toml`: **34 testes**
-  (`tests/diferencial.rs`: 25; `tests/cli.rs`: 9) — inclui `while` + atribuição,
+- `cargo test --manifest-path frontends/lift-rir/Cargo.toml`: **36 testes**
+  (`tests/diferencial.rs`: 27; `tests/cli.rs`: 9) — inclui `while` + atribuição,
   `if`/`else if`/`else` com merge, `&&`/`||`/`!` com curto-circuito, recursão
   `fib`, `/` e `%`, `string`, `f64` (`number`), arrays (literal, índice e
-  `xs[i] = v` com rejeição de alias), o trap de divisão por zero e de índice fora
-  dos limites, rejeição de `console.log` e os códigos de exit do `lift-run`
-  (0/2/3/4).
+  `xs[i] = v` com rejeição de alias), structs (`interface`, literal e campo), os
+  traps de divisão por zero e de índice fora dos limites, rejeição de `console.log`
+  e os códigos de exit do `lift-run` (0/2/3/4).
 - **Diferencial**: `cargo run -p lift_cli -- run examples/rsuvm-oracle.lift` no
   Lift produz `30 5 7 9 3 true false 25 12 55 0`; `rsuvm-oracle2.lift` produz
   `15 0 7 0 1 2 10 3 6 0` — idênticos ao executado na RSUVM

@@ -32,7 +32,7 @@
     )
 )]
 
-use rvm_spec::{ArrayElem, BinOp, CmpOp, FloatOp, Type};
+use rvm_spec::{ArrayElem, BinOp, CmpOp, FloatOp, StructId, Type};
 
 pub mod structure;
 #[cfg(any(test, feature = "test-helpers"))]
@@ -60,8 +60,45 @@ pub struct Module {
     pub version: u16,
     /// Função de entrada executada por padrão pelo host.
     pub entry: FnId,
+    /// Structs declaradas no módulo (ADR-0029), indexadas pelo próprio
+    /// [`StructId`]. Campos são escalares (`bool`/`i64`/`string`/`f64`).
+    pub structs: Vec<StructDef>,
     /// Funções do módulo, indexadas pelo próprio `FnId`.
     pub functions: Vec<Function>,
+}
+
+/// Struct declarada no módulo (ADR-0029).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StructDef {
+    /// Identificador denso; deve ser igual ao índice em [`Module::structs`].
+    pub id: StructId,
+    /// Nome declarado (identificador único no módulo).
+    pub name: String,
+    /// Campos, na ordem de declaração.
+    pub fields: Vec<FieldDef>,
+}
+
+impl StructDef {
+    /// Índice do campo `name`, se existir.
+    #[must_use]
+    pub fn field_index(&self, name: &str) -> Option<usize> {
+        self.fields.iter().position(|field| field.name == name)
+    }
+
+    /// Campo pelo nome.
+    #[must_use]
+    pub fn field(&self, name: &str) -> Option<&FieldDef> {
+        self.fields.iter().find(|field| field.name == name)
+    }
+}
+
+/// Campo de uma struct: nome e tipo escalar (ADR-0029).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FieldDef {
+    /// Nome do campo (identificador, único dentro da struct).
+    pub name: String,
+    /// Tipo do campo; escalar (`bool`/`i64`/`string`/`f64`).
+    pub ty: Type,
 }
 
 /// Função RIR: assinatura, bloco de entrada e blocos.
@@ -226,6 +263,21 @@ pub enum Op {
         /// Novo valor do elemento; precisa ter o tipo do elemento.
         value: ValueId,
     },
+    /// Constrói uma struct a partir dos valores dos campos, na ordem de declaração
+    /// (`struct_new`), ADR-0029.
+    StructNew {
+        /// Struct construída.
+        struct_id: StructId,
+        /// Valores dos campos, na ordem de [`StructDef::fields`].
+        fields: Vec<ValueId>,
+    },
+    /// Lê um campo de uma struct (`field_get`), ADR-0029.
+    FieldGet {
+        /// Operando struct.
+        object: ValueId,
+        /// Nome do campo; o tipo é resolvido pelo verificador.
+        field: String,
+    },
     /// Chama estaticamente uma função do mesmo módulo (`call_static`).
     Call {
         /// Função chamada; resolvida estaticamente pelo verificador.
@@ -257,6 +309,9 @@ impl Op {
             Op::ArrayGet { .. } => Type::I64,
             // O tipo (array do elemento) é resolvido pelo verificador.
             Op::ArraySet { .. } => Type::Array(ArrayElem::I64),
+            Op::StructNew { struct_id, .. } => Type::Struct(*struct_id),
+            // O tipo é resolvido pelo verificador a partir da struct do objeto.
+            Op::FieldGet { .. } => Type::Unit,
             Op::Call { .. } => Type::I64, // substituído pelo tipo de retorno no verificador
         }
     }
@@ -284,6 +339,8 @@ impl Op {
                 index,
                 value,
             } => vec![*array, *index, *value],
+            Op::StructNew { fields, .. } => fields.clone(),
+            Op::FieldGet { object, .. } => vec![*object],
             Op::Call { args, .. } => args.clone(),
         }
     }
@@ -353,6 +410,12 @@ impl Module {
     pub fn function_by_name(&self, name: &str) -> Option<&Function> {
         self.functions.iter().find(|function| function.name == name)
     }
+
+    /// Struct pelo identificador denso.
+    #[must_use]
+    pub fn struct_def(&self, id: StructId) -> Option<&StructDef> {
+        self.structs.get(id as usize)
+    }
 }
 
 impl Function {
@@ -407,7 +470,7 @@ impl Function {
             for instr in &block.instrs {
                 if instr.def == id {
                     return match &instr.op {
-                        Op::Call { .. } => None,
+                        Op::Call { .. } | Op::FieldGet { .. } => None,
                         op => Some(op.result_type()),
                     };
                 }

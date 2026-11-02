@@ -66,6 +66,8 @@ fn collect_ops(module: &Module, ops: &mut BTreeSet<String>, terms: &mut BTreeSet
                     Op::ArrayLen { .. } => "array_len".to_string(),
                     Op::ArrayGet { .. } => "array_get".to_string(),
                     Op::ArraySet { .. } => "array_set".to_string(),
+                    Op::StructNew { .. } => "struct_new".to_string(),
+                    Op::FieldGet { .. } => "field_get".to_string(),
                     Op::Call { .. } => "call_static".to_string(),
                 };
                 ops.insert(name);
@@ -126,6 +128,8 @@ fn corpus_valido_cobre_todas_as_operacoes_do_subset() {
         "array_len",
         "array_get",
         "array_set",
+        "struct_new",
+        "field_get",
         "eq_i64",
         "ne_i64",
         "lt_i64",

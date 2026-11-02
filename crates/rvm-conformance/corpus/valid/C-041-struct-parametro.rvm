@@ -1,0 +1,23 @@
+; id: C-041
+; expect: value i64:5
+; extra: struct como parâmetro de função (tipo `struct Nome`, ADR-0029)
+module c041 version 1
+entry usa
+
+struct Caixa {
+  valor: i64
+}
+
+fn extrai(c: struct Caixa) -> i64 {
+  entry:
+    v0 = field_get c, valor
+    return v0
+}
+
+fn usa() -> i64 {
+  entry:
+    v1 = const_i64 5
+    v2 = struct_new Caixa v1
+    v3 = call_static extrai(v2)
+    return v3
+}

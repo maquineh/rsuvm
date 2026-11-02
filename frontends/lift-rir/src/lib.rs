@@ -7,21 +7,22 @@
 //! # Subconjunto suportado
 //!
 //! - funções com parâmetros/retorno em `int` (`i64`), `boolean` (`bool`),
-//!   `string` (`string`), `number` (`f64`), arrays desses tipos (`array`) ou
-//!   `void` (`unit`);
+//!   `string` (`string`), `number` (`f64`), arrays desses tipos (`array`), structs
+//!   (`interface`) com campos escalares ou `void` (`unit`);
 //! - `let`/`const`, **atribuição** a binding mutável e a **elemento de array**
 //!   (`xs[i] = v`), `return`, `if`/`else if`/`else` (com merge) e `while`;
 //! - expressões: literais `int`/`boolean`/`string`/`number`, **literais de array**
-//!   `[...]`, **indexação** `xs[i]`, variáveis locais, `+ - * / %`, comparações
+//!   `[...]`, **indexação** `xs[i]`, **literais de struct** `{ campo: valor }`,
+//!   **acesso a campo** `obj.campo`, variáveis locais, `+ - * / %`, comparações
 //!   (`== != < <= > >=`; `==`/`!=` de `string` por conteúdo), negação `-x`, lógica
 //!   `!`/`&&`/`||` (**curto-circuito**) e chamadas a outras funções do programa.
 //!
-//! Fora do subconjunto (`coalesce`, objetos/structs, closures, `console.log`,
-//! `import`, statements de topo): devolve [`AdapterError::Unsupported`].
+//! Fora do subconjunto (`coalesce`, closures, `console.log`, `import`, statements
+//! de topo): devolve [`AdapterError::Unsupported`].
 //! Divisão/resto por zero e `i64::MIN / -1` produzem os traps
 //! `division_by_zero`/`integer_overflow` (ADR-0022). `xs[i] = v` só é baixado
-//! quando `xs` é um array local **não-aliasado** (ADR-0028); caso contrário,
-//! `Unsupported`.
+//! quando `xs` é um array local **não-aliasado** (ADR-0028); structs aceitam
+//! apenas campos escalares (ADR-0029).
 //!
 //! # Semântica (construção CFG/SSA)
 //!
@@ -42,10 +43,10 @@ use lift_sema::{
     HirStatement, HirWhile, ResolvedType,
 };
 use rvm_ir::{
-    Block, BlockId, BlockParam, BranchTarget, FnId, Function, Instr, Module, Op, Param, Terminator,
-    ValueId,
+    Block, BlockId, BlockParam, BranchTarget, FieldDef, FnId, Function, Instr, Module, Op, Param,
+    StructDef, Terminator, ValueId,
 };
-use rvm_spec::{ArrayElem, BinOp, CmpOp, FloatOp, Type, IR_VERSION};
+use rvm_spec::{ArrayElem, BinOp, CmpOp, FloatOp, StructId, Type, IR_VERSION};
 
 /// Erro do adaptador.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -92,6 +93,9 @@ pub fn lower_source(source: &str, entry: &str) -> Result<Module, AdapterError> {
 pub fn lower(program: &HirProgram, entry: &str) -> Result<Module, AdapterError> {
     let mut names: BTreeMap<String, FnId> = BTreeMap::new();
     let mut functions: Vec<&HirFunction> = Vec::new();
+    // Nome de struct -> (id, ordem dos campos). Preenchido em duas passadas para
+    // permitir referências entre structs (embora campos só aceitem escalares).
+    let mut structs: BTreeMap<String, (StructId, Vec<String>)> = BTreeMap::new();
     for declaration in &program.declarations {
         match declaration {
             HirDeclaration::Function(function) => {
@@ -105,9 +109,20 @@ pub fn lower(program: &HirProgram, entry: &str) -> Result<Module, AdapterError> 
                 }
                 functions.push(function);
             }
-            HirDeclaration::Struct(_) | HirDeclaration::Import(_) => {
+            HirDeclaration::Struct(def) => {
+                let id = u32::try_from(structs.len())
+                    .map_err(|_| AdapterError::Unsupported("structs demais".to_string()))?;
+                let order = def.fields.iter().map(|field| field.name.clone()).collect();
+                if structs.insert(def.name.clone(), (id, order)).is_some() {
+                    return Err(AdapterError::Unsupported(format!(
+                        "struct duplicada `{}`",
+                        def.name
+                    )));
+                }
+            }
+            HirDeclaration::Import(_) => {
                 return Err(AdapterError::Unsupported(
-                    "declaração struct/import de topo".to_string(),
+                    "declaração import de topo".to_string(),
                 ));
             }
             HirDeclaration::Statement(_) => {
@@ -122,29 +137,74 @@ pub fn lower(program: &HirProgram, entry: &str) -> Result<Module, AdapterError> 
         AdapterError::Unsupported(format!("função de entrada `{entry}` não declarada"))
     })?;
 
+    // Tabela de structs do módulo, com campos escalares resolvidos.
+    let mut struct_defs: Vec<StructDef> = Vec::new();
+    for declaration in &program.declarations {
+        if let HirDeclaration::Struct(def) = declaration {
+            let (id, _) = structs
+                .get(&def.name)
+                .cloned()
+                .ok_or_else(|| AdapterError::Unsupported("struct sem id (bug)".to_string()))?;
+            let mut fields: Vec<FieldDef> = Vec::new();
+            for field in &def.fields {
+                let ty = map_type(&field.ty, &structs)?;
+                if !is_scalar_type(ty) {
+                    return Err(AdapterError::Unsupported(format!(
+                        "campo `{}` de `{}` não é escalar",
+                        field.name, def.name
+                    )));
+                }
+                fields.push(FieldDef {
+                    name: field.name.clone(),
+                    ty,
+                });
+            }
+            struct_defs.push(StructDef {
+                id,
+                name: def.name.clone(),
+                fields,
+            });
+        }
+    }
+
     let mut lowered: Vec<Function> = Vec::new();
     for (index, function) in functions.iter().enumerate() {
         let id = u32::try_from(index)
             .map_err(|_| AdapterError::Unsupported("funções demais".to_string()))?;
-        lowered.push(lower_function(function, id, &names)?);
+        lowered.push(lower_function(function, id, &names, &structs)?);
     }
 
     Ok(Module {
         name: "lift_program".to_string(),
         version: IR_VERSION,
         entry: entry_id,
+        structs: struct_defs,
         functions: lowered,
     })
 }
 
+/// `true` para tipos escalares aceitos em campos de struct (ADR-0029).
+fn is_scalar_type(ty: Type) -> bool {
+    matches!(ty, Type::Bool | Type::I64 | Type::Str | Type::F64)
+}
+
 /// Mapeia um tipo Lift resolvido para um tipo do subset EXP-0.
-fn map_type(ty: &ResolvedType) -> Result<Type, AdapterError> {
+fn map_type(
+    ty: &ResolvedType,
+    structs: &BTreeMap<String, (StructId, Vec<String>)>,
+) -> Result<Type, AdapterError> {
     match ty {
         ResolvedType::Int => Ok(Type::I64),
         ResolvedType::Boolean => Ok(Type::Bool),
         ResolvedType::Void => Ok(Type::Unit),
         ResolvedType::String => Ok(Type::Str),
         ResolvedType::Number => Ok(Type::F64),
+        ResolvedType::Struct(name) => {
+            let (id, _) = structs.get(name).cloned().ok_or_else(|| {
+                AdapterError::Unsupported(format!("struct `{name}` não declarada"))
+            })?;
+            Ok(Type::Struct(id))
+        }
         ResolvedType::Array(inner) => {
             let element = match inner.as_ref() {
                 ResolvedType::Int => ArrayElem::I64,
@@ -179,6 +239,8 @@ struct FuncLower {
     /// Locais de array comprovadamente não-aliasados (ADR-0028): podem receber
     /// atribuição a elemento via atualização funcional.
     safe_arrays: BTreeSet<BindingId>,
+    /// Structs do programa: nome → (id, ordem dos campos) (ADR-0029).
+    structs: BTreeMap<String, (StructId, Vec<String>)>,
 }
 
 impl FuncLower {
@@ -189,7 +251,13 @@ impl FuncLower {
             next_label: 0,
             current: None,
             safe_arrays: BTreeSet::new(),
+            structs: BTreeMap::new(),
         }
+    }
+
+    /// Mapeia um tipo Lift resolvido para o tipo RIR.
+    fn map_type(&self, ty: &ResolvedType) -> Result<Type, AdapterError> {
+        map_type(ty, &self.structs)
     }
 
     fn new_value(&mut self) -> Result<ValueId, AdapterError> {
@@ -307,7 +375,7 @@ impl FuncLower {
             }
             match statement {
                 HirStatement::Variable(declaration) => {
-                    let ty = map_type(&declaration.ty)?;
+                    let ty = self.map_type(&declaration.ty)?;
                     let value = self.lower_expr(names, &declaration.initializer, &env)?;
                     env.insert(declaration.id, (value, ty));
                 }
@@ -689,6 +757,40 @@ impl FuncLower {
                     index: position,
                 })
             }
+            HirExprKind::StructLiteral {
+                struct_name,
+                fields,
+            } => {
+                let (struct_id, order) =
+                    self.structs.get(struct_name).cloned().ok_or_else(|| {
+                        AdapterError::Unsupported(format!("struct `{struct_name}` não declarada"))
+                    })?;
+                let mut values: BTreeMap<String, ValueId> = BTreeMap::new();
+                for field in fields {
+                    let value = self.lower_expr(names, &field.value, env)?;
+                    values.insert(field.name.clone(), value);
+                }
+                let mut ordered: Vec<ValueId> = Vec::new();
+                for name in &order {
+                    let value = values.get(name).copied().ok_or_else(|| {
+                        AdapterError::Unsupported(format!(
+                            "campo `{name}` ausente no literal de `{struct_name}`"
+                        ))
+                    })?;
+                    ordered.push(value);
+                }
+                self.emit(Op::StructNew {
+                    struct_id,
+                    fields: ordered,
+                })
+            }
+            HirExprKind::FieldAccess { object, field } => {
+                let object_value = self.lower_expr(names, object, env)?;
+                self.emit(Op::FieldGet {
+                    object: object_value,
+                    field: field.clone(),
+                })
+            }
             HirExprKind::Local { id, name } => env
                 .get(id)
                 .map(|(value, _)| *value)
@@ -1040,12 +1142,13 @@ fn lower_function(
     function: &HirFunction,
     id: FnId,
     names: &BTreeMap<String, FnId>,
+    structs: &BTreeMap<String, (StructId, Vec<String>)>,
 ) -> Result<Function, AdapterError> {
-    let ret = map_type(&function.return_type)?;
+    let ret = map_type(&function.return_type, structs)?;
     let mut params: Vec<Param> = Vec::new();
     let mut env: Env = BTreeMap::new();
     for (index, parameter) in function.parameters.iter().enumerate() {
-        let ty = map_type(&parameter.ty)?;
+        let ty = map_type(&parameter.ty, structs)?;
         let value = u32::try_from(index)
             .map_err(|_| AdapterError::Unsupported("parâmetros demais".to_string()))?;
         if env.insert(parameter.id, (value, ty)).is_some() {
@@ -1064,6 +1167,7 @@ fn lower_function(
         .map_err(|_| AdapterError::Unsupported("parâmetros demais".to_string()))?;
     let mut lower = FuncLower::new(first_value);
     lower.safe_arrays = collect_mutable_arrays(function);
+    lower.structs = structs.clone();
     let entry = lower.alloc_block();
     lower.start(entry, "entry".to_string(), Vec::new());
     let out = lower.lower_block(names, &function.body.statements, env)?;

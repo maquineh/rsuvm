@@ -1,0 +1,17 @@
+; id: N-033
+; expect: error invalid_type
+; extra: field_get com campo inexistente é invalid_type (ADR-0029)
+module n033 version 1
+entry f
+
+struct Ponto {
+  x: i64
+}
+
+fn f() -> i64 {
+  entry:
+    v0 = const_i64 1
+    v1 = struct_new Ponto v0
+    v2 = field_get v1, z
+    return v2
+}

@@ -77,10 +77,13 @@ impl ArrayElem {
             Type::I64 => Some(ArrayElem::I64),
             Type::Str => Some(ArrayElem::Str),
             Type::F64 => Some(ArrayElem::F64),
-            Type::Unit | Type::Array(_) => None,
+            Type::Unit | Type::Array(_) | Type::Struct(_) => None,
         }
     }
 }
+
+/// Identificador denso de uma struct declarada no módulo (ADR-0029).
+pub type StructId = u32;
 
 /// Tipo de valor do subset EXP-0.
 ///
@@ -104,6 +107,10 @@ pub enum Type {
     F64,
     /// Array imutável de elementos escalares (ADR-0027).
     Array(ArrayElem),
+    /// Struct com campos escalares (ADR-0029). O `StructId` indexa a tabela de
+    /// structs do módulo ([`crate`] não tem acesso a ela: o layout é resolvido por
+    /// `rvm-verify`).
+    Struct(StructId),
 }
 
 impl Type {
@@ -117,6 +124,7 @@ impl Type {
             Type::Str => "string",
             Type::F64 => "f64",
             Type::Array(_) => "array",
+            Type::Struct(_) => "struct",
         }
     }
 
@@ -831,6 +839,10 @@ pub struct Limits {
     pub max_string_bytes: u32,
     /// Número máximo de elementos de um literal de array (ADR-0027).
     pub max_array_len: u32,
+    /// Número máximo de structs declaradas no módulo (ADR-0029).
+    pub max_structs: u32,
+    /// Número máximo de campos de uma struct (ADR-0029).
+    pub max_fields_per_struct: u32,
     /// Tamanho máximo, em bytes, da entrada textual ou binária de um módulo.
     pub max_input_bytes: u32,
 }
@@ -848,6 +860,8 @@ impl Default for Limits {
             max_name_len: 64,
             max_string_bytes: 4096,
             max_array_len: 4096,
+            max_structs: 256,
+            max_fields_per_struct: 256,
             max_input_bytes: 1_048_576,
         }
     }

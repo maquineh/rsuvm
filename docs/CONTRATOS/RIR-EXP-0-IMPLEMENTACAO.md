@@ -7,7 +7,9 @@ o intérprete e o corpus devem cumprir.
 ## 1. Modelo
 
 ~~~text
-Module    { name, version = 1, entry: FnId, functions: Vec<Function> }
+Module    { name, version = 1, entry: FnId, structs: Vec<StructDef>, functions: Vec<Function> }
+StructDef { id = índice, name, fields: Vec<FieldDef> }
+FieldDef  { name, ty: Type escalar }          // bool | i64 | string | f64
 Function  { id = índice, name, params: Vec<Param>, ret: Type, entry: BlockId,
             blocks: Vec<Block> }
 Param     { name, ty }                       // ValueId implícito = índice
@@ -16,7 +18,8 @@ BlockParam{ value: ValueId, name, ty }
 Instr     { def: ValueId, op: Op }
 Op        = const_i64 | const_bool | const_str | const_f64 | bin(op,lhs,rhs) | cmp(op,lhs,rhs)
           | str_eq(lhs,rhs) | str_ne(lhs,rhs) | str_len(operand) | concat_str(lhs,rhs)
-          | float(op,lhs,rhs) | array(items) | array_len(v) | array_get(v,i) | array_set(v,i,x) | call(callee,args)
+          | float(op,lhs,rhs) | array(items) | array_len(v) | array_get(v,i) | array_set(v,i,x)
+          | struct_new(sid, fields) | field_get(v, field) | call(callee,args)
 Term      = return [v] | br(target,args) | cond_br(cond, target, target)
 ~~~
 
@@ -94,6 +97,8 @@ Depois de `structure::check`:
    | `array_len` | `array` | `i64` |
    | `array_get` | `array`, `i64` | elemento do array |
    | `array_set` | `array`, `i64`, elemento do array | `array` |
+   | `struct_new` | um valor por campo, no tipo do campo | `struct` |
+   | `field_get` | `struct`, nome de campo existente | tipo do campo |
    | comparações `*_i64` | `i64`, `i64` | `bool` |
    | `call_static` | casam com `params` do alvo | `ret` do alvo |
    Qualquer divergência ⇒ `invalid_type`.
@@ -137,6 +142,9 @@ terminador por último. O primeiro erro vence.
   elemento substituído e **não altera** o array de origem (não há referências nem
   aliasing no núcleo, ADR-0028). Exige `value` no tipo do elemento e faz bounds
   check (`index_out_of_bounds`); cobra `len × 24` bytes cumulativos.
+- `struct_new` cria um valor de struct (campos escalares, ADR-0029) e cobra
+  `campos × 24` bytes cumulativos; `field_get` lê um campo pelo nome (o campo
+  precisa existir e o objeto ser struct). Não há `field_set` nesta rodada.
 - `br`/`cond_br` copiam os argumentos para os slots dos parâmetros do bloco alvo
   antes de saltar (phi explícito).
 - `return` devolve `Value::Unit` quando não há valor.
