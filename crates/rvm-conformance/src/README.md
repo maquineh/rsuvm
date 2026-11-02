@@ -17,7 +17,11 @@ mutação), sobre arquivos `.rvm` em `corpus/valid` e `corpus/invalid`.
   (`; id:`, `; expect:`), conforme [corpus/README.md](../corpus/README.md).
 - Alvos de teste (não são contratos de código):
   `tests/conformance.rs` — percorre o corpus e compara `value|error|trap|limit`;
-  `tests/properties.rs` — propriedades e orçamentos declarados.
+  `tests/properties.rs` — propriedades e orçamentos declarados;
+  `tests/coverage.rs` — meta de cobertura por operação
+  (`docs/CONTRATOS/CORPUS-COBERTURA.md`);
+  `tests/fuzzing.rs` — campanha determinística de parser/decoder/verificador
+  (`docs/RELATORIOS/FUZZING-EXP-0.md`).
 
 ## Invariants
 

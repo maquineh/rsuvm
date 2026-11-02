@@ -104,7 +104,40 @@ reservada do `Vec`; é quota determinística, não medição de consumo.
 
 ## A3 — Fuzzing e benchmarks (itens 5–6)
 
-A preencher na etapa A3.
+### Item 5 (campanha de fuzzing)
+
+- Novo alvo `crates/rvm-conformance/tests/fuzzing.rs`: campanha determinística
+  sobre **parser textual**, **decoder binário** e **verificador** (com execução
+  limitada do que verifica).
+- Orçamento declarado: 4 sementes fixas × base × 100 mutações
+  (texto 7 600; bytecode 11 200; verificador 11 200 operações).
+- Registro da rodada: `docs/RELATORIOS/FUZZING-EXP-0.md` (ferramenta, alvos,
+  sementes, corpus, orçamento, resultado, limitações).
+- Resultado: nenhum pânico observado; 2 842 mutações ainda verificaram e foram
+  executadas. Não é fuzzer guiado por cobertura (política de zero dependências).
+
+### Item 6 (benchmarks pré-registrados)
+
+- `docs/RELATORIOS/BENCHMARKS-PREREGISTRADOS.md`: método, métrica e limiar de
+  H06/H03 fixados **antes** de medir.
+- H03 e H06 permanecem **não medidas**: exigem decidir a ligação estática
+  inter-módulo, que não existe no EXP-0 (item 6 reconhece a dependência).
+- Substituto exploratório: `crates/rvm-interpreter/benches/chamada.rs`
+  (`harness = false`), custo marginal de `call_static` **intra-módulo**
+  (≈ 164–205 ns/chamada no ambiente registrado). Não classifica H03/H06.
+
+### Verificação (Resultado)
+
+| Comando | Resultado |
+|---|---|
+| `cargo test -p rvm-conformance --test fuzzing` | 3 passed, 0 failed; texto 7 600, bytecode 11 200, verificador 11 200 operações, 0 pânico |
+| `cargo bench -p rvm-interpreter --bench chamada` | executou; ver tabela em `BENCHMARKS-PREREGISTRADOS.md` |
+| `cargo build --workspace --all-targets` | compila o alvo de bench |
+| `cargo clippy --workspace --all-targets -- -D warnings` | exit 0 |
+| `cargo fmt --all -- --check` | exit 0 |
+
+Lacuna remanescente: fuzzing não guiado por cobertura e benchmark inter-módulo
+bloqueado pela ausência de ligação estática (ADR pendente).
 
 ## A4 — Lift (item 7)
 
