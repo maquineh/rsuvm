@@ -216,6 +216,16 @@ pub enum Op {
         /// Índice (`i64`).
         index: ValueId,
     },
+    /// Substitui um elemento de um array (`array_set`), devolvendo um **novo**
+    /// array; o array de origem não é alterado (atualização funcional, ADR-0028).
+    ArraySet {
+        /// Operando array.
+        array: ValueId,
+        /// Índice (`i64`).
+        index: ValueId,
+        /// Novo valor do elemento; precisa ter o tipo do elemento.
+        value: ValueId,
+    },
     /// Chama estaticamente uma função do mesmo módulo (`call_static`).
     Call {
         /// Função chamada; resolvida estaticamente pelo verificador.
@@ -245,6 +255,8 @@ impl Op {
             Op::ArrayLen { .. } => Type::I64,
             // O tipo do elemento é resolvido pelo verificador a partir do array.
             Op::ArrayGet { .. } => Type::I64,
+            // O tipo (array do elemento) é resolvido pelo verificador.
+            Op::ArraySet { .. } => Type::Array(ArrayElem::I64),
             Op::Call { .. } => Type::I64, // substituído pelo tipo de retorno no verificador
         }
     }
@@ -267,6 +279,11 @@ impl Op {
             Op::ArrayLiteral(items) => items.clone(),
             Op::ArrayLen { array } => vec![*array],
             Op::ArrayGet { array, index } => vec![*array, *index],
+            Op::ArraySet {
+                array,
+                index,
+                value,
+            } => vec![*array, *index, *value],
             Op::Call { args, .. } => args.clone(),
         }
     }

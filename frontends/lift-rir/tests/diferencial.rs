@@ -321,6 +321,44 @@ fn arrays_literal_e_indice() {
 }
 
 #[test]
+fn array_set_em_local_nao_aliasado() {
+    // Oráculo do Lift (`rsuvm-oracle9.lift`): `9`, `14`, `6`.
+    let troca = "function troca(): int { let xs: int[] = [1, 2, 3]; xs[0] = 9; return xs[0]; }";
+    assert_eq!(executar(troca, "troca", &[]), Value::I64(9));
+
+    let soma = "function soma(): int { let xs: int[] = [1, 2, 3]; xs[1] = 10; return xs[0] + xs[1] + xs[2]; }";
+    assert_eq!(executar(soma, "soma", &[]), Value::I64(14));
+
+    let acumula = "function acumula(): int { let xs: int[] = [0, 0, 0]; let i = 0; while i < 3 { xs[i] = i * 2; i = i + 1; } return xs[0] + xs[1] + xs[2]; }";
+    assert_eq!(executar(acumula, "acumula", &[]), Value::I64(6));
+}
+
+#[test]
+fn array_set_aliasado_e_rejeitado() {
+    // `ys` recebe `xs`; mutar `ys` mudaria `xs` no Lift (referência), mas não na
+    // RIR (valor). O adaptador recusa em vez de gerar módulo incorreto.
+    let source =
+        "function f(): int { let xs: int[] = [1, 2, 3]; let ys: int[] = xs; ys[0] = 9; return ys[0]; }";
+    let error = lower_source(source, "f").expect_err("array aliasado");
+    assert!(
+        matches!(error, AdapterError::Unsupported(_)),
+        "erro inesperado: {error:?}"
+    );
+}
+
+#[test]
+fn array_set_fora_dos_limites_trapa() {
+    let source = "function f(): int { let xs: int[] = [1, 2, 3]; xs[5] = 9; return xs[0]; }";
+    let module = lower_source(source, "f").expect("lowering Lift→RIR");
+    let verified = rvm_verify::VerifiedModule::verify(module, &Limits::default())
+        .expect("módulo gerado deveria verificar");
+    let config = ExecConfig::new(1_000_000, CallDepthLimit::new(64).expect("limite válido"));
+    let error = rvm_interpreter::execute(&verified, verified.entry(), &[], &config)
+        .expect_err("índice fora dos limites deveria trapar");
+    assert_eq!(error.code(), rvm_spec::ErrorCode::IndexOutOfBounds);
+}
+
+#[test]
 fn construto_fora_do_subconjunto_e_rejeitado() {
     // `console.log` (efeito de host) está fora do subconjunto.
     let source = "function f(): int { console.log(\"x\"); return 0; }";

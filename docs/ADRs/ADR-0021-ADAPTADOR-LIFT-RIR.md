@@ -25,8 +25,9 @@ pode importar Lift: adaptadores ficam fora de `crates/`.
    permanece sem dependências externas.
 3. **Subconjunto** suportado: funções com parâmetros/retorno `int` (`i64`),
    `boolean` (`bool`), `string` (`string`), `number` (`f64`), arrays desses tipos
-   (`array`) ou `void` (`unit`); `let`/`const`, **atribuição**, `return`,
-   `if`/`else if`/`else` (inclusive **merge** e `if` sem `else`) e **`while`**;
+   (`array`) ou `void` (`unit`); `let`/`const`, **atribuição** (a binding e a
+   **elemento de array** `xs[i] = v`), `return`, `if`/`else if`/`else` (inclusive
+   **merge** e `if` sem `else`) e **`while`**;
    expressões `int`/`boolean`/`string`/`number` literais, **literais de array**
    `[...]`, **indexação** `xs[i]`, locais, `+ - * / %`, comparações `== != < <= >
    >=` (`==`/`!=` de `string` por conteúdo; `+` de `string` é concatenação; `f64`
@@ -40,7 +41,8 @@ pode importar Lift: adaptadores ficam fora de `crates/`.
    `import`, statements de topo) devolve [`AdapterError::Unsupported`], nunca um
    módulo incorreto. Divisão/resto (ADR-0022), `string` (ADR-0024/0025), `f64`
    (ADR-0026) e arrays (ADR-0027) foram habilitadas por tipos/ops novos no núcleo.
-   Arrays do adaptador cobrem literais e indexação (sem mutação).
+   Arrays do adaptador cobrem literais, indexação e **atribuição a elemento**
+   `xs[i] = v` (ADR-0028), esta última só quando `xs` é um local **não-aliasado**.
 6. **Teste diferencial**: o valor executado na RSUVM é comparado com o **oráculo do
    Lift** (mesmo programa rodado pelo compilador do Lift), registrado em
    `docs/RELATORIOS/ADAPTADOR-LIFT-RIR.md`.
@@ -67,19 +69,21 @@ pode importar Lift: adaptadores ficam fora de `crates/`.
 
 - Positivas: demonstra a rota frontend→RIR com um frontend real; roda um
   subconjunto Lift na RSUVM; o núcleo permanece puro e sem dependências.
-- Negativas: cobre só `int`/`boolean`/`void` (sem efeitos, strings, arrays,
-  objetos); o adaptador carrega as dependências do Lift (`logos`, `serde`, …) no
-  **seu** workspace; depende de um commit fixado do Lift.
+- Negativas: cobre só `int`/`boolean`/`void`/`string`/`number`/arrays de escalares
+  (sem efeitos, objetos nem closures); a atribuição a elemento de array exige
+  análise de aliasing conservadora; o adaptador carrega as dependências do Lift
+  (`logos`, `serde`, …) no **seu** workspace; depende de um commit fixado do Lift.
 - Residual: a HIR do Lift é rica; ampliar o subconjunto (divisão, `while`,
   strings) exige decisões e testes próprios. Não há codegen reverso (RIR→Lift).
 
 ## Validação
 
-- `cargo test --manifest-path frontends/lift-rir/Cargo.toml`: **31 testes**
-  (`tests/diferencial.rs`: 22; `tests/cli.rs`: 9) — inclui `while` + atribuição,
+- `cargo test --manifest-path frontends/lift-rir/Cargo.toml`: **34 testes**
+  (`tests/diferencial.rs`: 25; `tests/cli.rs`: 9) — inclui `while` + atribuição,
   `if`/`else if`/`else` com merge, `&&`/`||`/`!` com curto-circuito, recursão
-  `fib`, `/` e `%`, `string`, `f64` (`number`), arrays (literal e índice), o trap de
-  divisão por zero, rejeição de `console.log` e os códigos de exit do `lift-run`
+  `fib`, `/` e `%`, `string`, `f64` (`number`), arrays (literal, índice e
+  `xs[i] = v` com rejeição de alias), o trap de divisão por zero e de índice fora
+  dos limites, rejeição de `console.log` e os códigos de exit do `lift-run`
   (0/2/3/4).
 - **Diferencial**: `cargo run -p lift_cli -- run examples/rsuvm-oracle.lift` no
   Lift produz `30 5 7 9 3 true false 25 12 55 0`; `rsuvm-oracle2.lift` produz

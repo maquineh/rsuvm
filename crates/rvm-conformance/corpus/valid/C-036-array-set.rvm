@@ -1,0 +1,18 @@
+; id: C-036
+; expect: value i64:9
+; extra: array_set atualiza um elemento e array_get lê o novo valor (ADR-0028)
+module c036 version 1
+entry atualiza
+
+fn atualiza() -> i64 {
+  entry:
+    v0 = const_i64 1
+    v1 = const_i64 2
+    v2 = const_i64 3
+    v3 = array v0, v1, v2
+    v4 = const_i64 0
+    v5 = const_i64 9
+    v6 = array_set v3, v4, v5
+    v7 = array_get v6, v4
+    return v7
+}

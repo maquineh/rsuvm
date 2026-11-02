@@ -16,7 +16,7 @@ BlockParam{ value: ValueId, name, ty }
 Instr     { def: ValueId, op: Op }
 Op        = const_i64 | const_bool | const_str | const_f64 | bin(op,lhs,rhs) | cmp(op,lhs,rhs)
           | str_eq(lhs,rhs) | str_ne(lhs,rhs) | str_len(operand) | concat_str(lhs,rhs)
-          | float(op,lhs,rhs) | array(items) | array_len(v) | array_get(v,i) | call(callee,args)
+          | float(op,lhs,rhs) | array(items) | array_len(v) | array_get(v,i) | array_set(v,i,x) | call(callee,args)
 Term      = return [v] | br(target,args) | cond_br(cond, target, target)
 ~~~
 
@@ -93,6 +93,7 @@ Depois de `structure::check`:
    | `array` | `1..=max_array_len` valores do mesmo tipo escalar | `array` |
    | `array_len` | `array` | `i64` |
    | `array_get` | `array`, `i64` | elemento do array |
+   | `array_set` | `array`, `i64`, elemento do array | `array` |
    | comparações `*_i64` | `i64`, `i64` | `bool` |
    | `call_static` | casam com `params` do alvo | `ret` do alvo |
    Qualquer divergência ⇒ `invalid_type`.
@@ -132,6 +133,10 @@ terminador por último. O primeiro erro vence.
 - `array` cria um array imutável (não-vazio, homogêneo) e cobra `len × 24` bytes na
   quota (cumulativo); `array_len` devolve o comprimento; `array_get` faz **bounds
   check** e produz `index_out_of_bounds` fora de `0..len` (ADR-0027).
+- `array_set` é uma **atualização funcional**: devolve um array **novo** com o
+  elemento substituído e **não altera** o array de origem (não há referências nem
+  aliasing no núcleo, ADR-0028). Exige `value` no tipo do elemento e faz bounds
+  check (`index_out_of_bounds`); cobra `len × 24` bytes cumulativos.
 - `br`/`cond_br` copiam os argumentos para os slots dos parâmetros do bloco alvo
   antes de saltar (phi explícito).
 - `return` devolve `Value::Unit` quando não há valor.

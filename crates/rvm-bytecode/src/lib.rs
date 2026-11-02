@@ -91,6 +91,7 @@ const OP_GE_F64: u8 = 34;
 const OP_ARRAY: u8 = 35;
 const OP_ARRAY_LEN: u8 = 36;
 const OP_ARRAY_GET: u8 = 37;
+const OP_ARRAY_SET: u8 = 38;
 
 // Tipos de terminador (tabela de `BYTECODE-EXP-0-IMPLEMENTACAO.md` §1).
 const TERM_RETURN: u8 = 0;
@@ -303,6 +304,16 @@ fn encode_instr(out: &mut Vec<u8>, instr: &Instr) {
             push_u32(out, *array);
             push_u32(out, *index);
         }
+        Op::ArraySet {
+            array,
+            index,
+            value,
+        } => {
+            push_u8(out, OP_ARRAY_SET);
+            push_u32(out, *array);
+            push_u32(out, *index);
+            push_u32(out, *value);
+        }
         Op::Bin { op, lhs, rhs } => {
             push_u8(out, bin_opcode(*op));
             push_u32(out, *lhs);
@@ -489,6 +500,11 @@ fn read_instr(reader: &mut Reader<'_>, limits: &Limits) -> Result<Instr, RvmErro
         OP_ARRAY_GET => Op::ArrayGet {
             array: reader.read_u32("operando array_get")?,
             index: reader.read_u32("índice de array_get")?,
+        },
+        OP_ARRAY_SET => Op::ArraySet {
+            array: reader.read_u32("operando array_set")?,
+            index: reader.read_u32("índice de array_set")?,
+            value: reader.read_u32("valor de array_set")?,
         },
         OP_ADD_I64_CHECKED => read_bin_operands(reader, BinOp::AddI64Checked)?,
         OP_SUB_I64_CHECKED => read_bin_operands(reader, BinOp::SubI64Checked)?,

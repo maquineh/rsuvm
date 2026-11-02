@@ -29,6 +29,7 @@ memória/transferência, integração Lift e integração Rio).
 | [0025](ADR-0025-CONCATENACAO-DE-STRING.md) | Concatenação de `string` com contabilização de memória | Aceito experimentalmente |
 | [0026](ADR-0026-TIPO-F64.md) | Tipo `f64` (ponto flutuante IEEE-754) no núcleo | Aceito experimentalmente |
 | [0027](ADR-0027-ARRAYS-IMUTAVEIS.md) | Arrays imutáveis no núcleo | Aceito experimentalmente |
+| [0028](ADR-0028-ARRAY-SET-FUNCIONAL.md) | Mutação de array por atualização funcional (`array_set`) | Aceito experimentalmente |
 
 Estados usados: `Proposto`, `Aceito experimentalmente`, `Validado no escopo`,
 `Rejeitado`, `Substituído`. "Validado no escopo" exige critério e evidência

@@ -7,18 +7,21 @@
 //! # Subconjunto suportado
 //!
 //! - funções com parâmetros/retorno em `int` (`i64`), `boolean` (`bool`),
-//!   `string` (`string`) ou `void` (`unit`);
-//! - `let`/`const`, **atribuição** a binding mutável, `return`, `if`/`else if`/
-//!   `else` (com merge) e `while`;
-//! - expressões: literais `int`/`boolean`/`string`, variáveis locais, `+ - * / %`,
-//!   comparações (`== != < <= > >=`; `==`/`!=` de `string` por conteúdo),
-//!   negação `-x`, lógica `!`/`&&`/`||` (**curto-circuito**) e chamadas a outras
-//!   funções do programa.
+//!   `string` (`string`), `number` (`f64`), arrays desses tipos (`array`) ou
+//!   `void` (`unit`);
+//! - `let`/`const`, **atribuição** a binding mutável e a **elemento de array**
+//!   (`xs[i] = v`), `return`, `if`/`else if`/`else` (com merge) e `while`;
+//! - expressões: literais `int`/`boolean`/`string`/`number`, **literais de array**
+//!   `[...]`, **indexação** `xs[i]`, variáveis locais, `+ - * / %`, comparações
+//!   (`== != < <= > >=`; `==`/`!=` de `string` por conteúdo), negação `-x`, lógica
+//!   `!`/`&&`/`||` (**curto-circuito**) e chamadas a outras funções do programa.
 //!
-//! Fora do subconjunto (`coalesce`, `f64`, strings, arrays, objetos, closures,
-//! `console.log`, `import`, `struct`, statements de topo): devolve
-//! [`AdapterError::Unsupported`]. Divisão/resto por zero e `i64::MIN / -1`
-//! produzem os traps `division_by_zero`/`integer_overflow` (ADR-0022).
+//! Fora do subconjunto (`coalesce`, objetos/structs, closures, `console.log`,
+//! `import`, statements de topo): devolve [`AdapterError::Unsupported`].
+//! Divisão/resto por zero e `i64::MIN / -1` produzem os traps
+//! `division_by_zero`/`integer_overflow` (ADR-0022). `xs[i] = v` só é baixado
+//! quando `xs` é um array local **não-aliasado** (ADR-0028); caso contrário,
+//! `Unsupported`.
 //!
 //! # Semântica (construção CFG/SSA)
 //!
@@ -30,7 +33,7 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use lift_ast::{BinaryOperator, UnaryOperator};
@@ -173,6 +176,9 @@ struct FuncLower {
     next_value: ValueId,
     next_label: u32,
     current: Option<Cursor>,
+    /// Locais de array comprovadamente não-aliasados (ADR-0028): podem receber
+    /// atribuição a elemento via atualização funcional.
+    safe_arrays: BTreeSet<BindingId>,
 }
 
 impl FuncLower {
@@ -182,6 +188,7 @@ impl FuncLower {
             next_value: first_value,
             next_label: 0,
             current: None,
+            safe_arrays: BTreeSet::new(),
         }
     }
 
@@ -305,19 +312,59 @@ impl FuncLower {
                     env.insert(declaration.id, (value, ty));
                 }
                 HirStatement::Assignment(assignment) => {
-                    let binding = match &assignment.target.kind {
-                        HirExprKind::Local { id, .. } => *id,
+                    match &assignment.target.kind {
+                        HirExprKind::Local { id, .. } => {
+                            let binding = *id;
+                            let ty = env.get(&binding).map(|(_, ty)| *ty).ok_or_else(|| {
+                                AdapterError::Unsupported(
+                                    "atribuição a binding não mapeado".to_string(),
+                                )
+                            })?;
+                            let value = self.lower_expr(names, &assignment.value, &env)?;
+                            env.insert(binding, (value, ty));
+                        }
+                        HirExprKind::Index { object, index } => {
+                            // `xs[i] = v`: atualização funcional (ADR-0028). Só é
+                            // baixada quando `xs` é um array local não-aliasado;
+                            // caso contrário, `Unsupported` (nunca módulo errado).
+                            let binding = index_object_binding(object).ok_or_else(|| {
+                                AdapterError::Unsupported(
+                                    "atribuição indexada exige array local".to_string(),
+                                )
+                            })?;
+                            if !self.safe_arrays.contains(&binding) {
+                                return Err(AdapterError::Unsupported(
+                                    "atribuição a elemento de array possivelmente aliasado"
+                                        .to_string(),
+                                ));
+                            }
+                            let (array_value, ty) =
+                                env.get(&binding).copied().ok_or_else(|| {
+                                    AdapterError::Unsupported(
+                                        "atribuição indexada a binding não mapeado".to_string(),
+                                    )
+                                })?;
+                            if !matches!(ty, Type::Array(_)) {
+                                return Err(AdapterError::Unsupported(
+                                    "atribuição indexada a valor que não é array".to_string(),
+                                ));
+                            }
+                            let position = self.lower_expr(names, index, &env)?;
+                            let element = self.lower_expr(names, &assignment.value, &env)?;
+                            let updated = self.emit(Op::ArraySet {
+                                array: array_value,
+                                index: position,
+                                value: element,
+                            })?;
+                            env.insert(binding, (updated, ty));
+                        }
                         _ => {
                             return Err(AdapterError::Unsupported(
-                                "alvo de atribuição não é variável".to_string(),
+                                "alvo de atribuição não é variável nem elemento de array"
+                                    .to_string(),
                             ))
                         }
-                    };
-                    let ty = env.get(&binding).map(|(_, ty)| *ty).ok_or_else(|| {
-                        AdapterError::Unsupported("atribuição a binding não mapeado".to_string())
-                    })?;
-                    let value = self.lower_expr(names, &assignment.value, &env)?;
-                    env.insert(binding, (value, ty));
+                    }
                 }
                 HirStatement::Expression(statement) => {
                     let _ = self.lower_expr(names, &statement.expression, &env)?;
@@ -824,6 +871,170 @@ impl FuncLower {
     }
 }
 
+/// Raiz de binding de um objeto de indexação, desembrulhando agrupamentos,
+/// `Move` e `Clone`.
+fn index_object_binding(expression: &HirExpr) -> Option<BindingId> {
+    match &expression.kind {
+        HirExprKind::Local { id, .. } => Some(*id),
+        HirExprKind::Grouping(inner) | HirExprKind::Move(inner) => index_object_binding(inner),
+        HirExprKind::Clone { expression, .. } => index_object_binding(expression),
+        _ => None,
+    }
+}
+
+/// `true` se a expressão é um literal de array (possivelmente agrupado).
+fn initializer_is_literal(expression: &HirExpr) -> bool {
+    match &expression.kind {
+        HirExprKind::ArrayLiteral(_) => true,
+        HirExprKind::Grouping(inner) => initializer_is_literal(inner),
+        _ => false,
+    }
+}
+
+/// Coleta locais de array declarados por um literal `[...]` na função.
+fn collect_literal_array_locals(statements: &[HirStatement], out: &mut BTreeSet<BindingId>) {
+    for statement in statements {
+        match statement {
+            HirStatement::Variable(declaration) => {
+                if matches!(declaration.ty, ResolvedType::Array(_))
+                    && initializer_is_literal(&declaration.initializer)
+                {
+                    out.insert(declaration.id);
+                }
+            }
+            HirStatement::If(node) => collect_literal_array_locals_if(node, out),
+            HirStatement::While(node) => {
+                collect_literal_array_locals(&node.body.statements, out);
+            }
+            HirStatement::Assignment(_) | HirStatement::Expression(_) | HirStatement::Return(_) => {
+            }
+        }
+    }
+}
+
+fn collect_literal_array_locals_if(node: &HirIf, out: &mut BTreeSet<BindingId>) {
+    collect_literal_array_locals(&node.then_branch.statements, out);
+    match &node.else_branch {
+        Some(HirElseBranch::Block(block)) => {
+            collect_literal_array_locals(&block.statements, out);
+        }
+        Some(HirElseBranch::ElseIf(nested)) => collect_literal_array_locals_if(nested, out),
+        None => {}
+    }
+}
+
+/// Marca os bindings usados como **valor** (qualquer uso que não seja objeto de
+/// indexação). Um local de array que apareça aqui escapa e não pode ser mutado
+/// com segurança sob semântica funcional.
+fn scan_block(statements: &[HirStatement], escaping: &mut BTreeSet<BindingId>) {
+    for statement in statements {
+        scan_statement(statement, escaping);
+    }
+}
+
+fn scan_statement(statement: &HirStatement, escaping: &mut BTreeSet<BindingId>) {
+    match statement {
+        HirStatement::Variable(declaration) => scan_expr(&declaration.initializer, escaping),
+        HirStatement::Assignment(assignment) => {
+            scan_expr(&assignment.target, escaping);
+            scan_expr(&assignment.value, escaping);
+        }
+        HirStatement::Expression(expression) => scan_expr(&expression.expression, escaping),
+        HirStatement::Return(ret) => {
+            if let Some(value) = &ret.value {
+                scan_expr(value, escaping);
+            }
+        }
+        HirStatement::If(node) => scan_if(node, escaping),
+        HirStatement::While(node) => {
+            scan_expr(&node.condition, escaping);
+            scan_block(&node.body.statements, escaping);
+        }
+    }
+}
+
+fn scan_if(node: &HirIf, escaping: &mut BTreeSet<BindingId>) {
+    scan_expr(&node.condition, escaping);
+    scan_block(&node.then_branch.statements, escaping);
+    match &node.else_branch {
+        Some(HirElseBranch::Block(block)) => scan_block(&block.statements, escaping),
+        Some(HirElseBranch::ElseIf(nested)) => scan_if(nested, escaping),
+        None => {}
+    }
+}
+
+fn scan_expr(expression: &HirExpr, escaping: &mut BTreeSet<BindingId>) {
+    match &expression.kind {
+        // O objeto de uma indexação é um "lugar": não é uso de valor.
+        HirExprKind::Index { object, index } => {
+            if index_object_binding(object).is_none() {
+                scan_expr(object, escaping);
+            }
+            scan_expr(index, escaping);
+        }
+        HirExprKind::Local { id, .. } => {
+            escaping.insert(*id);
+        }
+        HirExprKind::Grouping(inner) | HirExprKind::Move(inner) => scan_expr(inner, escaping),
+        HirExprKind::Clone { expression, .. } => scan_expr(expression, escaping),
+        HirExprKind::Unary { operand, .. } => scan_expr(operand, escaping),
+        HirExprKind::Binary { left, right, .. } => {
+            scan_expr(left, escaping);
+            scan_expr(right, escaping);
+        }
+        HirExprKind::Call { arguments, .. } => {
+            for argument in arguments {
+                scan_expr(&argument.expression, escaping);
+            }
+        }
+        HirExprKind::ArrayLiteral(items) => {
+            for item in items {
+                scan_expr(item, escaping);
+            }
+        }
+        HirExprKind::FieldAccess { object, .. } => scan_expr(object, escaping),
+        HirExprKind::StructLiteral { fields, .. } => {
+            for field in fields {
+                scan_expr(&field.value, escaping);
+            }
+        }
+        HirExprKind::OptionSome(payload) => scan_expr(payload, escaping),
+        HirExprKind::Coalesce {
+            option, fallback, ..
+        } => {
+            scan_expr(option, escaping);
+            scan_expr(fallback, escaping);
+        }
+        HirExprKind::Closure { captures, .. } => {
+            for (_, value) in captures {
+                scan_expr(value, escaping);
+            }
+        }
+        HirExprKind::ClosureCall { callee, arguments } => {
+            scan_expr(callee, escaping);
+            for argument in arguments {
+                scan_expr(argument, escaping);
+            }
+        }
+        HirExprKind::IntegerLiteral(_)
+        | HirExprKind::NumberLiteral(_)
+        | HirExprKind::StringLiteral(_)
+        | HirExprKind::BooleanLiteral(_)
+        | HirExprKind::OptionNone => {}
+    }
+}
+
+/// Locais de array **não-aliasados** (ADR-0028): declarados por literal e nunca
+/// usados como valor. Podem ser atualizados por `array_set` + religação.
+fn collect_mutable_arrays(function: &HirFunction) -> BTreeSet<BindingId> {
+    let mut candidates: BTreeSet<BindingId> = BTreeSet::new();
+    collect_literal_array_locals(&function.body.statements, &mut candidates);
+    let mut escaping: BTreeSet<BindingId> = BTreeSet::new();
+    scan_block(&function.body.statements, &mut escaping);
+    candidates.retain(|id| !escaping.contains(id));
+    candidates
+}
+
 /// Loweriza uma função Lift para uma função RIR.
 fn lower_function(
     function: &HirFunction,
@@ -852,6 +1063,7 @@ fn lower_function(
     let first_value = u32::try_from(function.parameters.len())
         .map_err(|_| AdapterError::Unsupported("parâmetros demais".to_string()))?;
     let mut lower = FuncLower::new(first_value);
+    lower.safe_arrays = collect_mutable_arrays(function);
     let entry = lower.alloc_block();
     lower.start(entry, "entry".to_string(), Vec::new());
     let out = lower.lower_block(names, &function.body.statements, env)?;

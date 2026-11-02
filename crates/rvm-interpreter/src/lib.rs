@@ -528,6 +528,67 @@ impl<'a> Interpreter<'a> {
                     self.write_current(&mut stack, top, instr.def, element, &site)?;
                     self.advance(&mut stack, top, &site)?;
                 }
+                Op::ArraySet {
+                    array,
+                    index,
+                    value,
+                } => {
+                    let (updated, bytes) = {
+                        let frame = stack.get(top).ok_or_else(|| {
+                            error_at(
+                                ErrorCode::InvalidModule,
+                                "frame ausente ao atualizar array",
+                                &site,
+                            )
+                        })?;
+                        let array_value = read_slot(frame, *array, &site)?;
+                        let items = array_value.as_array().ok_or_else(|| {
+                            error_at(
+                                ErrorCode::InvalidModule,
+                                format!("v{array} não é um array"),
+                                &site,
+                            )
+                        })?;
+                        let position = read_i64(frame, *index, &site)?;
+                        let len = i64::try_from(items.len()).unwrap_or(i64::MAX);
+                        if position < 0 || position >= len {
+                            return Err(error_at(
+                                ErrorCode::IndexOutOfBounds,
+                                format!("índice {position} fora de 0..{len}"),
+                                &site,
+                            ));
+                        }
+                        let offset = usize::try_from(position).map_err(|_| {
+                            error_at(
+                                ErrorCode::InvalidModule,
+                                "índice não representável neste host",
+                                &site,
+                            )
+                        })?;
+                        let replacement = read_slot(frame, *value, &site)?;
+                        let mut updated: Vec<Value> = Vec::new();
+                        updated.try_reserve_exact(items.len()).map_err(|_| {
+                            error_at(
+                                ErrorCode::InvalidModule,
+                                "não foi possível alocar o array",
+                                &site,
+                            )
+                        })?;
+                        updated.extend_from_slice(items);
+                        if let Some(slot) = updated.get_mut(offset) {
+                            *slot = replacement;
+                        }
+                        let bytes = u64::try_from(updated.len())
+                            .unwrap_or(u64::MAX)
+                            .saturating_mul(SLOT_BYTES);
+                        (Value::Array(updated), bytes)
+                    };
+                    // A atualização funcional produz um array novo; cobra os
+                    // bytes novamente (cumulativo, ADR-0028).
+                    self.charge_memory(bytes, &site)?;
+                    self.write_current(&mut stack, top, instr.def, updated, &site)?;
+                    self.advance(&mut stack, top, &site)?;
+                }
                 Op::Call { callee, args } => {
                     let callee_function = self.callee(*callee, &site)?;
                     // O buffer de argumentos é cobrado antes de alocar (falha

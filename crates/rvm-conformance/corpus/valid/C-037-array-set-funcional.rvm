@@ -1,0 +1,18 @@
+; id: C-037
+; expect: value i64:1
+; extra: array_set é atualização funcional; o array de origem não muda (ADR-0028)
+module c037 version 1
+entry origem
+
+fn origem() -> i64 {
+  entry:
+    v0 = const_i64 1
+    v1 = const_i64 2
+    v2 = const_i64 3
+    v3 = array v0, v1, v2
+    v4 = const_i64 0
+    v5 = const_i64 9
+    v6 = array_set v3, v4, v5
+    v7 = array_get v3, v4
+    return v7
+}

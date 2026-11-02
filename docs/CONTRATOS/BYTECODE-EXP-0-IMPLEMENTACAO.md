@@ -93,6 +93,7 @@ terminator:
 | 35 | `array` | `u16 count`, `u32 items[count]` |
 | 36 | `array_len` | `u32 array` |
 | 37 | `array_get` | `u32 array`, `u32 index` |
+| 38 | `array_set` | `u32 array`, `u32 index`, `u32 value` |
 
 Código desconhecido ⇒ `unknown_opcode`.
 

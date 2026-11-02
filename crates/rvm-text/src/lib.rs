@@ -284,6 +284,18 @@ fn print_op(module: &Module, function: &Function, op: &Op, out: &mut String) {
             out.push_str(", ");
             print_value(function, *index, out);
         }
+        Op::ArraySet {
+            array,
+            index,
+            value,
+        } => {
+            out.push_str("array_set ");
+            print_value(function, *array, out);
+            out.push_str(", ");
+            print_value(function, *index, out);
+            out.push_str(", ");
+            print_value(function, *value, out);
+        }
         Op::Bin { op, lhs, rhs } => {
             out.push_str(op.name());
             out.push(' ');
@@ -651,6 +663,7 @@ enum RawOp {
     Array(Vec<String>),
     ArrayLen(String),
     ArrayGet(String, String),
+    ArraySet(String, String, String),
     Call(String, Vec<String>),
 }
 
@@ -1050,6 +1063,14 @@ impl Parser {
                 let index = self.expect_ident("índice")?;
                 RawOp::ArrayGet(array, index)
             }
+            "array_set" => {
+                let array = self.expect_ident("operando array")?;
+                self.expect_token(Token::Comma, "`,` entre operandos")?;
+                let index = self.expect_ident("índice")?;
+                self.expect_token(Token::Comma, "`,` entre operandos")?;
+                let value = self.expect_ident("valor do elemento")?;
+                RawOp::ArraySet(array, index, value)
+            }
             "call_static" => {
                 let callee = self.expect_ident("nome da função chamada")?;
                 self.expect_token(Token::LParen, "`(` na chamada")?;
@@ -1413,6 +1434,11 @@ fn lower_op(
         RawOp::ArrayGet(array, index) => Op::ArrayGet {
             array: value(array)?,
             index: value(index)?,
+        },
+        RawOp::ArraySet(array, index, element) => Op::ArraySet {
+            array: value(array)?,
+            index: value(index)?,
+            value: value(element)?,
         },
         RawOp::Bin(op, lhs, rhs) => Op::Bin {
             op: *op,

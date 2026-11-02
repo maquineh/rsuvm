@@ -4,8 +4,9 @@
 - **Adaptador:** `frontends/lift-rir` (workspace separado; ADR-0021)
 - **Lift de origem:** commit `5e59af55baba7af53f8763140d35c972399d2851`
   (`https://github.com/maquineh/lift`, licença `MIT OR Apache-2.0`)
-- **Escopo:** subconjunto de funções `int`/`boolean`/`void` com `let`/`const`,
-  **atribuição**, `return`, `if`/`else if`/`else` (com merge), **`while`** e lógica
+- **Escopo:** subconjunto de funções `int`/`boolean`/`string`/`number`/`void` e
+  arrays de escalares, com `let`/`const`, **atribuição** (a binding e a elemento de
+  array), `return`, `if`/`else if`/`else` (com merge), **`while`** e lógica
   `!`/`&&`/`||` com curto-circuito (ver ADR-0021)
 
 ## 1. Pipeline
@@ -195,14 +196,38 @@ Saída do Lift (oráculo): `20`.
 |---|---|---|---|---|
 | `segundo` (literal + índice) | `segundo()` | 20 | `i64:20` | sim |
 
-Resultado: `22 passed` (diferencial) + `9 passed` (CLI) = **31 passed; 0 failed**.
+### 2.7 `array_set` (`xs[i] = v`)
+
+Oitavo programa de referência (`rsuvm-oracle9.lift`):
+
+```bash
+cargo run -p lift_cli -- run examples/rsuvm-oracle9.lift
+```
+
+Saída do Lift (oráculo): `9 14 6`.
+
+| Caso (Lift) | Chamada | Oráculo Lift | RSUVM (RIR) | Igual? |
+|---|---|---|---|---|
+| `troca` (`xs[0] = 9`) | `troca()` | 9 | `i64:9` | sim |
+| `soma` (`xs[1] = 10`) | `soma()` | 14 | `i64:14` | sim |
+| `acumula` (`while` + `xs[i] = i*2`) | `acumula()` | 6 | `i64:6` | sim |
+
+`xs[i] = v` vira `array_set` + **religação** do binding ao array novo (atualização
+funcional, ADR-0028). Como o Lift tem semântica de **referência**, o adaptador só
+baixa a atribuição quando `xs` é um **local não-aliasado** (declarado por literal e
+usado só como objeto de indexação); arrays possivelmente aliasados devolvem
+`AdapterError::Unsupported` em vez de um módulo incorreto.
+
+Resultado: `25 passed` (diferencial) + `9 passed` (CLI) = **34 passed; 0 failed**.
 
 ## 3. Limitações
 
 1. Subconjunto ainda estreito: **sem** `coalesce`, objetos/structs, closures,
    `console.log`/`import`. Fora disso, `AdapterError::Unsupported`. Divisão/resto,
-   `string` (com concatenação), `f64` (`number`) e arrays (literal + índice) são
-   suportados; mutação de array e objetos exigiriam mais no núcleo.
+   `string` (com concatenação), `f64` (`number`) e arrays (literal, índice e
+   `xs[i] = v`) são suportados; a atribuição a elemento exige que o array seja um
+   local não-aliasado (ADR-0028) e objetos/structs ainda exigiriam um tipo novo no
+   núcleo.
 2. O adaptador é um **workspace separado** e depende do Lift por git fixado; o
    núcleo RSUVM continua sem dependências externas.
 3. O teste compara com o oráculo do Lift **registrado**; não invoca o compilador do

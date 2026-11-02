@@ -284,6 +284,18 @@ impl<'a> FunctionFacts<'a> {
                 self.require_array(*array, location)?;
                 self.check_operand_type(*index, Type::I64, location)
             }
+            Op::ArraySet {
+                array,
+                index,
+                value,
+            } => {
+                self.check_use(block_index, instr_index, *array, location)?;
+                self.check_use(block_index, instr_index, *index, location)?;
+                self.check_use(block_index, instr_index, *value, location)?;
+                let element = self.array_element_type(*array, location)?;
+                self.check_operand_type(*index, Type::I64, location)?;
+                self.check_operand_type(*value, element.ty(), location)
+            }
             Op::Call { callee, args } => {
                 let target = self.module.function(*callee).ok_or_else(|| {
                     invalid(
@@ -470,6 +482,22 @@ impl<'a> FunctionFacts<'a> {
     fn require_array(&self, value: ValueId, location: &Location) -> Result<(), RvmError> {
         match self.type_of_value(value, location)? {
             Type::Array(_) => Ok(()),
+            other => Err(invalid(
+                ErrorCode::InvalidType,
+                format!("valor v{value} tem tipo {other}, esperado array"),
+                location.clone(),
+            )),
+        }
+    }
+
+    /// Elemento do tipo de array de `value`, exigindo que seja um array.
+    fn array_element_type(
+        &self,
+        value: ValueId,
+        location: &Location,
+    ) -> Result<ArrayElem, RvmError> {
+        match self.type_of_value(value, location)? {
+            Type::Array(element) => Ok(element),
             other => Err(invalid(
                 ErrorCode::InvalidType,
                 format!("valor v{value} tem tipo {other}, esperado array"),
@@ -808,6 +836,26 @@ fn build_values(
                         }
                     }
                 }
+                Op::ArraySet { array, .. } => {
+                    let array_index = value_index(*array, location)?;
+                    let array_ty = types.get(array_index).copied().flatten().ok_or_else(|| {
+                        invalid(
+                            ErrorCode::InvalidModule,
+                            "tipo do array desconhecido".to_string(),
+                            location.clone(),
+                        )
+                    })?;
+                    match array_ty {
+                        Type::Array(element) => Type::Array(element),
+                        _ => {
+                            return Err(invalid(
+                                ErrorCode::InvalidType,
+                                "array_set sobre valor que não é array".to_string(),
+                                location.clone(),
+                            ))
+                        }
+                    }
+                }
                 other => operation_type(module, other, location)?,
             };
             record_type(&mut types, index, ty, location)?;
@@ -837,6 +885,7 @@ fn operation_type(module: &Module, op: &Op, location: &Location) -> Result<Type,
         Op::ArrayLiteral(_) => Ok(Type::Array(ArrayElem::I64)),
         Op::ArrayLen { .. } => Ok(Type::I64),
         Op::ArrayGet { .. } => Ok(Type::I64),
+        Op::ArraySet { .. } => Ok(Type::Array(ArrayElem::I64)),
         Op::Call { callee, .. } => module
             .function(*callee)
             .map(|target| target.ret)

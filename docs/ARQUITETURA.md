@@ -63,12 +63,14 @@ linguagem (ADR-0009).
   `ne_i64`, `lt_i64`, `le_i64`, `gt_i64`, `ge_i64`, `str_eq`, `str_ne`, `str_len`,
   `concat_str`, `add_f64`, `sub_f64`, `mul_f64`, `div_f64`, `eq_f64`, `ne_f64`,
   `lt_f64`, `le_f64`, `gt_f64`, `ge_f64`, `array`, `array_len`, `array_get`,
+  `array_set`,
   `call_static`.
 - Terminadores: `return`, `br`, `cond_br`.
 - Merge por parâmetros de bloco (phi explícito).
 - Fora do EXP-0: registros/objetos, referências, closures, `unsafe`, FFI,
   exceções recuperáveis, threads, async. Arrays existem **imutáveis** (ADR-0027),
-  sem mutação/slicing; `f64` existe (ADR-0026) sem `%`/`pow`/conversões;
+  com atualização **funcional** por `array_set` (ADR-0028, sem referências), sem
+  mutação in-place, sem slicing e sem arrays aninhados; `f64` existe (ADR-0026) sem `%`/`pow`/conversões;
   concatenação de `string` existe (ADR-0025), sem slicing.
 
 Semântica aritmética: `i64::checked_*`; resultado fora de `[-2^63, 2^63-1]`

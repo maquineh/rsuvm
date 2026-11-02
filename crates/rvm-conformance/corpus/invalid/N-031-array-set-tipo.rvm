@@ -1,0 +1,16 @@
+; id: N-031
+; expect: error invalid_type
+; extra: array_set exige valor do tipo do elemento do array (ADR-0028)
+module n031 version 1
+entry troca
+
+fn troca() -> bool {
+  entry:
+    v0 = const_i64 10
+    v1 = array v0
+    v2 = const_i64 0
+    v3 = const_bool true
+    v4 = array_set v1, v2, v3
+    v5 = array_get v4, v2
+    return v5
+}

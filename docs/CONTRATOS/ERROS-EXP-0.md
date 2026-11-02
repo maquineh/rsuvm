@@ -38,7 +38,7 @@ humanas nunca são contrato.
 | `division_by_zero` | trap | trap | divisão ou resto por zero (ADR-0022) | `rvm-interpreter` |
 | `invalid_shift` | trap | trap | deslocamento com quantidade fora de `0..=63` (ADR-0023) | `rvm-interpreter` |
 | `string_too_long` | trap | trap | concatenação acima de `max_string_bytes` (ADR-0025) | `rvm-interpreter` |
-| `index_out_of_bounds` | trap | trap | `array_get` com índice fora de `0..len` (ADR-0027) | `rvm-interpreter` |
+| `index_out_of_bounds` | trap | trap | `array_get`/`array_set` com índice fora de `0..len` (ADR-0027/0028) | `rvm-interpreter` |
 | `out_of_fuel` | resource | resource_limit | saldo de fuel insuficiente antes do despacho | `rvm-interpreter` |
 | `call_depth_exceeded` | resource | resource_limit | profundidade de chamadas excederia o limite | `rvm-interpreter` |
 | `out_of_memory` | resource | resource_limit | quota de memória modelada de frames excedida | `rvm-interpreter` |
@@ -81,6 +81,8 @@ aparecem durante a execução de um `VerifiedModule`.
 | N-027 deslocamento fora de `0..=63` | `invalid_shift` | execução (trap) |
 | N-028 concatenação sem quota | `out_of_memory` | execução (limite) |
 | N-029 índice de array fora dos limites | `index_out_of_bounds` | execução (trap) |
+| N-030 `array_set` fora dos limites | `index_out_of_bounds` | execução (trap) |
+| N-031 `array_set` com valor de tipo errado | `invalid_type` | verificação |
 
 `invalid_module` também cobre limite estrutural excedido: a distinção entre
 "estrutura inválida" e "quota de execução" é feita por `class`, não pelo texto.

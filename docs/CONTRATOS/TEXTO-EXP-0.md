@@ -32,6 +32,7 @@ operação   = "const_i64" inteiro
            | "array" valor { "," valor }
            | "array_len" valor
            | "array_get" valor "," valor
+           | "array_set" valor "," valor "," valor
            | "call_static" ident "(" [valores] ")" ;
 op_binário = "add_i64_checked" | "sub_i64_checked" | "mul_i64_checked"
            | "div_i64_checked" | "rem_i64_checked"
