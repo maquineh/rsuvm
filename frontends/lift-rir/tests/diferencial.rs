@@ -162,10 +162,31 @@ fn while_aninhado_em_if() {
 }
 
 #[test]
+fn divisao_e_resto() {
+    let source = "function divide(a: int, b: int): int { return a / b; } function resto(a: int, b: int): int { return a % b; }";
+    assert_eq!(
+        executar(source, "divide", &[Value::I64(20), Value::I64(6)]),
+        Value::I64(3)
+    );
+    assert_eq!(
+        executar(source, "divide", &[Value::I64(-20), Value::I64(6)]),
+        Value::I64(-3)
+    );
+    assert_eq!(
+        executar(source, "resto", &[Value::I64(20), Value::I64(6)]),
+        Value::I64(2)
+    );
+    assert_eq!(
+        executar(source, "resto", &[Value::I64(-20), Value::I64(6)]),
+        Value::I64(-2)
+    );
+}
+
+#[test]
 fn construto_fora_do_subconjunto_e_rejeitado() {
-    // Divisão não existe no núcleo EXP-0; exige ADR próprio.
-    let source = "function metade(a: int): int { return a / 2; }";
-    let error = lower_source(source, "metade").expect_err("divisão está fora do subconjunto");
+    // `string` não existe no núcleo EXP-0.
+    let source = "function nome(): string { return \"x\"; }";
+    let error = lower_source(source, "nome").expect_err("string está fora do subconjunto");
     assert!(
         matches!(error, AdapterError::Unsupported(_)),
         "erro inesperado: {error:?}"

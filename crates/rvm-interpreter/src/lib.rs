@@ -20,8 +20,9 @@
 //! - A quota de memória modelada cobra o custo do frame **e** o buffer
 //!   transitório de argumentos de chamada/desvio enquanto ele existe
 //!   (ADR-0016); [`RunOutcome::memory_peak`] registra o pico observado.
-//! - `add/sub/mul_i64_checked` usam [`rvm_spec::BinOp::eval_i64`]; resultado fora
-//!   de `i64` produz o trap `integer_overflow`. Comparações usam
+//! - `add/sub/mul/div/rem_i64_checked` usam [`rvm_spec::BinOp::eval_i64`];
+//!   resultado fora de `i64` produz o trap `integer_overflow`, e divisão/resto por
+//!   zero produz `division_by_zero` (ADR-0022). Comparações usam
 //!   [`rvm_spec::CmpOp::eval_i64`] e produzem `bool`.
 //! - `br`/`cond_br` copiam os argumentos para os slots dos parâmetros do bloco
 //!   alvo antes do salto (phi explícito); `return` sem valor produz
@@ -53,7 +54,7 @@
 
 use rvm_ir::{BlockId, FnId, Function, Module, Op, Terminator, ValueId};
 use rvm_runtime::{arg_buffer_cost, frame_cost, ExecConfig, Value};
-use rvm_spec::{ErrorCode, Location, RvmError};
+use rvm_spec::{BinOp, ErrorCode, Location, RvmError};
 
 use rvm_verify::VerifiedModule;
 
@@ -310,13 +311,25 @@ impl<'a> Interpreter<'a> {
                 Op::Bin { op, lhs, rhs } => {
                     let left = self.read_i64(&stack, top, *lhs, &site)?;
                     let right = self.read_i64(&stack, top, *rhs, &site)?;
-                    let result = op.eval_i64(left, right).ok_or_else(|| {
-                        error_at(
-                            ErrorCode::IntegerOverflow,
-                            format!("`{op}` transbordou com os operandos {left} e {right}"),
-                            &site,
-                        )
-                    })?;
+                    let result = match op.eval_i64(left, right) {
+                        Some(value) => value,
+                        None => {
+                            let (code, detail) = if right == 0
+                                && matches!(op, BinOp::DivI64Checked | BinOp::RemI64Checked)
+                            {
+                                (
+                                    ErrorCode::DivisionByZero,
+                                    format!("`{op}` com divisor zero"),
+                                )
+                            } else {
+                                (
+                                    ErrorCode::IntegerOverflow,
+                                    format!("`{op}` transbordou com os operandos {left} e {right}"),
+                                )
+                            };
+                            return Err(error_at(code, detail, &site));
+                        }
+                    };
                     self.write_current(&mut stack, top, instr.def, Value::I64(result), &site)?;
                     self.advance(&mut stack, top, &site)?;
                 }

@@ -1,0 +1,12 @@
+; id: C-020
+; expect: value i64:3
+; args: i64:20, i64:6
+; extra: divisão inteira truncando para zero (div_i64_checked, ADR-0022)
+module c020 version 1
+entry divisao
+
+fn divisao(a: i64, b: i64) -> i64 {
+  entry:
+    v2 = div_i64_checked a, b
+    return v2
+}

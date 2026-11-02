@@ -70,10 +70,51 @@ fn while_executa_e_imprime() {
 }
 
 #[test]
+fn divisao_executa() {
+    let file = temp_lift(
+        "divide",
+        "function divide(a: int, b: int): int { return a / b; }",
+    );
+    let result = run(&[
+        file.to_str().unwrap(),
+        "divide",
+        "--arg",
+        "i64:20",
+        "--arg",
+        "i64:6",
+    ]);
+    assert_eq!(result.code, Some(0));
+    assert_eq!(result.stdout.trim(), "i64:3");
+    let _ = fs::remove_file(file);
+}
+
+#[test]
+fn divisao_por_zero_sai_com_codigo_de_trap() {
+    let file = temp_lift(
+        "divide0",
+        "function divide(a: int, b: int): int { return a / b; }",
+    );
+    let result = run(&[
+        file.to_str().unwrap(),
+        "divide",
+        "--arg",
+        "i64:1",
+        "--arg",
+        "i64:0",
+    ]);
+    assert_eq!(
+        result.code,
+        Some(3),
+        "esperava exit 3 (trap division_by_zero)"
+    );
+    let _ = fs::remove_file(file);
+}
+
+#[test]
 fn construto_fora_do_subconjunto_sai_com_codigo_de_modulo() {
-    // Divisão não existe no núcleo EXP-0.
-    let file = temp_lift("divisao", "function metade(a: int): int { return a / 2; }");
-    let result = run(&[file.to_str().unwrap(), "metade", "--arg", "i64:10"]);
+    // `string` não existe no núcleo EXP-0.
+    let file = temp_lift("texto", "function nome(): string { return \"x\"; }");
+    let result = run(&[file.to_str().unwrap(), "nome"]);
     assert_eq!(result.code, Some(2), "esperava exit 2 (módulo)");
     let _ = fs::remove_file(file);
 }

@@ -34,7 +34,8 @@ humanas nunca são contrato.
 | `invalid_type` | verify | module | tipo ou aridade incompatível (operandos, argumentos, retorno, condição, chamada) | `rvm-verify` |
 | `invalid_control_flow` | verify | module | alvo de desvio inexistente, bloco inalcançável, terminador ausente/duplicado, violação de dominância | `rvm-ir`, `rvm-verify`, `rvm-text` |
 | `unsupported_feature` | verify | module | imports, capability concedida sem executor, recurso fora do EXP-0 | `rvm-ir`, `rvm-verify`, `rvm-text`, `rvm-runtime` |
-| `integer_overflow` | trap | trap | soma/subtração/multiplicação fora de `i64` | `rvm-interpreter` |
+| `integer_overflow` | trap | trap | soma/subtração/multiplicação fora de `i64`; `i64::MIN / -1` e `i64::MIN % -1` | `rvm-interpreter` |
+| `division_by_zero` | trap | trap | divisão ou resto por zero (ADR-0022) | `rvm-interpreter` |
 | `out_of_fuel` | resource | resource_limit | saldo de fuel insuficiente antes do despacho | `rvm-interpreter` |
 | `call_depth_exceeded` | resource | resource_limit | profundidade de chamadas excederia o limite | `rvm-interpreter` |
 | `out_of_memory` | resource | resource_limit | quota de memória modelada de frames excedida | `rvm-interpreter` |
@@ -72,6 +73,8 @@ aparecem durante a execução de um `VerifiedModule`.
 | N-011 recursão acima da profundidade | `call_depth_exceeded` | execução (limite) |
 | N-012 truncamento/`length` excessivo | `truncated_input` / `input_too_large` | decode (bytecode) |
 | N-021 quota de memória | `out_of_memory` | execução (limite) |
+| N-025 divisão por zero | `division_by_zero` | execução (trap) |
+| N-026 `i64::MIN / -1` | `integer_overflow` | execução (trap) |
 
 `invalid_module` também cobre limite estrutural excedido: a distinção entre
 "estrutura inválida" e "quota de execução" é feita por `class`, não pelo texto.

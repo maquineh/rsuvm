@@ -79,7 +79,7 @@ Depois de `structure::check`:
    |---|---|---|
    | `const_i64` | — | `i64` |
    | `const_bool` | — | `bool` |
-   | `add/sub/mul_i64_checked` | `i64`, `i64` | `i64` |
+   | `add/sub/mul/div/rem_i64_checked` | `i64`, `i64` | `i64` |
    | comparações `*_i64` | `i64`, `i64` | `bool` |
    | `call_static` | casam com `params` do alvo | `ret` do alvo |
    Qualquer divergência ⇒ `invalid_type`.
@@ -106,7 +106,8 @@ terminador por último. O primeiro erro vence.
   `Function::value_count()`; slots não inicializados são erro interno
   (`invalid_module`), nunca pânico.
 - `const_*` grava o valor; `bin` aplica `rvm_spec::BinOp::eval_i64` e mapeia
-  `None` para `integer_overflow`; `cmp` usa `CmpOp::eval_i64`; `call` avalia
+  `None` para `integer_overflow`, exceto divisão/resto por zero, que produz
+  `division_by_zero` (ADR-0022); `cmp` usa `CmpOp::eval_i64`; `call` avalia
   argumentos, verifica profundidade, entra no frame do callee e grava o retorno no
   slot de `def`.
 - `br`/`cond_br` copiam os argumentos para os slots dos parâmetros do bloco alvo

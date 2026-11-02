@@ -19,6 +19,8 @@ com valor esperado, e cada terminador em pelo menos um caso válido. A verifica�
 | `add_i64_checked` | C-001, C-004, C-005, C-017, C-018, C-019 |
 | `sub_i64_checked` | C-010 |
 | `mul_i64_checked` | C-011 |
+| `div_i64_checked` | C-020 |
+| `rem_i64_checked` | C-021 |
 | `eq_i64` | C-002 |
 | `ne_i64` | C-012 |
 | `lt_i64` | C-008 |
@@ -46,7 +48,8 @@ com a expectativa declarada. A verificação é executada por
 | `invalid_control_flow` | N-005, N-006, N-013, N-016, N-018 |
 | `unknown_opcode` | N-008 |
 | `unsupported_version` | N-014 |
-| `integer_overflow` | N-009, N-019, N-020 |
+| `integer_overflow` | N-009, N-019, N-020, N-026 |
+| `division_by_zero` | N-025 |
 | `out_of_fuel` | N-010 |
 | `call_depth_exceeded` | N-011 |
 | `out_of_memory` | N-021, N-024 |

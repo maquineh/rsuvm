@@ -24,6 +24,7 @@ operação   = "const_i64" inteiro
            | op_binário valor "," valor
            | "call_static" ident "(" [valores] ")" ;
 op_binário = "add_i64_checked" | "sub_i64_checked" | "mul_i64_checked"
+           | "div_i64_checked" | "rem_i64_checked"
            | "eq_i64" | "ne_i64" | "lt_i64" | "le_i64" | "gt_i64" | "ge_i64" ;
 valores    = valor { "," valor } ;
 valor      = ident ;

@@ -91,6 +91,12 @@ pub enum BinOp {
     SubI64Checked,
     /// Multiplicação com verificação de overflow (`mul_i64_checked`).
     MulI64Checked,
+    /// Divisão inteira com verificação (`div_i64_checked`). Divisão por zero e
+    /// `i64::MIN / -1` devolvem [`None`] (ADR-0022).
+    DivI64Checked,
+    /// Resto inteiro com verificação (`rem_i64_checked`). Resto por zero e
+    /// `i64::MIN % -1` devolvem [`None`] (ADR-0022).
+    RemI64Checked,
 }
 
 impl BinOp {
@@ -101,6 +107,8 @@ impl BinOp {
             BinOp::AddI64Checked => "add_i64_checked",
             BinOp::SubI64Checked => "sub_i64_checked",
             BinOp::MulI64Checked => "mul_i64_checked",
+            BinOp::DivI64Checked => "div_i64_checked",
+            BinOp::RemI64Checked => "rem_i64_checked",
         }
     }
 
@@ -114,6 +122,8 @@ impl BinOp {
             "add_i64_checked" => Some(BinOp::AddI64Checked),
             "sub_i64_checked" => Some(BinOp::SubI64Checked),
             "mul_i64_checked" => Some(BinOp::MulI64Checked),
+            "div_i64_checked" => Some(BinOp::DivI64Checked),
+            "rem_i64_checked" => Some(BinOp::RemI64Checked),
             _ => None,
         }
     }
@@ -133,14 +143,17 @@ impl BinOp {
     /// Aplica a operação com overflow verificado.
     ///
     /// Devolve [`None`] quando o resultado matemático não cabe em `i64`
-    /// (inclusive `i64::MIN * -1` e `i64::MIN - 1`). O contrato não depende de
-    /// `cfg!(debug_assertions)`.
+    /// (inclusive `i64::MIN * -1` e `i64::MIN - 1`). Para divisão e resto,
+    /// devolve [`None`] também em divisão/resto por zero e em `i64::MIN / -1`
+    /// (ADR-0022). O contrato não depende de `cfg!(debug_assertions)`.
     #[must_use]
     pub fn eval_i64(self, lhs: i64, rhs: i64) -> Option<i64> {
         match self {
             BinOp::AddI64Checked => lhs.checked_add(rhs),
             BinOp::SubI64Checked => lhs.checked_sub(rhs),
             BinOp::MulI64Checked => lhs.checked_mul(rhs),
+            BinOp::DivI64Checked => lhs.checked_div(rhs),
+            BinOp::RemI64Checked => lhs.checked_rem(rhs),
         }
     }
 }
@@ -338,6 +351,8 @@ pub enum ErrorCode {
     UnsupportedFeature,
     /// Trap aritmético: resultado fora de `[-2^63, 2^63-1]`.
     IntegerOverflow,
+    /// Trap aritmético: divisão ou resto por zero (`division_by_zero`, ADR-0022).
+    DivisionByZero,
     /// Fuel esgotado antes do despacho.
     OutOfFuel,
     /// Profundidade máxima de chamadas excedida.
@@ -365,6 +380,7 @@ impl ErrorCode {
             ErrorCode::InvalidControlFlow => "invalid_control_flow",
             ErrorCode::UnsupportedFeature => "unsupported_feature",
             ErrorCode::IntegerOverflow => "integer_overflow",
+            ErrorCode::DivisionByZero => "division_by_zero",
             ErrorCode::OutOfFuel => "out_of_fuel",
             ErrorCode::CallDepthExceeded => "call_depth_exceeded",
             ErrorCode::OutOfMemory => "out_of_memory",
@@ -390,6 +406,7 @@ impl ErrorCode {
             "invalid_control_flow" => Some(ErrorCode::InvalidControlFlow),
             "unsupported_feature" => Some(ErrorCode::UnsupportedFeature),
             "integer_overflow" => Some(ErrorCode::IntegerOverflow),
+            "division_by_zero" => Some(ErrorCode::DivisionByZero),
             "out_of_fuel" => Some(ErrorCode::OutOfFuel),
             "call_depth_exceeded" => Some(ErrorCode::CallDepthExceeded),
             "out_of_memory" => Some(ErrorCode::OutOfMemory),
@@ -413,7 +430,7 @@ impl ErrorCode {
             | ErrorCode::InvalidType
             | ErrorCode::InvalidControlFlow
             | ErrorCode::UnsupportedFeature => ErrorCategory::Verify,
-            ErrorCode::IntegerOverflow => ErrorCategory::Trap,
+            ErrorCode::IntegerOverflow | ErrorCode::DivisionByZero => ErrorCategory::Trap,
             ErrorCode::OutOfFuel | ErrorCode::CallDepthExceeded | ErrorCode::OutOfMemory => {
                 ErrorCategory::Resource
             }
@@ -626,6 +643,15 @@ mod tests {
         assert_eq!(BinOp::MulI64Checked.eval_i64(i64::MAX, 2), None);
         assert_eq!(BinOp::MulI64Checked.eval_i64(i64::MIN, -1), None);
         assert_eq!(BinOp::AddI64Checked.eval_i64(i64::MIN, i64::MAX), Some(-1));
+        // Divisão e resto (ADR-0022): truncam para zero; zero e `MIN / -1` falham.
+        assert_eq!(BinOp::DivI64Checked.eval_i64(20, 6), Some(3));
+        assert_eq!(BinOp::DivI64Checked.eval_i64(-20, 6), Some(-3));
+        assert_eq!(BinOp::DivI64Checked.eval_i64(1, 0), None);
+        assert_eq!(BinOp::DivI64Checked.eval_i64(i64::MIN, -1), None);
+        assert_eq!(BinOp::RemI64Checked.eval_i64(20, 6), Some(2));
+        assert_eq!(BinOp::RemI64Checked.eval_i64(-20, 6), Some(-2));
+        assert_eq!(BinOp::RemI64Checked.eval_i64(1, 0), None);
+        assert_eq!(BinOp::RemI64Checked.eval_i64(i64::MIN, -1), None);
     }
 
     #[test]
@@ -646,6 +672,8 @@ mod tests {
             BinOp::AddI64Checked,
             BinOp::SubI64Checked,
             BinOp::MulI64Checked,
+            BinOp::DivI64Checked,
+            BinOp::RemI64Checked,
         ] {
             assert_eq!(BinOp::from_name(op.name()), Some(op));
         }
@@ -680,12 +708,18 @@ mod tests {
             ErrorCode::InvalidControlFlow,
             ErrorCode::UnsupportedFeature,
             ErrorCode::IntegerOverflow,
+            ErrorCode::DivisionByZero,
             ErrorCode::OutOfFuel,
             ErrorCode::CallDepthExceeded,
             ErrorCode::CapabilityDenied,
         ] {
             assert_eq!(ErrorCode::from_stable_name(code.as_str()), Some(code));
         }
+        assert_eq!(
+            ErrorCode::DivisionByZero.class(),
+            ErrorClass::Trap,
+            "divisão por zero é trap semântico"
+        );
         assert_eq!(
             ErrorCode::InvalidType.class(),
             ErrorClass::Module,

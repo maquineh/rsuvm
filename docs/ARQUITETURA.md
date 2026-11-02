@@ -58,15 +58,16 @@ linguagem (ADR-0009).
 
 - Tipos: `unit`, `bool`, `i64`. Sem coerção implícita.
 - Operações: `const_i64`, `const_bool`, `add_i64_checked`, `sub_i64_checked`,
-  `mul_i64_checked`, `eq_i64`, `ne_i64`, `lt_i64`, `le_i64`, `gt_i64`, `ge_i64`,
-  `call_static`.
+  `mul_i64_checked`, `div_i64_checked`, `rem_i64_checked`, `eq_i64`, `ne_i64`,
+  `lt_i64`, `le_i64`, `gt_i64`, `ge_i64`, `call_static`.
 - Terminadores: `return`, `br`, `cond_br`.
 - Merge por parâmetros de bloco (phi explícito).
-- Fora do EXP-0: divisão, resto, shifts, `f64`, strings, arrays, registros,
-  referências, closures, `unsafe`, FFI, exceções recuperáveis, threads, async.
+- Fora do EXP-0: shifts, `f64`, strings, arrays, registros, referências,
+  closures, `unsafe`, FFI, exceções recuperáveis, threads, async.
 
 Semântica aritmética: `i64::checked_*`; resultado fora de `[-2^63, 2^63-1]`
-produz o trap `integer_overflow`. O comportamento é idêntico em debug e release
+produz o trap `integer_overflow`, e divisão/resto por zero produz
+`division_by_zero` (ADR-0022). O comportamento é idêntico em debug e release
 (`overflow-checks = true` também no perfil release, como defesa extra).
 
 ## 4. Quotas

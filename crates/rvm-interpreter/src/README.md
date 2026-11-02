@@ -32,8 +32,9 @@ carrega localização nos diagnósticos. Executa a RIR diretamente, sem JIT/AOT
 - A execução usa uma **pilha de frames explícita na heap** (`Vec<Frame>`), sem
   recursão na linguagem hospedeira; a versão recursiva anterior estourou a pilha
   nativa com 256 frames (ADR-0012).
-- `add/sub/mul_i64_checked` usam `rvm_spec::BinOp::eval_i64`; `None` vira trap
-  `integer_overflow`. Comparações usam `CmpOp::eval_i64` e produzem `bool`.
+- `add/sub/mul/div/rem_i64_checked` usam `rvm_spec::BinOp::eval_i64`; `None` vira
+  trap `integer_overflow` (ou `division_by_zero`, em divisão/resto por zero —
+  ADR-0022). Comparações usam `CmpOp::eval_i64` e produzem `bool`.
 - `br`/`cond_br` copiam os argumentos para os slots dos parâmetros do bloco alvo
   antes do salto (phi explícito); `return` sem valor produz `Value::Unit`.
 - Erros de execução carregam `Location` de função, bloco ou instrução; trap de

@@ -88,8 +88,28 @@ Saída do Lift (oráculo): `15 0 7 0 1 2 10 3 6 0`.
 
 **Todos os 10 pontos coincidem.**
 
+### 2.2 Divisão e resto
+
+Terceiro programa de referência (`rsuvm-oracle3.lift`):
+
+```bash
+cargo run -p lift_cli -- run examples/rsuvm-oracle3.lift
+```
+
+Saída do Lift (oráculo): `3 -3 2 -2` (truncamento para zero).
+
+| Caso (Lift) | Chamada | Oráculo Lift | RSUVM (RIR) | Igual? |
+|---|---|---|---|---|
+| `divide` | `divide(20, 6)` | 3 | `i64:3` | sim |
+| `divide` | `divide(-20, 6)` | -3 | `i64:-3` | sim |
+| `resto` | `resto(20, 6)` | 2 | `i64:2` | sim |
+| `resto` | `resto(-20, 6)` | -2 | `i64:-2` | sim |
+
+Divisão/resto por zero produz o trap `division_by_zero` (ADR-0022); o `lift-run`
+sai com código 3.
+
 Os testes automatizados vivem em `frontends/lift-rir/tests/diferencial.rs`
-(13 testes; cada um roda o pipeline completo Lift→RIR→verificação→execução).
+(14 testes; cada um roda o pipeline completo Lift→RIR→verificação→execução).
 
 Comando de verificação:
 
@@ -97,14 +117,14 @@ Comando de verificação:
 cargo test --manifest-path frontends/lift-rir/Cargo.toml
 ```
 
-Resultado: `13 passed` (diferencial) + `6 passed` (CLI) = **19 passed; 0 failed**.
+Resultado: `14 passed` (diferencial) + `8 passed` (CLI) = **22 passed; 0 failed**.
 
 ## 3. Limitações
 
-1. Subconjunto ainda estreito: **sem** `else if`, divisão/resto, `f64`, strings,
+1. Subconjunto ainda estreito: **sem** `else if`, `coalesce`, `f64`, strings,
    arrays, objetos, closures, `console.log`/`import` nem `not`/`and`/`or`. Fora
-   disso, `AdapterError::Unsupported`. Divisão/resto **não existem** no núcleo
-   EXP-0 (exigiriam ADR com op nova); strings exigiriam um tipo novo no núcleo.
+   disso, `AdapterError::Unsupported`. Divisão/resto são suportadas (ADR-0022);
+   strings exigiriam um tipo novo no núcleo.
 2. O adaptador é um **workspace separado** e depende do Lift por git fixado; o
    núcleo RSUVM continua sem dependências externas.
 3. O teste compara com o oráculo do Lift **registrado**; não invoca o compilador do

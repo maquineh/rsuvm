@@ -10,14 +10,15 @@
 //!   (`unit`);
 //! - `let`/`const`, **atribuição** a binding mutável, `return`, `if/else`
 //!   (inclusive com merge) e `while`;
-//! - expressões: literais `int`/`boolean`, variáveis locais, `+ - *`,
+//! - expressões: literais `int`/`boolean`, variáveis locais, `+ - * / %`,
 //!   comparações (`== != < <= > >=`), negação unária (`-x`) e chamadas a outras
 //!   funções do próprio programa.
 //!
-//! Fora do subconjunto (`else if`, divisão/resto, `f64`, strings, arrays,
-//! objetos, closures, `console.log`, `import`, `not`, `and`, `or`, `struct`,
-//! statements de topo): devolve [`AdapterError::Unsupported`]. Divisão/resto e
-//! strings não existem no núcleo EXP-0; exigiriam ADR (op nova) ou tipo novo.
+//! Fora do subconjunto (`else if`, `coalesce`, `f64`, strings, arrays, objetos,
+//! closures, `console.log`, `import`, `not`, `and`, `or`, `struct`, statements de
+//! topo): devolve [`AdapterError::Unsupported`]. Divisão/resto por zero e
+//! `i64::MIN / -1` produzem os traps `division_by_zero`/`integer_overflow`
+//! (ADR-0022), como no núcleo.
 //!
 //! # Semântica (construção CFG/SSA)
 //!
@@ -573,6 +574,16 @@ impl FuncLower {
                         lhs,
                         rhs,
                     },
+                    BinaryOperator::Divide => Op::Bin {
+                        op: BinOp::DivI64Checked,
+                        lhs,
+                        rhs,
+                    },
+                    BinaryOperator::Remainder => Op::Bin {
+                        op: BinOp::RemI64Checked,
+                        lhs,
+                        rhs,
+                    },
                     BinaryOperator::Equal => Op::Cmp {
                         op: CmpOp::Eq,
                         lhs,
@@ -603,12 +614,8 @@ impl FuncLower {
                         lhs,
                         rhs,
                     },
-                    BinaryOperator::Divide
-                    | BinaryOperator::Remainder
-                    | BinaryOperator::Coalesce => {
-                        return Err(AdapterError::Unsupported(
-                            "divisão/resto/coalesce".to_string(),
-                        ))
+                    BinaryOperator::Coalesce => {
+                        return Err(AdapterError::Unsupported("coalesce".to_string()))
                     }
                     BinaryOperator::And | BinaryOperator::Or => {
                         return Err(AdapterError::Unsupported("`and`/`or`".to_string()))

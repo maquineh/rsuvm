@@ -1,0 +1,12 @@
+; id: C-021
+; expect: value i64:2
+; args: i64:20, i64:6
+; extra: resto inteiro (rem_i64_checked, ADR-0022)
+module c021 version 1
+entry resto
+
+fn resto(a: i64, b: i64) -> i64 {
+  entry:
+    v2 = rem_i64_checked a, b
+    return v2
+}

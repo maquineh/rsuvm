@@ -67,6 +67,8 @@ terminator:
 | 9 | `gt_i64` | `u32 lhs`, `u32 rhs` |
 | 10 | `ge_i64` | `u32 lhs`, `u32 rhs` |
 | 11 | `call_static` | `u32 callee`, `u16 argc`, `u32 args[argc]` |
+| 12 | `div_i64_checked` | `u32 lhs`, `u32 rhs` |
+| 13 | `rem_i64_checked` | `u32 lhs`, `u32 rhs` |
 
 Código desconhecido ⇒ `unknown_opcode`.
 

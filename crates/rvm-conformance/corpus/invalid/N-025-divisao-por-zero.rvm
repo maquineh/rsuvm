@@ -1,0 +1,12 @@
+; id: N-025
+; expect: trap division_by_zero
+; args: i64:1, i64:0
+; extra: divisão por zero produz trap division_by_zero (ADR-0022)
+module n025 version 1
+entry divide
+
+fn divide(a: i64, b: i64) -> i64 {
+  entry:
+    v2 = div_i64_checked a, b
+    return v2
+}

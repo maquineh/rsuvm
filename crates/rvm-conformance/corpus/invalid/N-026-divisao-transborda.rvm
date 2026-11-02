@@ -1,0 +1,12 @@
+; id: N-026
+; expect: trap integer_overflow
+; args: i64:-9223372036854775808, i64:-1
+; extra: i64::MIN / -1 transborda i64 (ADR-0022)
+module n026 version 1
+entry divide
+
+fn divide(a: i64, b: i64) -> i64 {
+  entry:
+    v2 = div_i64_checked a, b
+    return v2
+}
