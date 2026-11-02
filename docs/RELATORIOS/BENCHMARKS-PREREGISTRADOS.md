@@ -117,8 +117,9 @@ resultados (dev e runner) estão registrados acima.
 
 1. Medição de tempo depende da máquina e do SO. Na máquina de desenvolvimento
    (não isolada) a dispersão chegou a 65% e H06 ficou inconclusiva; no runner
-   dedicado (`bench.yml`), a dispersão no ponto classificador foi 0,28% e H06 foi
-   confirmada. O workflow manual permanece para reexecução.
+   dedicado (`bench.yml`), a dispersão no ponto classificador foi 0,28% no run
+   `41429076866` e 0,45% no run `41520845695`, com H06 confirmada nos dois. O
+   workflow manual permanece para reexecução.
 2. Como a ligação estática elimina a fronteira de módulo em tempo de execução, o
    "custo inter-módulo" medido é apenas a diferença de indireção/renomeação, que
    tende a zero por construção; o custo real do desenho é a ligação (uma vez),
@@ -144,3 +145,31 @@ limitações em
 [`BENCHMARK-REEXECUCAO-2026-11-02.md`](./BENCHMARK-REEXECUCAO-2026-11-02.md).
 A confirmação anterior no runner dedicado (`bench.yml`, run `41429076866`) não é
 substituída por uma medição não isolada; para reclassificar, rode o workflow.
+
+## 9. Reclassificação no runner dedicado — run 41520845695
+
+- **Data:** 2026-11-02
+- **Commit:** `85af2e7` (ABI de host/ADR-0036; benchmark de chamada inalterado)
+- **Ambiente:** GitHub Actions, `ubuntu-latest`, workflow `bench.yml`
+- **Run:** `41520845695`, conclusão `success` (40 s)
+- **Método/limiares:** os mesmos da seção 3; nenhum ajuste pós-hoc.
+
+| k | fuel | intra ns | inter ns | H06 rel | dispersão |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 6 | 321,3 | 322,8 | — | 0,0452 |
+| 4 | 18 | 961,7 | 960,8 | −0,0037 | 0,0620 |
+| 16 | 66 | 3 509,9 | 3 515,0 | 0,0024 | 0,0062 |
+| 64 | 258 | 13 715,6 | 13 701,2 | −0,0019 | 0,0193 |
+| 256 | 1 026 | 54 458,6 | 54 254,6 | **−0,0047** | **0,0045** |
+
+- Custo de ligação (k = 64): **9 735,4 ns** por ligação.
+- Dispersão máxima observada: 0,0620 (6,2%); no ponto classificador: **0,0045
+  (0,45%)**.
+- **Classificação: H06 CONFIRMADA** (`overhead relativo −0,0047 ≤ 0,25`).
+- O tempo absoluto do runner mudou em relação ao run `41429076866` (54,5 µs vs
+  26,5 µs em k = 256); como build, máquina e carga do runner não são controlados
+  entre runs, **não se atribui a causa** sem perfilamento. A classificação de H06
+  é relativa e independente dessa diferença.
+
+Log completo: artefato `bench-log` do run `41520845695` em
+<https://github.com/maquineh/rsuvm/actions/runs/41520845695>.

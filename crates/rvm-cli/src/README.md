@@ -39,10 +39,12 @@ traduz `ErrorClass`/`ErrorCode` em códigos de saída estáveis
 - Sem `--allow-fs-read`, `CliHost` usa `Capabilities::none()` e `host_read_file`
   falha com `capability_denied` (exit 5) antes de tocar o arquivo
   (`main.rs:CliHost`, teste `host_sem_flag_e_capability_denied`).
-- `--allow-fs-read <dir>` concede `filesystem_read` para caminhos sob `dir`
-  (comparação por componentes; `..` é negado; escopo vazio é erro de uso); o host
-  revalida o escopo e limita a leitura a 1 MiB. Caminho fora do escopo ⇒ exit 5
-  (testes `host_com_flag_nega_arquivo_fora_do_escopo` e
+- `--allow-fs-read <dir>` exige diretório absoluto, existente e sem `..`; concede
+  `filesystem_read` para caminhos sob `dir` (comparação por componentes; `..` é
+  negado; escopo vazio/relativo/inexistente é erro de uso). O host canonicaliza a
+  raiz e o alvo, recusa alvo canônico fora da raiz (symlink para fora ⇒ exit 5),
+  aceita apenas arquivo regular e limita a leitura a 1 MiB (ADR-0037). Caminho
+  fora do escopo ⇒ exit 5 (testes `host_com_flag_nega_arquivo_fora_do_escopo` e
   `host_com_flag_nega_escapada_com_parent_dir`).
 - `--allow-fs-read` é a única flag de concessão; qualquer outro `--allow-*` é
   opção desconhecida e sai com 1 (`main.rs:parse_options`, teste
@@ -59,9 +61,9 @@ traduz `ErrorClass`/`ErrorCode` em códigos de saída estáveis
 
 - Lê exatamente o arquivo de entrada indicado e, em `encode`, escreve exatamente o
   arquivo de saída indicado (`std::fs::read`, `std::fs::read_to_string`,
-  `std::fs::write`). Com `--allow-fs-read <dir>`, `CliHost` também lê arquivos sob
-  `<dir>` quando o convidado chama `host_read_file`; nenhum outro acesso a
-  filesystem.
+  `std::fs::write`). Com `--allow-fs-read <dir>`, `CliHost` canonicaliza e lê
+  arquivos regulares sob `<dir>` quando o convidado chama `host_read_file`;
+  nenhum outro acesso a filesystem.
 - Escreve em `stdout`/`stderr` do processo. Nenhuma rede, ambiente, relógio ou
   subprocesso.
 

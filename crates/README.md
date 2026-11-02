@@ -42,4 +42,4 @@ executor aceita.
 - [rvm-cli](./rvm-cli/README.md) — binário `rsuvm` (`run`, `run-bc`, `check`,
   `fmt`, `encode`); nega efeitos por padrão e concede `filesystem_read` com
   `--allow-fs-read <dir>`.
-- [rvm-conformance](./rvm-conformance/README.md) — corpus em dados (61 válidos, 42 inválidos) e testes de conformidade/propriedades.
+- [rvm-conformance](./rvm-conformance/README.md) — corpus em dados (62 válidos, 42 inválidos) e testes de conformidade/propriedades.

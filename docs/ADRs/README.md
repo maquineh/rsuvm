@@ -38,6 +38,7 @@ memória/transferência, integração Lift e integração Rio).
 | [0034](ADR-0034-TIPOS-POR-ID.md) | Representação de tipos por id (tabela no módulo) | Aceito experimentalmente |
 | [0035](ADR-0035-MEMORIA-RETIDA.md) | Quota de memória por valor retido (liberação em slots) | Aceito experimentalmente |
 | [0036](ADR-0036-ABI-HOST-CAPABILITIES.md) | ABI mínima de host com capabilities, escopo e quota por efeito | Aceito experimentalmente |
+| [0037](ADR-0037-ESCOPO-DE-ARQUIVO.md) | Escopo de arquivo: canonicalização no host e handles adiados | Aceito experimentalmente |
 
 Estados usados: `Proposto`, `Aceito experimentalmente`, `Validado no escopo`,
 `Rejeitado`, `Substituído`. "Validado no escopo" exige critério e evidência

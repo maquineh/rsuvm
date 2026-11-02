@@ -1,0 +1,14 @@
+; id: C-062
+; expect: capability capability_denied
+; extra: host_read_file verifica, mas execute sem host nega antes do efeito (ADR-0036/0037)
+module c062 version 1
+entry le
+type 5 = result string string
+
+fn le() -> result string string {
+  entry:
+    v0 = const_str "arquivo.txt"
+    v1 = const_i64 100
+    v2 = host_read_file v0, v1
+    return v2
+}

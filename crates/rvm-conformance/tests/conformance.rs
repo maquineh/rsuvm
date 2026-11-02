@@ -40,6 +40,7 @@ enum Expect {
     Error(ErrorCode),
     Trap(ErrorCode),
     Limit(ErrorCode),
+    Capability(ErrorCode),
 }
 
 #[derive(Debug)]
@@ -131,6 +132,7 @@ fn parse_case(path: &Path) -> Case {
                 "error" => Expect::Error(code(rest.trim())),
                 "trap" => Expect::Trap(code(rest.trim())),
                 "limit" => Expect::Limit(code(rest.trim())),
+                "capability" => Expect::Capability(code(rest.trim())),
                 other => panic!("{}: tipo de expectativa `{other}`", path.display()),
             };
             assert!(
@@ -338,6 +340,9 @@ fn run_corpus(directory: &str) -> (BTreeSet<String>, usize) {
             Expect::Limit(expected) => {
                 check_execution_failure(&case, *expected, ErrorClass::ResourceLimit)
             }
+            Expect::Capability(expected) => {
+                check_execution_failure(&case, *expected, ErrorClass::Capability)
+            }
         }
         count += 1;
     }
@@ -357,6 +362,7 @@ fn corpus_valido_executa_e_reproduz() {
         "C-032", "C-033", "C-034", "C-035", "C-036", "C-037", "C-038", "C-039", "C-040", "C-041",
         "C-042", "C-043", "C-044", "C-045", "C-046", "C-047", "C-048", "C-049", "C-050", "C-051",
         "C-052", "C-053", "C-054", "C-055", "C-056", "C-057", "C-058", "C-059", "C-060", "C-061",
+        "C-062",
     ] {
         assert!(
             ids.contains(required),

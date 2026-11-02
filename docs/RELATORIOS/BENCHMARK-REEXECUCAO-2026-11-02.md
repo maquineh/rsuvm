@@ -60,8 +60,8 @@
 No ponto k = 256, o tempo intra desta reexecução (≈98,6–102,2 µs) é cerca de 2,3×
 o valor da tabela de desenvolvimento original (43,5 µs). Como a máquina, a carga e
 o build não foram controlados, **não se atribui a causa** a ADR-0034/0035 sem
-perfilamento. O número do runner (26,5 µs) continua sendo a referência de
-classificação de H06.
+perfilamento. O número do runner (26,5 µs no run `41429076866`; 54,5 µs no run
+`41520845695`) é a referência de classificação de H06, que é relativa; ver §7.
 
 ## 6. Reprodução
 
@@ -72,3 +72,28 @@ cargo bench -p rvm-interpreter --bench chamada
 O binário imprime a tabela, o custo de ligação e a classificação. O workflow
 `.github/workflows/bench.yml` continua manual; para classificar H06 de forma
 estável, rode-o em runner dedicado e registre o run.
+
+## 7. Reclassificação no runner dedicado (run 41520845695)
+
+Após esta reexecução local, o workflow `bench.yml` foi disparado na `main` no
+commit `85af2e7` (GitHub Actions, `ubuntu-latest`). O run `41520845695` concluiu
+com sucesso e reclassificou H06:
+
+| k | fuel | intra ns | inter ns | H06 rel | dispersão |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 6 | 321,3 | 322,8 | — | 0,0452 |
+| 4 | 18 | 961,7 | 960,8 | −0,0037 | 0,0620 |
+| 16 | 66 | 3 509,9 | 3 515,0 | 0,0024 | 0,0062 |
+| 64 | 258 | 13 715,6 | 13 701,2 | −0,0019 | 0,0193 |
+| 256 | 1 026 | 54 458,6 | 54 254,6 | **−0,0047** | **0,0045** |
+
+- Ligação (k = 64): **9 735,4 ns**.
+- **H06 CONFIRMADA**: overhead relativo `−0,0047 ≤ 0,25`, dispersão `0,45%` no
+  ponto classificador.
+- O tempo absoluto (54,5 µs em k = 256) difere do run `41429076866` (26,5 µs);
+  sem controle de build/máquina entre runs, não se atribui causa. A classificação
+  é relativa e não muda.
+- Limitações da seção 5 continuam valendo: é microbenchmark, não carga real.
+
+Artefato: `bench-log` do run
+<https://github.com/maquineh/rsuvm/actions/runs/41520845695>.

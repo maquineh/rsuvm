@@ -374,6 +374,137 @@ fn host_com_escopo_vazio_e_erro_de_uso() {
 }
 
 #[test]
+fn host_com_escopo_relativo_e_erro_de_uso() {
+    let output = saida(bin().arg("run").arg(caminho_exemplo()).args([
+        "--arg",
+        "i64:10",
+        "--arg",
+        "i64:20",
+        "--allow-fs-read",
+        "relativo",
+    ]));
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "stderr: {}",
+        texto(&output.stderr)
+    );
+    assert!(texto(&output.stderr).contains("absoluto"));
+}
+
+#[test]
+fn host_com_parent_dir_no_escopo_e_erro_de_uso() {
+    let dir = cenario_host("escopo-parent");
+    let output = saida(
+        bin()
+            .arg("run")
+            .arg(dir.join("le.rvm"))
+            .args([
+                "--arg",
+                &format!("str:{}", dir.join("dentro.txt").display()),
+                "--arg",
+                "i64:100",
+                "--allow-fs-read",
+            ])
+            .arg(dir.join("sub").join("..")),
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "stderr: {}",
+        texto(&output.stderr)
+    );
+    assert!(texto(&output.stderr).contains(".."));
+}
+
+#[test]
+fn host_com_escopo_inexistente_e_erro_de_uso() {
+    let dir = cenario_host("escopo-inexistente");
+    let output = saida(
+        bin()
+            .arg("run")
+            .arg(dir.join("le.rvm"))
+            .args([
+                "--arg",
+                &format!("str:{}", dir.join("dentro.txt").display()),
+                "--arg",
+                "i64:100",
+                "--allow-fs-read",
+            ])
+            .arg(dir.join("nao-existe")),
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "stderr: {}",
+        texto(&output.stderr)
+    );
+    assert!(texto(&output.stderr).contains("canonical"));
+}
+
+#[test]
+fn host_com_escopo_arquivo_e_erro_de_uso() {
+    let dir = cenario_host("escopo-arquivo");
+    let output = saida(
+        bin()
+            .arg("run")
+            .arg(dir.join("le.rvm"))
+            .args([
+                "--arg",
+                &format!("str:{}", dir.join("dentro.txt").display()),
+                "--arg",
+                "i64:100",
+                "--allow-fs-read",
+            ])
+            .arg(dir.join("dentro.txt")),
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "stderr: {}",
+        texto(&output.stderr)
+    );
+    assert!(texto(&output.stderr).contains("diretório"));
+}
+
+#[cfg(unix)]
+#[test]
+fn host_com_flag_nega_symlink_para_fora_do_escopo() {
+    use std::os::unix::fs::symlink;
+
+    let dir = cenario_host("symlink");
+    let fora =
+        std::env::temp_dir().join(format!("rsuvm-cli-fora-{}-symlink.txt", std::process::id()));
+    std::fs::write(&fora, "segredo").expect("escrever arquivo fora");
+    symlink(&fora, dir.join("link.txt")).expect("criar symlink");
+    let output = saida(
+        bin()
+            .arg("run")
+            .arg(dir.join("le.rvm"))
+            .args([
+                "--arg",
+                &format!("str:{}", dir.join("link.txt").display()),
+                "--arg",
+                "i64:100",
+                "--allow-fs-read",
+            ])
+            .arg(&dir),
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+    let _ = std::fs::remove_file(&fora);
+    assert_eq!(
+        output.status.code(),
+        Some(5),
+        "stderr: {}",
+        texto(&output.stderr)
+    );
+    assert!(texto(&output.stderr).contains("capability_denied"));
+}
+
+#[test]
 fn encode_e_run_bc_preservam_host_read_file() {
     let dir = cenario_host("roundtrip");
     let fonte = dir.join("le.rvm");

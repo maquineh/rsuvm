@@ -152,7 +152,9 @@ Comando de verificação do projeto: `cargo test --workspace`.
 - Nenhuma capability é concedida por padrão: `execute` sem host e `HostApi`
   negam tudo. A exceção explícita é `read_file` com `filesystem_read`, concedida
   programaticamente por `Capabilities::grant`/`execute_with_host` ou pelo CLI com
-  `--allow-fs-read <dir>` (ADR-0036). Isso é uma propriedade do código atual, não
+  `--allow-fs-read <dir>` (ADR-0036). O host do CLI exige escopo absoluto e
+  existente, canonicaliza raiz e alvo e recusa symlink para fora; isso reduz o
+  escape, mas não é sandbox (ADR-0037). É uma propriedade do código atual, não
   uma promessa de que efeitos futuros serão seguros.
 - Adaptadores Lift/Rio não existem neste repositório; ver
   `docs/RELATORIOS/BASELINE-RIO.md` e `docs/fundacao/INTEGRACAO/`.

@@ -184,7 +184,7 @@ futuras. O protótipo não é sandbox multi-tenant.
 | H03 chamada inter-módulo sem serialização geral | **confirmada estruturalmente** | ADR-0018; ver `BENCHMARKS-PREREGISTRADOS.md` |
 | H04 transferência exclusiva/alias | **não testada** | sem objetos, referências ou aliasing no EXP-0 |
 | H05 capabilities deny-by-default | **corroborada no escopo** | default deny; concessão explícita só para `filesystem_read` com escopo; testes de negação (ADR-0036) |
-| H06 custo de chamada inter-módulo ≤ 25% | **confirmada no runner dedicado; inconclusiva na reexecução local** | dispersão 1,33% no runner; 57,8%/31,8% local — ver `BENCHMARK-REEXECUCAO-2026-11-02.md` |
+| H06 custo de chamada inter-módulo ≤ 25% | **confirmada no runner dedicado; inconclusiva na reexecução local** | runs `41429076866` (dispersão 1,33%) e `41520845695` (0,45%, overhead −0,0047); local 57,8%/31,8% — ver `BENCHMARK-REEXECUCAO-2026-11-02.md` |
 | H07 fuel/profundidade determinísticos | **corroborada no escopo** | fronteiras exatas 5/6, 8/255/256 e testes repetidos |
 | H08 integração Lift sem alterar semântica | **bloqueada** | sem clone/auditoria do Lift; ADR-0007 inalterado |
 
@@ -213,9 +213,10 @@ executados.
    contados (ADR-0016).
 2. **Sem benchmark**: H06 e qualquer alegação de desempenho continuam sem medição.
    **Atualização:** o benchmark pré-registrado foi executado depois (runner
-   dedicado e reexecução local); ver `BENCHMARKS-PREREGISTRADOS.md` §5/§8 e
+   dedicado e reexecução local); ver `BENCHMARKS-PREREGISTRADOS.md` §5/§8/§9 e
    `BENCHMARK-REEXECUCAO-2026-11-02.md`. A reexecução local pós ADR-0034/0035
-   ficou inconclusiva por dispersão; a confirmação de H06 é a do runner.
+   ficou inconclusiva por dispersão; o run `41520845695` no runner dedicado
+   reconfirmou H06 (dispersão 0,45%, overhead −0,0047).
 3. **Fuzzing limitado e determinístico**: 10 módulos × 200 mutações (bytecode) e
    10 × 200 (texto); não é campanha e não prova ausência de bugs.
 4. **Sem revisão independente ou auditoria** de segurança.

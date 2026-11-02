@@ -108,8 +108,8 @@ do decoder binário. A ausência é **lacuna declarada**, não aprovação:
 | `syntax_error`, `unknown_type`, `invalid_number`, `unsupported_feature` | parser textual (`crates/rvm-text/tests`) |
 | `string_too_long` | `crates/rvm-interpreter/tests/memoria.rs` (concatenação acima de `max_string_bytes`) |
 | `truncated_input`, `input_too_large` | decoder binário (`crates/rvm-bytecode/tests/hostile.rs`) |
-| `capability_denied` | `crates/rvm-interpreter/tests/host.rs`, `crates/rvm-cli/tests/cli.rs` e `rvm-runtime` |
-| `host_read_file` | `crates/rvm-interpreter/tests/host.rs` e `crates/rvm-cli/tests/cli.rs`; o corpus não executa host (ADR-0036) |
+| `capability_denied` | C-062 (corpus), `crates/rvm-interpreter/tests/host.rs`, `crates/rvm-cli/tests/cli.rs` e `rvm-runtime` |
+| `host_read_file` | C-062 (verifica + nega sem host); leitura concedida em `crates/rvm-interpreter/tests/host.rs` e `crates/rvm-cli/tests/cli.rs` (ADR-0036/0037) |
 | limites estruturais (funções, blocos, instruções, valores) | `rvm-ir/src/structure.rs` (unitários, com `Limits` customizados) |
 | `call_static` entre módulos | `crates/rvm-link/tests` e benchmark pré-registrado (ADR-0018); H03 confirmada estruturalmente |
 

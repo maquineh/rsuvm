@@ -258,25 +258,62 @@ const HOST_READ_LIMIT: u64 = 1024 * 1024;
 
 /// Host do CLI: concede `filesystem_read` apenas sob o diretório indicado.
 ///
-/// A checagem de capability é feita pelo intérprete **antes** de chamar o host; o
-/// host revalida o escopo e limita os bytes lidos (defesa em profundidade).
+/// O escopo é absoluto, não contém `..` e precisa existir; a raiz é
+/// canonicalizada na criação. Em cada chamada, o host revalida o escopo lexical,
+/// canonicaliza o caminho pedido e recusa se o alvo real sair da raiz canônica
+/// (ADR-0037). A checagem de capability do intérprete acontece antes; esta é a
+/// segunda barreira.
 struct CliHost {
     capabilities: Capabilities,
+    canonical_root: Option<PathBuf>,
     max_bytes: u64,
 }
 
 impl CliHost {
-    fn new(scope: Option<&Path>) -> Self {
-        let capabilities = match scope {
-            Some(path) => {
-                Capabilities::grant(Effect::FilesystemRead, path.to_string_lossy().into_owned())
-            }
-            None => Capabilities::none(),
+    fn new(scope: Option<&Path>) -> Result<Self, Failure> {
+        let Some(path) = scope else {
+            return Ok(Self {
+                capabilities: Capabilities::none(),
+                canonical_root: None,
+                max_bytes: HOST_READ_LIMIT,
+            });
         };
-        Self {
-            capabilities,
-            max_bytes: HOST_READ_LIMIT,
+        if !path.is_absolute() {
+            return Err(Failure::Usage(
+                "`--allow-fs-read` exige um diretório absoluto".to_string(),
+            ));
         }
+        if path
+            .components()
+            .any(|component| matches!(component, std::path::Component::ParentDir))
+        {
+            return Err(Failure::Usage(
+                "`--allow-fs-read` não aceita `..`".to_string(),
+            ));
+        }
+        let canonical_root = std::fs::canonicalize(path).map_err(|error| {
+            Failure::Usage(format!(
+                "`--allow-fs-read {}` não pôde ser canonicalizado: {error}",
+                path.display()
+            ))
+        })?;
+        if !std::fs::metadata(&canonical_root)
+            .map(|meta| meta.is_dir())
+            .unwrap_or(false)
+        {
+            return Err(Failure::Usage(format!(
+                "`--allow-fs-read {}` não é um diretório",
+                path.display()
+            )));
+        }
+        Ok(Self {
+            capabilities: Capabilities::grant(
+                Effect::FilesystemRead,
+                path.to_string_lossy().into_owned(),
+            ),
+            canonical_root: Some(canonical_root),
+            max_bytes: HOST_READ_LIMIT,
+        })
     }
 }
 
@@ -305,23 +342,47 @@ impl Host for CliHost {
                         format!("read_file: escopo `{path}` não coberto pela concessão"),
                     ));
                 }
+                let Some(root) = self.canonical_root.as_deref() else {
+                    return Err(RvmError::new(
+                        ErrorCode::CapabilityDenied,
+                        "read_file: nenhuma raiz canônica concedida".to_string(),
+                    ));
+                };
                 let limit = u64::try_from(requested).unwrap_or(0).min(self.max_bytes);
                 let failure = |message: String| Value::Result {
                     ty: ret,
                     value: Err(Box::new(Value::Str(message))),
                 };
-                let file = match std::fs::File::open(path) {
-                    Ok(file) => file,
-                    Err(error) => return Ok(failure(format!("falha ao abrir `{path}`: {error}"))),
+                // O caminho é canonicalizado antes da abertura: um symlink dentro
+                // do escopo que aponte para fora é recusado. Falha de
+                // canonicalização não revela se o alvo existe fora do escopo.
+                let canonical = match std::fs::canonicalize(path) {
+                    Ok(canonical) => canonical,
+                    Err(_) => return Ok(failure("arquivo indisponível".to_string())),
                 };
-                // Recusa cedo pelo metadado, mas nunca lê mais que `limit + 1`
-                // bytes: um arquivo que cresça depois do metadado continua
-                // limitado (ADR-0036).
-                if let Ok(metadata) = file.metadata() {
-                    if metadata.len() > limit {
+                if !canonical.starts_with(root) {
+                    return Err(RvmError::new(
+                        ErrorCode::CapabilityDenied,
+                        format!("read_file: `{path}` resolve para fora do escopo concedido"),
+                    ));
+                }
+                let file = match std::fs::metadata(&canonical) {
+                    Ok(metadata) if !metadata.is_file() => {
+                        return Ok(failure("não é um arquivo regular".to_string()))
+                    }
+                    Ok(metadata) if metadata.len() > limit => {
                         return Ok(failure(format!("arquivo excede {limit} bytes")));
                     }
-                }
+                    Ok(_) => match std::fs::File::open(&canonical) {
+                        Ok(file) => file,
+                        Err(error) => {
+                            return Ok(failure(format!("falha ao abrir `{path}`: {error}")))
+                        }
+                    },
+                    Err(_) => return Ok(failure("arquivo indisponível".to_string())),
+                };
+                // Nunca lê mais que `limit + 1` bytes: um arquivo que cresça
+                // depois do metadado continua limitado (ADR-0036).
                 let mut bytes = Vec::new();
                 match file.take(limit.saturating_add(1)).read_to_end(&mut bytes) {
                     Ok(_) if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > limit => {
@@ -344,11 +405,11 @@ impl Host for CliHost {
 fn command_run(rest: &[String], source: Source) -> Result<(), Failure> {
     let options = parse_options(rest, true)?;
     let config = options.config()?;
+    let mut host = CliHost::new(options.fs_read_scope.as_deref())?;
     let limits = Limits::default();
     let module = load_module(&options.path, source, &limits)?;
     let entry = resolve_entry(&module, options.entry.as_deref())?;
     let verified = rvm_verify::VerifiedModule::verify(module, &limits)?;
-    let mut host = CliHost::new(options.fs_read_scope.as_deref());
     let outcome =
         rvm_interpreter::execute_with_host(&verified, entry, &options.args, &config, &mut host)?;
     println!("{}", outcome.value);

@@ -53,7 +53,7 @@ $validos = (Get-ChildItem 'crates\rvm-conformance\corpus\valid' -Filter *.rvm).C
 $invalidos = (Get-ChildItem 'crates\rvm-conformance\corpus\invalid' -Filter *.rvm).Count
 $lines.Add('## Corpus de conformidade')
 $lines.Add('')
-$lines.Add('- casos válidos: **' + $validos + '** (C-001..C-061)')
+$lines.Add('- casos válidos: **' + $validos + '** (C-001..C-062)')
 $lines.Add('- casos inválidos: **' + $invalidos + '** (N-001..N-011, N-013..N-043; N-012 vive no decoder binário)')
 $lines.Add('')
 

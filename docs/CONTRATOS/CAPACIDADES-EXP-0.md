@@ -45,8 +45,10 @@ A ABI é **fechada** nesta rodada:
   chamar o backend e valida o tipo do valor devolvido.
 - `rvm_runtime::HostApi::request(effect, scope)` devolve `Ok(())` somente se
   `Capabilities::allows` for verdadeiro e `Err(capability_denied)` caso contrário.
-- `rvm-cli` aceita `--allow-fs-read <dir>` em `run`/`run-bc`; sem a flag, o host do
-  CLI não concede nada. A leitura é limitada a 1 MiB.
+- `rvm-cli` aceita `--allow-fs-read <dir>` em `run`/`run-bc`; o diretório precisa
+  ser absoluto, existente e sem `..`. Sem a flag, o host do CLI não concede nada.
+  O host canonicaliza a raiz e cada alvo, recusa alvo canônico fora da raiz e lê
+  apenas arquivos regulares, com teto de 1 MiB (ADR-0037).
 
 ## 4. Obrigações de teste
 
@@ -58,8 +60,10 @@ A ABI é **fechada** nesta rodada:
 3. Testes de negação **antes do backend**: o host não pode ser chamado sem
    concessão (`crates/rvm-interpreter/tests/host.rs`).
 4. Testes de escopo: caminho dentro da concessão executa; fora, é negado.
-5. Testes de CLI: sem `--allow-fs-read` ⇒ saída 5; dentro do diretório ⇒ lê; fora
-   ⇒ saída 5; round-trip `encode`/`run-bc` com `host_read_file`.
+5. Testes de CLI: sem `--allow-fs-read` ⇒ saída 5; escopo vazio/relativo/
+   inexistente ou com `..` ⇒ saída 1; dentro do diretório ⇒ lê; fora ⇒ saída 5;
+   symlink para fora ⇒ saída 5 (`cfg(unix)`); round-trip `encode`/`run-bc` com
+   `host_read_file`.
 6. Nenhum teste pode depender de rede, ambiente, relógio ou subprocesso; os testes
    de arquivo usam diretório temporário próprio.
 
@@ -69,11 +73,11 @@ A ABI é **fechada** nesta rodada:
 - Ausência de DoS: fuel e profundidade limitam trabalho; a leitura é limitada por
   `max_bytes`/1 MiB, mas não há limite de tempo nem de taxa. A string é lida antes
   de ser cobrada na quota de memória; a quota limita a retenção, não o IO.
-- Segurança do adaptador de arquivo: a comparação de escopo não canonicaliza
-  symlinks, não resolve `..` para um diretório real (caminhos com `..` são
-  negados) e está sujeita a TOCTOU entre a checagem e a leitura. Um link dentro do
-  escopo pode apontar para fora. A comparação é sensível a caixa em componentes
-  normais (no Windows, `C:\Temp` não cobre `c:\temp`).
+- Segurança do adaptador de arquivo: o CLI canonicaliza a raiz e o alvo e recusa
+  symlink que resolva para fora, mas resta TOCTOU entre a canonicalização e a
+  abertura; hard links não são distinguíveis por caminho; a comparação de
+  caminhos canônicos no Windows pode ser sensível a caixa. Handles/`openat` não
+  existem (ADR-0037).
 - Confidencialidade do conteúdo lido: o convidado recebe os bytes; não há
   filtragem, redação nem auditoria.
 - Que um bug no verificador não permita efeitos: a ABI é pequena, mas qualquer

@@ -107,8 +107,9 @@ cargo run -p rvm-cli -- check examples/soma.rvm
   opcional por regra. Workflows auxiliares **manuais**: `bench.yml` (benchmark
   pré-registrado) e `fuzz.yml` (fuzzing guiado por cobertura, nightly).
 - Resultados atuais e log bruto: [RELATORIO-IMPLEMENTACAO](./docs/RELATORIOS/RELATORIO-IMPLEMENTACAO.md)
-  e [EVIDENCIAS-EXECUCAO](./docs/RELATORIOS/EVIDENCIAS-EXECUCAO.md): 166 testes
-  verdes, 61 casos válidos + 42 inválidos no corpus.
+  e [EVIDENCIAS-EXECUCAO](./docs/RELATORIOS/EVIDENCIAS-EXECUCAO.md): 170 testes
+  verdes no Windows (o teste de symlink é `cfg(unix)` e roda no CI Linux; 171 lá),
+  62 casos válidos + 42 inválidos no corpus.
 
 ## Segurança (limites declarados)
 
@@ -117,8 +118,9 @@ cargo run -p rvm-cli -- check examples/soma.rvm
   revisado.
 - "Zero panic no corpus" descreve a rodada de testes, não ausência de
   vulnerabilidade. Fuzzing de campanha e auditoria independente **não** foram
-  executados. O benchmark pré-registrado tem medições registradas (runner dedicado
-  e reexecução local pós ADR-0034/0035); ver
+  executados. O benchmark pré-registrado tem medições registradas (runner
+  dedicado e reexecução local pós ADR-0034/0035); H06 foi confirmada nos runs
+  `41429076866` e `41520845695`; ver
   [BENCHMARKS-PREREGISTRADOS](./docs/RELATORIOS/BENCHMARKS-PREREGISTRADOS.md).
 - Integração Lift/Rio **não** foi feita: bloqueios técnicos registrados em
   [BASELINE-RIO](./docs/RELATORIOS/BASELINE-RIO.md) e

@@ -467,8 +467,9 @@ O benchmark de chamada (`cargo bench -p rvm-interpreter --bench chamada`) foi
 reexecutado no commit `89c21dc` (ADR-0034/0035), com o método e limiares
 inalterados. Nesta máquina (Windows, i7-9700, rustc 1.94.1), duas execuções deram
 dispersão de 57,8% e 31,8% no ponto classificador: **H06 inconclusiva**; custo de
-ligação ≈24–26 µs. A confirmação anterior em runner dedicado (`bench.yml`, run
-`41429076866`, dispersão 1,33%) permanece como referência. Relatório:
+ligação ≈24–26 µs. A confirmação em runner dedicado veio dos runs `41429076866`
+(dispersão 1,33%) e `41520845695` (dispersão 0,45%, overhead relativo −0,0047,
+commit `85af2e7`): **H06 CONFIRMADA**. Relatório:
 `docs/RELATORIOS/BENCHMARK-REEXECUCAO-2026-11-02.md`.
 
 ### ABI de host com capabilities (item 3)
@@ -477,17 +478,18 @@ A ABI mínima fechada é `read_file(path: string, max_bytes: i64) -> result stri
 string`, com efeito `filesystem_read`, escopo no argumento 0 e código `0`/opcode
 `54` no bytecode (ADR-0036). `execute` sem host nega toda chamada; o intérprete
 confere a capability **antes** de chamar o backend e revalida o tipo do retorno.
-O CLI concede com `--allow-fs-read <dir>` (leitura limitada a 1 MiB; escopo vazio
-é erro de uso) e sai com 5 sem a flag, fora do escopo ou com `..`. Testes: 5 em
-`rvm-interpreter/tests/host.rs`, 6 no CLI (incluindo round-trip
-`encode`/`run-bc`) e round-trip de texto; o corpus de conformidade não executa
-`host_read_file` (lacuna registrada).
+O CLI concede com `--allow-fs-read <dir>` (absoluto, existente, canonicalizado;
+leitura limitada a 1 MiB) e sai com 5 sem a flag, fora do escopo, com `..` ou
+symlink para fora (ADR-0037). Testes: 5 em `rvm-interpreter/tests/host.rs`, 10 no
+CLI (9 no Windows; o de symlink é `cfg(unix)`), round-trip de texto e o caso de
+corpus `C-062` (verifica + nega sem host). A leitura concedida não é executada
+pelo corpus; fica nos testes dedicados.
 
 ### Verificação (Resultado)
 
 | Comando | Resultado |
 |---|---|
-| `cargo test --workspace` | **166 passed, 0 failed**; corpus 61 válidos + 42 inválidos |
+| `cargo test --workspace` | **170 passed, 0 failed** no Windows (o teste de symlink é `cfg(unix)`; 171 no Linux); corpus 62 válidos + 42 inválidos |
 | `cargo test --manifest-path frontends/lift-rir/Cargo.toml` | 43 passed, 0 failed (34 diferencial + 9 CLI) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | exit 0 |
 | `cargo fmt --all -- --check` | exit 0 |
