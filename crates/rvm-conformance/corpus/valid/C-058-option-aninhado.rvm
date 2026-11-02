@@ -1,0 +1,15 @@
+; id: C-058
+; expect: value i64:5
+; extra: option aninhado (option<option<i64>>) no núcleo (ADR-0034)
+module c058 version 1
+entry f
+
+fn f() -> i64 {
+  entry:
+    v0 = const_i64 5
+    v1 = option_some i64 v0
+    v2 = option_some option i64 v1
+    v3 = option_unwrap v2
+    v4 = option_unwrap v3
+    return v4
+}

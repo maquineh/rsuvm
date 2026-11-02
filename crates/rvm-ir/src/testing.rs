@@ -4,7 +4,7 @@
 //! `test-helpers`. Não faz parte da API de produção: nada aqui valida limites ou
 //! tipos, apenas monta estruturas densas e legíveis.
 
-use rvm_spec::{BinOp, CmpOp, Type, IR_VERSION};
+use rvm_spec::{builtin_types, BinOp, CmpOp, TypeId, IR_VERSION, TYPE_BOOL, TYPE_I64, TYPE_UNIT};
 
 use crate::{
     Block, BlockParam, BranchTarget, Function, Instr, Module, Op, Param, Terminator, ValueId,
@@ -40,7 +40,7 @@ fn instr(def: ValueId, op: Op) -> Instr {
     Instr { def, op }
 }
 
-fn funcao(id: u32, name: &str, params: Vec<Param>, ret: Type, blocks: Vec<Block>) -> Function {
+fn funcao(id: u32, name: &str, params: Vec<Param>, ret: TypeId, blocks: Vec<Block>) -> Function {
     Function {
         id,
         name: name.to_string(),
@@ -56,12 +56,13 @@ fn modulo(name: &str, entry: u32, functions: Vec<Function>) -> Module {
         name: name.to_string(),
         version: IR_VERSION,
         entry,
+        types: builtin_types(),
         structs: Vec::new(),
         functions,
     }
 }
 
-fn param(name: &str, ty: Type) -> Param {
+fn param(name: &str, ty: TypeId) -> Param {
     Param {
         name: name.to_string(),
         ty,
@@ -80,7 +81,7 @@ pub fn soma() -> Module {
         0,
         "main",
         Vec::new(),
-        Type::I64,
+        TYPE_I64,
         vec![bloco(
             0,
             "entry",
@@ -101,8 +102,8 @@ pub fn soma() -> Module {
     let soma = funcao(
         1,
         "soma",
-        vec![param("a", Type::I64), param("b", Type::I64)],
-        Type::I64,
+        vec![param("a", TYPE_I64), param("b", TYPE_I64)],
+        TYPE_I64,
         vec![bloco(
             0,
             "entry",
@@ -127,7 +128,7 @@ pub fn constante(valor: i64) -> Module {
         0,
         "main",
         Vec::new(),
-        Type::I64,
+        TYPE_I64,
         vec![bloco(
             0,
             "entry",
@@ -145,7 +146,7 @@ pub fn unidade() -> Module {
         0,
         "main",
         Vec::new(),
-        Type::Unit,
+        TYPE_UNIT,
         vec![bloco(0, "entry", Vec::new(), Terminator::Return(None))],
     );
     modulo("unidade", 0, vec![main])
@@ -158,7 +159,7 @@ pub fn desvio_verdadeiro() -> Module {
         0,
         "main",
         Vec::new(),
-        Type::I64,
+        TYPE_I64,
         vec![
             bloco(
                 0,
@@ -208,8 +209,8 @@ pub fn com_merge() -> Module {
     let escolhe = funcao(
         0,
         "escolhe",
-        vec![param("c", Type::Bool)],
-        Type::I64,
+        vec![param("c", TYPE_BOOL)],
+        TYPE_I64,
         vec![
             bloco(
                 0,
@@ -233,7 +234,7 @@ pub fn com_merge() -> Module {
                 vec![BlockParam {
                     value: 3,
                     name: "b0".to_string(),
-                    ty: Type::I64,
+                    ty: TYPE_I64,
                 }],
                 Vec::new(),
                 Terminator::Br(BranchTarget {
@@ -247,7 +248,7 @@ pub fn com_merge() -> Module {
                 vec![BlockParam {
                     value: 4,
                     name: "b1".to_string(),
-                    ty: Type::I64,
+                    ty: TYPE_I64,
                 }],
                 Vec::new(),
                 Terminator::Br(BranchTarget {
@@ -261,7 +262,7 @@ pub fn com_merge() -> Module {
                 vec![BlockParam {
                     value: 5,
                     name: "escolhido".to_string(),
-                    ty: Type::I64,
+                    ty: TYPE_I64,
                 }],
                 Vec::new(),
                 Terminator::Return(Some(5)),
@@ -278,7 +279,7 @@ pub fn loop_infinito() -> Module {
         0,
         "main",
         Vec::new(),
-        Type::I64,
+        TYPE_I64,
         vec![
             bloco(
                 0,
@@ -310,7 +311,7 @@ pub fn recursao() -> Module {
         0,
         "main",
         Vec::new(),
-        Type::I64,
+        TYPE_I64,
         vec![bloco(
             0,
             "entry",
@@ -336,7 +337,7 @@ pub fn overflow() -> Module {
         0,
         "main",
         Vec::new(),
-        Type::I64,
+        TYPE_I64,
         vec![bloco(
             0,
             "entry",
@@ -365,7 +366,7 @@ pub fn comparacao() -> Module {
         0,
         "main",
         Vec::new(),
-        Type::Bool,
+        TYPE_BOOL,
         vec![bloco(
             0,
             "entry",

@@ -7,25 +7,38 @@ o intérprete e o corpus devem cumprir.
 ## 1. Modelo
 
 ~~~text
-Module    { name, version = 1, entry: FnId, structs: Vec<StructDef>, functions: Vec<Function> }
+Module    { name, version = 1, entry: FnId, types: Vec<TypeDef>, structs: Vec<StructDef>,
+            functions: Vec<Function> }
+TypeDef   = unit | bool | i64 | string | f64
+          | array(TypeId) | struct(StructId) | option(TypeId) | result(TypeId, TypeId)
 StructDef { id = índice, name, fields: Vec<FieldDef> }
-FieldDef  { name, ty: Type escalar }          // bool | i64 | string | f64
-Function  { id = índice, name, params: Vec<Param>, ret: Type, entry: BlockId,
+FieldDef  { name, ty: TypeId }
+Function  { id = índice, name, params: Vec<Param>, ret: TypeId, entry: BlockId,
             blocks: Vec<Block> }
-Param     { name, ty }                       // ValueId implícito = índice
+Param     { name, ty: TypeId }               // ValueId implícito = índice
 Block     { id = índice, label, params: Vec<BlockParam>, instrs, term }
-BlockParam{ value: ValueId, name, ty }
+BlockParam{ value: ValueId, name, ty: TypeId }
 Instr     { def: ValueId, op: Op }
 Op        = const_i64 | const_bool | const_str | const_f64 | bin(op,lhs,rhs) | cmp(op,lhs,rhs)
           | str_eq(lhs,rhs) | str_ne(lhs,rhs) | str_len(operand) | concat_str(lhs,rhs)
-          | float(op,lhs,rhs) | array(items) | array_len(v) | array_get(v,i) | array_set(v,i,x)
+          | float(op,lhs,rhs) | array(ty,items) | array_len(v) | array_get(v,i)
+          | array_set(v,i,x)
           | struct_new(sid, fields) | field_get(v, field) | field_set(v, field, x)
-          | option_none(elem) | option_some(v) | option_is_some(v) | option_unwrap(v)
+          | option_none(ty) | option_some(ty,v) | option_is_some(v) | option_unwrap(v)
           | coalesce(o,f) | option_eq(lhs,rhs) | option_ne(lhs,rhs)
-          | result_ok(ok,err,v) | result_err(ok,err,v) | result_is_ok(v)
+          | result_ok(ty,v) | result_err(ty,v) | result_is_ok(v)
           | result_unwrap(v) | result_unwrap_err(v) | call(callee,args)
 Term      = return [v] | br(target,args) | cond_br(cond, target, target)
 ~~~
+
+### Tabela de tipos (ADR-0034)
+
+Todo módulo começa a tabela com os cinco tipos embutidos canônicos, nesta ordem:
+`0 = unit`, `1 = bool`, `2 = i64`, `3 = string`, `4 = f64`. Tipos compostos
+ocupam ids densos a partir de `5` e são **recursivos por id**: `array(T)`,
+`option(T)` e `result(T, E)` referenciam outros `TypeId`; `struct(S)` referencia a
+tabela de structs. O grafo de tipos precisa ser **acíclico** (inclusive campos de
+struct).
 
 ### Declarações externas e ligação estática (ADR-0018)
 
@@ -63,6 +76,9 @@ proporcional ao módulo:
 11. Contagens respeitam [`rvm_spec::Limits`], e a soma de valores usa aritmética
     verificada; a alocação do vetor de presença ocorre **depois** da checagem do
     limite.
+12. A tabela de tipos é densa e começa com `unit`, `bool`, `i64`, `string`, `f64`
+    (`0..=4`); todo `TypeId` referenciado existe; o grafo de tipos é **acíclico**
+    (campos de struct inclusos); `module.types.len() <= max_types` (ADR-0034).
 
 Limites padrão: 64 funções, 256 blocos/função, 16 parâmetros, 8 parâmetros por
 bloco, 1024 instruções/bloco, 4096 valores/função, 16 argumentos por
@@ -97,22 +113,22 @@ Depois de `structure::check`:
    | `const_f64` | — | `f64` |
    | `add_f64`/`sub_f64`/`mul_f64`/`div_f64` | `f64`, `f64` | `f64` |
    | `eq_f64`/`ne_f64`/`lt_f64`/`le_f64`/`gt_f64`/`ge_f64` | `f64`, `f64` | `bool` |
-   | `array` | `1..=max_array_len` valores do mesmo tipo escalar | `array` |
-   | `array_len` | `array` | `i64` |
-   | `array_get` | `array`, `i64` | elemento do array |
-   | `array_set` | `array`, `i64`, elemento do array | `array` |
-   | `struct_new` | um valor por campo, no tipo do campo | `struct` |
-   | `field_get` | `struct`, nome de campo existente | tipo do campo |
-   | `field_set` | `struct`, nome de campo existente, valor do tipo do campo | `struct` |
-   | `option_none` | — | `option` |
-   | `option_some` | um escalar | `option` |
-   | `option_is_some` | `option` | `bool` |
-   | `option_unwrap` | `option` | payload |
-   | `coalesce` | `option`, fallback (payload ou o próprio `option`) | tipo do fallback |
-   | `option_eq`/`option_ne` | `option`, `option` (mesmo payload) | `bool` |
-   | `result_ok`/`result_err` | valor no tipo da variante | `result` |
-   | `result_is_ok` | `result` | `bool` |
-   | `result_unwrap`/`result_unwrap_err` | `result` | payload `ok`/`err` |
+   | `array` | `1..=max_array_len` valores do mesmo tipo `T` | `array(T)` (no op) |
+   | `array_len` | `array(T)` | `i64` |
+   | `array_get` | `array(T)`, `i64` | `T` |
+   | `array_set` | `array(T)`, `i64`, `T` | `array(T)` |
+   | `struct_new` | um valor por campo, no tipo do campo | `struct(S)` |
+   | `field_get` | `struct(S)`, nome de campo existente | tipo do campo |
+   | `field_set` | `struct(S)`, campo existente, valor do tipo do campo | `struct(S)` |
+   | `option_none` | — | `option(T)` (no op) |
+   | `option_some` | `T` | `option(T)` (no op) |
+   | `option_is_some` | `option(T)` | `bool` |
+   | `option_unwrap` | `option(T)` | `T` |
+   | `coalesce` | `option(T)`, fallback `T` ou `option(T)` | tipo do fallback |
+   | `option_eq`/`option_ne` | `option(T)`, `option(T)` | `bool` |
+   | `result_ok`/`result_err` | valor no tipo da variante | `result(T, E)` (no op) |
+   | `result_is_ok` | `result(T, E)` | `bool` |
+   | `result_unwrap`/`result_unwrap_err` | `result(T, E)` | `T`/`E` |
    | comparações `*_i64` | `i64`, `i64` | `bool` |
    | `call_static` | casam com `params` do alvo | `ret` do alvo |
    Qualquer divergência ⇒ `invalid_type`.
@@ -149,28 +165,29 @@ terminador por último. O primeiro erro vence.
   (quota) ou `string_too_long` (acima de `ExecConfig::max_string_bytes`, ADR-0025).
 - `const_f64`/`Float` operam sobre `f64` com **IEEE-754 sem trap** (divisão por zero
   → `inf`/`NaN`; comparações com `NaN` são falsas exceto `!=`, ADR-0026).
-- `array` cria um array imutável (não-vazio, homogêneo) e cobra `len × 24` bytes na
-  quota (cumulativo); `array_len` devolve o comprimento; `array_get` faz **bounds
-  check** e produz `index_out_of_bounds` fora de `0..len` (ADR-0027).
+- `array` cria um array imutável (não-vazio, homogêneo) do tipo declarado no op e
+  cobra `len × 24` bytes na quota (cumulativo); `array_len` devolve o comprimento;
+  `array_get` faz **bounds check** e produz `index_out_of_bounds` fora de `0..len`
+  (ADR-0027).
 - `array_set` é uma **atualização funcional**: devolve um array **novo** com o
   elemento substituído e **não altera** o array de origem (não há referências nem
   aliasing no núcleo, ADR-0028). Exige `value` no tipo do elemento e faz bounds
   check (`index_out_of_bounds`); cobra `len × 24` bytes cumulativos.
-- `struct_new` cria um valor de struct (campos escalares, ADR-0029) e cobra
-  `campos × 24` bytes cumulativos; `field_get` lê um campo pelo nome (o campo
-  precisa existir e o objeto ser struct); `field_set` é uma **atualização
+- `struct_new` cria um valor de struct (campos de qualquer `TypeId`, ADR-0029/0034)
+  e cobra `campos × 24` bytes cumulativos; `field_get` lê um campo pelo nome (o
+  campo precisa existir e o objeto ser struct); `field_set` é uma **atualização
   funcional** que devolve uma struct **nova** com o campo substituído, sem alterar
   a de origem (ADR-0032), cobrando `campos × 24` bytes cumulativos.
-- `option_none`/`option_some` criam `none`/`some` (payload escalar, ADR-0030);
-  `option_is_some` testa; `option_unwrap` extrai o payload e produz o trap
-  `unwrap_none` sobre `none`; `coalesce` devolve o payload se `some`, senão o
-  fallback. O fallback **preguiçoso** do `??` do Lift é obtido pelo adaptador via
-  fluxo de controle, não pelo op.
+- `option_none`/`option_some` criam `none`/`some` do tipo `option(T)` declarado no
+  op (ADR-0030/0034); `option_is_some` testa; `option_unwrap` extrai o payload e
+  produz o trap `unwrap_none` sobre `none`; `coalesce` devolve o payload se `some`,
+  senão o fallback. O fallback **preguiçoso** do `??` do Lift é obtido pelo
+  adaptador via fluxo de controle, não pelo op.
 - `option_eq`/`option_ne` comparam dois `option` de mesmo payload por valor
   (`none == none` é `true`; `some` compara payloads; `NaN != NaN`, ADR-0031).
-- `result_ok`/`result_err` constroem um `result` (payloads escalares, ADR-0033);
-  `result_is_ok` testa; `result_unwrap`/`result_unwrap_err` extraem o payload e
-  produzem o trap `unwrap_error` sobre a variante errada.
+- `result_ok`/`result_err` constroem um `result` do tipo declarado no op
+  (ADR-0033/0034); `result_is_ok` testa; `result_unwrap`/`result_unwrap_err`
+  extraem o payload e produzem o trap `unwrap_error` sobre a variante errada.
 - `br`/`cond_br` copiam os argumentos para os slots dos parâmetros do bloco alvo
   antes de saltar (phi explícito).
 - `return` devolve `Value::Unit` quando não há valor.

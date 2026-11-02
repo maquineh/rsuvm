@@ -9,17 +9,18 @@ sujeita a mudança sem compatibilidade.
 ## 1. Gramática
 
 ~~~text
-arquivo    = comentário* módulo declaração_struct* import* entrada declaração_fn+ EOF ;
+arquivo    = comentário* módulo declaração_tipo* declaração_struct* import* entrada declaração_fn+ EOF ;
 módulo     = "module" ident "version" inteiro ;
+declaração_tipo = "type" inteiro "=" tipo ;
 declaração_struct = "struct" ident "{" campo+ "}" ;
-campo      = ident ":" tipo_escalar ;
+campo      = ident ":" tipo ;
 import     = "import" ident ;
 entrada    = "entry" ident ;
 declaração_fn = "fn" ident "(" [parâmetros] ")" "->" tipo bloco+ ;
 parâmetros = parâmetro { "," parâmetro } ;
 parâmetro  = ident ":" tipo ;
-tipo       = "unit" | "bool" | "i64" | "string" | "f64" | "struct" ident | "option" tipo_escalar | "result" tipo_escalar tipo_escalar ;
-tipo_escalar = "bool" | "i64" | "string" | "f64" ;
+tipo       = "unit" | "bool" | "i64" | "string" | "f64"
+           | "array" tipo | "struct" ident | "option" tipo | "result" tipo tipo ;
 bloco      = rótulo [ "(" parâmetros ")" ] ":" instrução* terminador ;
 instrução  = ident "=" operação ;
 operação   = "const_i64" inteiro
@@ -32,22 +33,22 @@ operação   = "const_i64" inteiro
            | "str_len" valor
            | "concat_str" valor "," valor
            | op_f64 valor "," valor
-           | "array" valor { "," valor }
+           | "array" tipo valor { "," valor }
            | "array_len" valor
            | "array_get" valor "," valor
            | "array_set" valor "," valor "," valor
            | "struct_new" ident valor { "," valor }
            | "field_get" valor "," ident
            | "field_set" valor "," ident "," valor
-           | "option_none" ident
-           | "option_some" valor
+           | "option_none" tipo
+           | "option_some" tipo valor
            | "option_is_some" valor
            | "option_unwrap" valor
            | "coalesce" valor "," valor
            | "option_eq" valor "," valor
            | "option_ne" valor "," valor
-           | "result_ok" tipo_escalar tipo_escalar valor
-           | "result_err" tipo_escalar tipo_escalar valor
+           | "result_ok" tipo tipo valor
+           | "result_err" tipo tipo valor
            | "result_is_ok" valor
            | "result_unwrap" valor
            | "result_unwrap_err" valor
@@ -123,7 +124,8 @@ depois usos), o que permite referências a definições posteriores — a legali
 ~~~text
 module <nome> version 1
 entry <nome_da_entrada>
-import <nome_da_funcao_externa>   ; opcional, zero ou mais
+type <id> = <tipo>                  ; tipos compostos (ids >= 5), na ordem
+import <nome_da_funcao_externa>     ; opcional, zero ou mais
 
 struct <Nome> { <campo>: <tipo> ... }   ; opcional, zero ou mais
 
@@ -176,9 +178,10 @@ linha dentro do literal é `syntax_error`; literal maior que
 
 ## 7. Fora do EXP-0
 
-Literais de string com interpolação, caracteres de escape não listados, arrays
-aninhados, structs aninhadas, tipos genéricos, comentários de bloco, anotações,
-módulos múltiplos por
-arquivo, ligação dinâmica, imports qualificados por módulo (`modulo.funcao`) e
-qualquer forma de açúcar sintático. A ligação inter-módulo é **estática** e feita
-pelo crate `rvm-link` (ADR-0018), fora do formato textual.
+Literais de string com interpolação, caracteres de escape não listados, tipos
+genéricos, comentários de bloco, anotações, módulos múltiplos por arquivo, ligação
+dinâmica, imports qualificados por módulo (`modulo.funcao`) e qualquer forma de
+açúcar sintático. A ligação inter-módulo é **estática** e feita pelo crate
+`rvm-link` (ADR-0018), fora do formato textual. Tipos compostos são recursivos por
+id (ADR-0034), então `array array i64`, `option option i64` e structs com campos
+de outros tipos são expressáveis; ciclos são rejeitados.

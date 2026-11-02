@@ -9,7 +9,7 @@ fn atualiza() -> i64 {
     v0 = const_i64 1
     v1 = const_i64 2
     v2 = const_i64 3
-    v3 = array v0, v1, v2
+    v3 = array i64 v0, v1, v2
     v4 = const_i64 0
     v5 = const_i64 9
     v6 = array_set v3, v4, v5

@@ -9,5 +9,5 @@ workspace é importado aqui.
 
 ## Subdirectories & Boundaries
 
-- [src](./src/README.md) — contrato do componente `rvm-spec`: `Type`, `BinOp`,
-  `CmpOp`, `ErrorCode`/`ErrorClass`, `RvmError`, `Limits`, `IR_VERSION`.
+- [src](./src/README.md) — contrato do componente `rvm-spec`: `TypeDef`/`TypeId`,
+  `BinOp`, `CmpOp`, `ErrorCode`/`ErrorClass`, `RvmError`, `Limits`, `IR_VERSION`.

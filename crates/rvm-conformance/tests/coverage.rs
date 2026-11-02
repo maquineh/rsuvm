@@ -62,7 +62,7 @@ fn collect_ops(module: &Module, ops: &mut BTreeSet<String>, terms: &mut BTreeSet
                     Op::ConcatStr { .. } => "concat_str".to_string(),
                     Op::ConstF64(_) => "const_f64".to_string(),
                     Op::Float { op, .. } => op.name().to_string(),
-                    Op::ArrayLiteral(_) => "array".to_string(),
+                    Op::ArrayLiteral { .. } => "array".to_string(),
                     Op::ArrayLen { .. } => "array_len".to_string(),
                     Op::ArrayGet { .. } => "array_get".to_string(),
                     Op::ArraySet { .. } => "array_set".to_string(),

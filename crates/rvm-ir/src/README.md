@@ -12,11 +12,12 @@ dados compartilhada (ADR-0002).
 ## Interface
 
 - `FnId`, `BlockId`, `ValueId` — aliases `u32` com invariante de densidade.
-- `Module` — `name`, `version`, `entry`, `functions`
-  (`lib.rs:Module`); `function(id)`, `function_by_name(name)`.
+- `Module` — `name`, `version`, `entry`, `types`, `structs`, `functions`
+  (`lib.rs:Module`); `function(id)`, `function_by_name(name)`, `struct_def(id)`,
+  `type_def(id)`, `find_type(def)`.
 - `Function` — `id`, `name`, `params`, `ret`, `entry`, `blocks`
-  (`lib.rs:Function`); `block(id)`, `value_count()`, `value_type(id)`.
-- `Param` — `name`, `ty`.
+  (`lib.rs:Function`); `block(id)`, `value_count()`.
+- `Param` — `name`, `ty: TypeId`.
 - `Block` — `id`, `label`, `params`, `instrs`, `term` (`lib.rs:Block`).
 - `BlockParam` — `value`, `name`, `ty` (merge por phi explícito).
 - `Instr` — `def`, `op`.
@@ -48,8 +49,9 @@ dados compartilhada (ADR-0002).
   aritmética verificada e o vetor de presença só é alocado depois da checagem.
 - O terminador é obrigatório por tipo (`Block::term` não é `Option`); bloco sem
   terminador é rejeitado na fronteira textual, não representável aqui.
-- `Function::value_type` não infere tipo de `call_static` (depende da assinatura
-  do alvo): devolve `None` nesse caso, por decisão documentada.
+- Tipos vivem na tabela do módulo (`types`, ADR-0034); construções resolvidas
+  pelos operandos (`array`, `option_some`, `coalesce`, `field_get`) não expõem
+  tipo fixo em `Op::result_type` (`None`).
 - `structure::check` não olha tipos de operandos nem dominância; isso é
   responsabilidade de `rvm-verify`.
 

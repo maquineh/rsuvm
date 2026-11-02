@@ -18,30 +18,34 @@ arquivo:
   module_name      string
   module_version   u16 = 1
   entry_fn         u32
+  type_count       u16
+  types[]          type_def (ADR-0034)
   struct_count     u16
   structs[]        struct_count vezes
   function_count   u32
   funções[]        function_count vezes
   -- fim do arquivo; bytes excedentes são rejeitados --
 
+type_def:
+  tag              u8  (0=unit, 1=bool, 2=i64, 3=string, 4=f64, 5=array, 6=struct,
+                        7=option, 8=result)
+  payload          array: u32 element_type; struct: u32 struct_id;
+                   option: u32 payload_type; result: u32 ok_type + u32 err_type;
+                   senão: —
+
 struct:
   id               u32
   name             string
   field_count      u16
-  fields[]         field_count vezes { name: string, ty: type }
-
-type:
-  tag              u8  (0=unit, 1=bool, 2=i64, 3=string, 4=f64, 5=array, 6=struct, 7=option, 8=result)
-  payload          array: u8 elem_tag; struct: u32 struct_id; option: u8 payload_tag;
-                   result: u8 ok_tag + u8 err_tag; senão: —
+  fields[]         field_count vezes { name: string, ty: u32 TypeId }
 
 function:
   id               u32
   name             string
-  ret_type         type
+  ret_type         u32 TypeId
   entry_block      u32
   param_count      u16
-  params[]         param_count vezes { name: string, ty: type }
+  params[]         param_count vezes { name: string, ty: u32 TypeId }
   block_count      u32
   blocks[]         block_count vezes
 
@@ -49,7 +53,7 @@ block:
   id               u32
   label            string
   block_param_count u16
-  block_params[]   { value_id: u32, name: string, ty: type }
+  block_params[]   { value_id: u32, name: string, ty: u32 TypeId }
   instr_count      u32
   instrs[]         instr_count vezes
   terminator       terminator
@@ -103,22 +107,22 @@ terminator:
 | 32 | `le_f64` | `u32 lhs`, `u32 rhs` |
 | 33 | `gt_f64` | `u32 lhs`, `u32 rhs` |
 | 34 | `ge_f64` | `u32 lhs`, `u32 rhs` |
-| 35 | `array` | `u16 count`, `u32 items[count]` |
+| 35 | `array` | `u32 ty`, `u16 count`, `u32 items[count]` |
 | 36 | `array_len` | `u32 array` |
 | 37 | `array_get` | `u32 array`, `u32 index` |
 | 38 | `array_set` | `u32 array`, `u32 index`, `u32 value` |
 | 39 | `struct_new` | `u32 struct_id`, `u16 count`, `u32 fields[count]` |
 | 40 | `field_get` | `u32 object`, `string field` |
-| 41 | `option_none` | `u8 payload_tag` |
-| 42 | `option_some` | `u32 value` |
+| 41 | `option_none` | `u32 ty` |
+| 42 | `option_some` | `u32 ty`, `u32 value` |
 | 43 | `option_is_some` | `u32 value` |
 | 44 | `option_unwrap` | `u32 value` |
 | 45 | `coalesce` | `u32 option`, `u32 fallback` |
 | 46 | `option_eq` | `u32 lhs`, `u32 rhs` |
 | 47 | `option_ne` | `u32 lhs`, `u32 rhs` |
 | 48 | `field_set` | `u32 object`, `string field`, `u32 value` |
-| 49 | `result_ok` | `u8 ok_tag`, `u8 err_tag`, `u32 value` |
-| 50 | `result_err` | `u8 ok_tag`, `u8 err_tag`, `u32 value` |
+| 49 | `result_ok` | `u32 ty`, `u32 value` |
+| 50 | `result_err` | `u32 ty`, `u32 value` |
 | 51 | `result_is_ok` | `u32 value` |
 | 52 | `result_unwrap` | `u32 value` |
 | 53 | `result_unwrap_err` | `u32 value` |

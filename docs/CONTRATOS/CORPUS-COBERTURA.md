@@ -84,7 +84,7 @@ com a expectativa declarada. A verificação é executada por
 | Código | Caso(s) inválido(s) |
 |---|---|
 | `invalid_type` | N-001, N-002, N-007, N-015, N-017, N-031, N-032, N-033, N-034, N-036, N-037, N-038, N-039, N-040, N-042 |
-| `invalid_module` | N-003, N-004, N-022, N-023 |
+| `invalid_module` | N-003, N-004, N-022, N-023, N-043 |
 | `invalid_control_flow` | N-005, N-006, N-013, N-016, N-018 |
 | `unknown_opcode` | N-008 |
 | `unsupported_version` | N-014 |

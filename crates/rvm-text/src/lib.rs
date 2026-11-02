@@ -58,8 +58,8 @@ use rvm_ir::{
     StructDef, Terminator, ValueId,
 };
 use rvm_spec::{
-    BinOp, CmpOp, ErrorCode, FloatOp, Limits, Location, OptionalElem, RvmError, ScalarKind,
-    StructId, Type, IR_VERSION,
+    builtin_types, BinOp, CmpOp, ErrorCode, FloatOp, Limits, Location, RvmError, StructId, TypeDef,
+    TypeId, IR_VERSION,
 };
 
 /// Converte o texto experimental em um módulo RIR estruturalmente válido.
@@ -111,6 +111,17 @@ pub fn print(module: &Module) -> String {
         }
     }
     out.push('\n');
+
+    for (index, def) in module.types.iter().enumerate() {
+        if index < rvm_spec::BUILTIN_TYPE_COUNT {
+            continue;
+        }
+        out.push_str("type ");
+        out.push_str(&index.to_string());
+        out.push_str(" = ");
+        print_type_def(module, *def, &mut out);
+        out.push('\n');
+    }
 
     for def in &module.structs {
         out.push('\n');
@@ -234,27 +245,43 @@ fn format_f64(value: f64) -> String {
     }
 }
 
-/// Escreve um [`Type`]; structs usam a forma `struct <Nome>` (ADR-0029).
-fn print_type(module: &Module, ty: Type, out: &mut String) {
-    match ty {
-        Type::Struct(id) => {
+/// Escreve um [`TypeDef`] estruturalmente (ADR-0034).
+fn print_type_def(module: &Module, def: TypeDef, out: &mut String) {
+    match def {
+        TypeDef::Unit => out.push_str("unit"),
+        TypeDef::Bool => out.push_str("bool"),
+        TypeDef::I64 => out.push_str("i64"),
+        TypeDef::Str => out.push_str("string"),
+        TypeDef::F64 => out.push_str("f64"),
+        TypeDef::Array(element) => {
+            out.push_str("array ");
+            print_type(module, element, out);
+        }
+        TypeDef::Struct(id) => {
             out.push_str("struct ");
             match module.struct_def(id) {
                 Some(def) => out.push_str(&def.name),
                 None => out.push_str(&id.to_string()),
             }
         }
-        Type::Optional(elem) => {
+        TypeDef::Optional(payload) => {
             out.push_str("option ");
-            out.push_str(elem.name());
+            print_type(module, payload, out);
         }
-        Type::Result(ok, err) => {
+        TypeDef::Result(ok, err) => {
             out.push_str("result ");
-            out.push_str(ok.name());
+            print_type(module, ok, out);
             out.push(' ');
-            out.push_str(err.name());
+            print_type(module, err, out);
         }
-        other => out.push_str(other.name()),
+    }
+}
+
+/// Escreve um `TypeId` resolvendo a tabela do módulo.
+fn print_type(module: &Module, ty: TypeId, out: &mut String) {
+    match module.type_def(ty) {
+        Some(def) => print_type_def(module, def, out),
+        None => out.push_str(&ty.to_string()),
     }
 }
 
@@ -306,8 +333,13 @@ fn print_op(module: &Module, function: &Function, op: &Op, out: &mut String) {
             out.push_str(", ");
             print_value(function, *rhs, out);
         }
-        Op::ArrayLiteral(items) => {
+        Op::ArrayLiteral { ty, items } => {
             out.push_str("array ");
+            match module.type_def(*ty) {
+                Some(TypeDef::Array(element)) => print_type(module, element, out),
+                _ => out.push_str(&ty.to_string()),
+            }
+            out.push(' ');
             for (index, item) in items.iter().enumerate() {
                 if index > 0 {
                     out.push_str(", ");
@@ -366,12 +398,20 @@ fn print_op(module: &Module, function: &Function, op: &Op, out: &mut String) {
             out.push_str(", ");
             print_value(function, *value, out);
         }
-        Op::OptionNone(elem) => {
+        Op::OptionNone(ty) => {
             out.push_str("option_none ");
-            out.push_str(elem.name());
+            match module.type_def(*ty) {
+                Some(TypeDef::Optional(payload)) => print_type(module, payload, out),
+                _ => out.push_str(&ty.to_string()),
+            }
         }
-        Op::OptionSome { value } => {
+        Op::OptionSome { ty, value } => {
             out.push_str("option_some ");
+            match module.type_def(*ty) {
+                Some(TypeDef::Optional(payload)) => print_type(module, payload, out),
+                _ => out.push_str(&ty.to_string()),
+            }
+            out.push(' ');
             print_value(function, *value, out);
         }
         Op::OptionIsSome { value } => {
@@ -400,19 +440,29 @@ fn print_op(module: &Module, function: &Function, op: &Op, out: &mut String) {
             out.push_str(", ");
             print_value(function, *rhs, out);
         }
-        Op::ResultOk { ok, err, value } => {
+        Op::ResultOk { ty, value } => {
             out.push_str("result_ok ");
-            out.push_str(ok.name());
-            out.push(' ');
-            out.push_str(err.name());
+            match module.type_def(*ty) {
+                Some(TypeDef::Result(ok, err)) => {
+                    print_type(module, ok, out);
+                    out.push(' ');
+                    print_type(module, err, out);
+                }
+                _ => out.push_str(&ty.to_string()),
+            }
             out.push(' ');
             print_value(function, *value, out);
         }
-        Op::ResultErr { ok, err, value } => {
+        Op::ResultErr { ty, value } => {
             out.push_str("result_err ");
-            out.push_str(ok.name());
-            out.push(' ');
-            out.push_str(err.name());
+            match module.type_def(*ty) {
+                Some(TypeDef::Result(ok, err)) => {
+                    print_type(module, ok, out);
+                    out.push(' ');
+                    print_type(module, err, out);
+                }
+                _ => out.push_str(&ty.to_string()),
+            }
             out.push(' ');
             print_value(function, *value, out);
         }
@@ -743,17 +793,6 @@ fn limit(value: u32) -> usize {
     usize::try_from(value).unwrap_or(usize::MAX)
 }
 
-/// Converte o nome estável de um payload de `option` em [`OptionalElem`].
-fn optional_elem_from_name(name: &str) -> Option<OptionalElem> {
-    match name {
-        "bool" => Some(OptionalElem::Bool),
-        "i64" => Some(OptionalElem::I64),
-        "string" => Some(OptionalElem::Str),
-        "f64" => Some(OptionalElem::F64),
-        _ => None,
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Estruturas intermediárias (nomes antes da resolução)
 // ---------------------------------------------------------------------------
@@ -763,6 +802,8 @@ struct RawModule {
     name: String,
     version: u16,
     entry: String,
+    /// Tabela de tipos (builtins + tipos do arquivo).
+    types: Vec<TypeDef>,
     /// Structs declaradas, na ordem do arquivo.
     structs: Vec<RawStruct>,
     functions: Vec<RawFunction>,
@@ -773,21 +814,21 @@ struct RawModule {
 #[derive(Debug)]
 struct RawStruct {
     name: String,
-    fields: Vec<(String, Type)>,
+    fields: Vec<(String, TypeId)>,
 }
 
 #[derive(Debug)]
 struct RawFunction {
     name: String,
-    params: Vec<(String, Type)>,
-    ret: Type,
+    params: Vec<(String, TypeId)>,
+    ret: TypeId,
     blocks: Vec<RawBlock>,
 }
 
 #[derive(Debug)]
 struct RawBlock {
     label: String,
-    params: Vec<(String, Type)>,
+    params: Vec<(String, TypeId)>,
     instrs: Vec<RawInstr>,
     term: RawTerm,
 }
@@ -811,22 +852,22 @@ enum RawOp {
     StrNe(String, String),
     StrLen(String),
     ConcatStr(String, String),
-    Array(Vec<String>),
+    Array(TypeId, Vec<String>),
     ArrayLen(String),
     ArrayGet(String, String),
     ArraySet(String, String, String),
     StructNew(String, Vec<String>),
     FieldGet(String, String),
     FieldSet(String, String, String),
-    OptionNone(OptionalElem),
-    OptionSome(String),
+    OptionNone(TypeId),
+    OptionSome(TypeId, String),
     OptionIsSome(String),
     OptionUnwrap(String),
     Coalesce(String, String),
     OptionEq(String, String),
     OptionNe(String, String),
-    ResultOk(ScalarKind, ScalarKind, String),
-    ResultErr(ScalarKind, ScalarKind, String),
+    ResultOk(TypeId, String),
+    ResultErr(TypeId, String),
     ResultIsOk(String),
     ResultUnwrap(String),
     ResultUnwrapErr(String),
@@ -859,15 +900,41 @@ struct Parser {
     index: usize,
     /// Structs já declaradas, para resolver `struct <Nome>` em tipos.
     structs: BTreeMap<String, StructId>,
+    /// Tabela de tipos em construção (builtins + tipos do arquivo).
+    types: Vec<TypeDef>,
+    /// Índice estrutural para deduplicar tipos.
+    type_index: BTreeMap<TypeDef, TypeId>,
 }
 
 impl Parser {
     fn new(tokens: Vec<Token>) -> Self {
+        let types = builtin_types();
+        let mut type_index = BTreeMap::new();
+        for (index, def) in types.iter().enumerate() {
+            if let Ok(id) = TypeId::try_from(index) {
+                type_index.insert(*def, id);
+            }
+        }
         Self {
             tokens,
             index: 0,
             structs: BTreeMap::new(),
+            types,
+            type_index,
         }
+    }
+
+    /// Interna `def` na tabela, devolvendo o `TypeId` estável.
+    fn intern(&mut self, def: TypeDef) -> Result<TypeId, RvmError> {
+        if let Some(id) = self.type_index.get(&def) {
+            return Ok(*id);
+        }
+        let id = TypeId::try_from(self.types.len()).map_err(|_| {
+            RvmError::new(ErrorCode::InvalidModule, "tipos demais").at(Location::Module)
+        })?;
+        self.types.push(def);
+        self.type_index.insert(def, id);
+        Ok(id)
     }
 
     fn peek(&self) -> &Token {
@@ -961,58 +1028,72 @@ impl Parser {
         }
     }
 
-    fn parse_type(&mut self) -> Result<Type, RvmError> {
+    fn parse_type(&mut self) -> Result<TypeId, RvmError> {
+        let def = self.parse_type_def()?;
+        self.intern(def)
+    }
+
+    fn parse_type_def(&mut self) -> Result<TypeDef, RvmError> {
         let name = self.expect_ident(
-            "tipo (`unit`, `bool`, `i64`, `string`, `f64`, `struct Nome` ou `option Elem`)",
+            "tipo (`unit`, `bool`, `i64`, `string`, `f64`, `array T`, `struct Nome`, `option T` ou `result T T`)",
         )?;
-        if name == "struct" {
-            let struct_name = self.expect_ident("nome de struct após `struct`")?;
-            let id = self.structs.get(&struct_name).copied().ok_or_else(|| {
-                RvmError::new(
-                    ErrorCode::UnknownType,
-                    format!("struct desconhecida `{struct_name}`"),
-                )
-                .at(Location::Module)
-            })?;
-            return Ok(Type::Struct(id));
-        }
-        if name == "option" {
-            let elem = self.expect_ident("elemento após `option`")?;
-            let elem = optional_elem_from_name(&elem).ok_or_else(|| {
-                RvmError::new(
-                    ErrorCode::UnknownType,
-                    format!("elemento de option desconhecido `{elem}`"),
-                )
-                .at(Location::Module)
-            })?;
-            return Ok(Type::Optional(elem));
-        }
-        if name == "result" {
-            let ok = self.expect_ident("payload ok após `result`")?;
-            let err = self.expect_ident("payload err após `result`")?;
-            let ok = optional_elem_from_name(&ok).ok_or_else(|| {
-                RvmError::new(
-                    ErrorCode::UnknownType,
-                    format!("payload ok de result desconhecido `{ok}`"),
-                )
-                .at(Location::Module)
-            })?;
-            let err = optional_elem_from_name(&err).ok_or_else(|| {
-                RvmError::new(
-                    ErrorCode::UnknownType,
-                    format!("payload err de result desconhecido `{err}`"),
-                )
-                .at(Location::Module)
-            })?;
-            return Ok(Type::Result(ok, err));
-        }
-        Type::from_name(&name).ok_or_else(|| {
-            RvmError::new(
+        match name.as_str() {
+            "unit" => Ok(TypeDef::Unit),
+            "bool" => Ok(TypeDef::Bool),
+            "i64" => Ok(TypeDef::I64),
+            "string" => Ok(TypeDef::Str),
+            "f64" => Ok(TypeDef::F64),
+            "array" => Ok(TypeDef::Array(self.parse_type()?)),
+            "struct" => {
+                let struct_name = self.expect_ident("nome de struct após `struct`")?;
+                let id = self.structs.get(&struct_name).copied().ok_or_else(|| {
+                    RvmError::new(
+                        ErrorCode::UnknownType,
+                        format!("struct desconhecida `{struct_name}`"),
+                    )
+                    .at(Location::Module)
+                })?;
+                Ok(TypeDef::Struct(id))
+            }
+            "option" => Ok(TypeDef::Optional(self.parse_type()?)),
+            "result" => {
+                let ok = self.parse_type()?;
+                let err = self.parse_type()?;
+                Ok(TypeDef::Result(ok, err))
+            }
+            other => Err(RvmError::new(
                 ErrorCode::UnknownType,
-                format!("tipo desconhecido `{name}`"),
+                format!("tipo desconhecido `{other}`"),
+            )
+            .at(Location::Module)),
+        }
+    }
+
+    /// `type <id> = <tipo>`: expande a tabela em ordem densa (preserva IDs na
+    /// reimpressão).
+    fn parse_type_decl(&mut self) -> Result<(), RvmError> {
+        self.expect_keyword("type")?;
+        let raw = self.expect_int("id do tipo")?;
+        let id = u32::try_from(raw).map_err(|_| {
+            RvmError::new(
+                ErrorCode::InvalidNumber,
+                format!("id de tipo {raw} não cabe em u32"),
             )
             .at(Location::Module)
-        })
+        })?;
+        let expected = u32::try_from(self.types.len()).map_err(|_| {
+            RvmError::new(ErrorCode::InvalidModule, "tipos demais").at(Location::Module)
+        })?;
+        if id != expected {
+            return Err(RvmError::new(
+                ErrorCode::InvalidModule,
+                format!("declaração de tipo {id} não é densa: esperado {expected}"),
+            )
+            .at(Location::Module));
+        }
+        self.expect_token(Token::Assign, "`=` na declaração de tipo")?;
+        let def = self.parse_type_def()?;
+        self.intern(def).map(|_| ())
     }
 
     fn parse_struct(&mut self) -> Result<RawStruct, RvmError> {
@@ -1029,7 +1110,7 @@ impl Parser {
             .at(Location::Module));
         }
         self.expect_token(Token::LBrace, "`{` na struct")?;
-        let mut fields: Vec<(String, Type)> = Vec::new();
+        let mut fields: Vec<(String, TypeId)> = Vec::new();
         while self.peek() != &Token::RBrace {
             if self.peek() == &Token::Eof {
                 return Err(self.syntax("struct sem `}`"));
@@ -1078,6 +1159,10 @@ impl Parser {
             if self.peek() == &Token::Eof {
                 break;
             }
+            if self.at_keyword("type") {
+                self.parse_type_decl()?;
+                continue;
+            }
             if self.at_keyword("struct") {
                 structs.push(self.parse_struct()?);
                 continue;
@@ -1116,6 +1201,7 @@ impl Parser {
             name,
             version,
             entry,
+            types: self.types.clone(),
             structs,
             functions,
             imports,
@@ -1147,8 +1233,8 @@ impl Parser {
         })
     }
 
-    fn parse_parameters(&mut self) -> Result<Vec<(String, Type)>, RvmError> {
-        let mut params: Vec<(String, Type)> = Vec::new();
+    fn parse_parameters(&mut self) -> Result<Vec<(String, TypeId)>, RvmError> {
+        let mut params: Vec<(String, TypeId)> = Vec::new();
         if self.peek() == &Token::RParen {
             return Ok(params);
         }
@@ -1167,7 +1253,7 @@ impl Parser {
 
     fn parse_block(&mut self) -> Result<RawBlock, RvmError> {
         let label = self.expect_ident("rótulo de bloco")?;
-        let mut params: Vec<(String, Type)> = Vec::new();
+        let mut params: Vec<(String, TypeId)> = Vec::new();
         if self.peek() == &Token::LParen {
             self.bump();
             params = self.parse_parameters()?;
@@ -1301,6 +1387,8 @@ impl Parser {
                 RawOp::ConcatStr(lhs, rhs)
             }
             "array" => {
+                let element = self.parse_type()?;
+                let ty = self.intern(TypeDef::Array(element))?;
                 let mut items: Vec<String> = Vec::new();
                 loop {
                     items.push(self.expect_ident("elemento do array")?);
@@ -1310,7 +1398,7 @@ impl Parser {
                         break;
                     }
                 }
-                RawOp::Array(items)
+                RawOp::Array(ty, items)
             }
             "array_len" => RawOp::ArrayLen(self.expect_ident("operando array")?),
             "array_get" => {
@@ -1329,6 +1417,14 @@ impl Parser {
             }
             "struct_new" => {
                 let struct_name = self.expect_ident("nome da struct")?;
+                let struct_id = self.structs.get(&struct_name).copied().ok_or_else(|| {
+                    RvmError::new(
+                        ErrorCode::InvalidModule,
+                        format!("struct `{struct_name}` não declarada"),
+                    )
+                    .at(Location::Module)
+                })?;
+                self.intern(TypeDef::Struct(struct_id))?;
                 let mut fields: Vec<String> = Vec::new();
                 loop {
                     fields.push(self.expect_ident("campo da struct")?);
@@ -1355,13 +1451,16 @@ impl Parser {
                 RawOp::FieldSet(object, field, value)
             }
             "option_none" => {
-                let elem = self.expect_ident("elemento do option")?;
-                let elem = optional_elem_from_name(&elem).ok_or_else(|| {
-                    self.syntax(format!("elemento de option desconhecido `{elem}`"))
-                })?;
-                RawOp::OptionNone(elem)
+                let payload = self.parse_type()?;
+                let ty = self.intern(TypeDef::Optional(payload))?;
+                RawOp::OptionNone(ty)
             }
-            "option_some" => RawOp::OptionSome(self.expect_ident("payload do option")?),
+            "option_some" => {
+                let payload = self.parse_type()?;
+                let ty = self.intern(TypeDef::Optional(payload))?;
+                let value = self.expect_ident("payload do option")?;
+                RawOp::OptionSome(ty, value)
+            }
             "option_is_some" => RawOp::OptionIsSome(self.expect_ident("operando option")?),
             "option_unwrap" => RawOp::OptionUnwrap(self.expect_ident("operando option")?),
             "coalesce" => {
@@ -1383,19 +1482,14 @@ impl Parser {
                 RawOp::OptionNe(lhs, rhs)
             }
             "result_ok" | "result_err" => {
-                let kind = self.expect_ident("payload ok do result")?;
-                let ok = optional_elem_from_name(&kind).ok_or_else(|| {
-                    self.syntax(format!("payload ok de result desconhecido `{kind}`"))
-                })?;
-                let kind = self.expect_ident("payload err do result")?;
-                let err = optional_elem_from_name(&kind).ok_or_else(|| {
-                    self.syntax(format!("payload err de result desconhecido `{kind}`"))
-                })?;
+                let ok = self.parse_type()?;
+                let err = self.parse_type()?;
+                let ty = self.intern(TypeDef::Result(ok, err))?;
                 let value = self.expect_ident("valor do result")?;
                 if op_name == "result_ok" {
-                    RawOp::ResultOk(ok, err, value)
+                    RawOp::ResultOk(ty, value)
                 } else {
-                    RawOp::ResultErr(ok, err, value)
+                    RawOp::ResultErr(ty, value)
                 }
             }
             "result_is_ok" => RawOp::ResultIsOk(self.expect_ident("operando result")?),
@@ -1476,6 +1570,7 @@ fn lower(raw: RawModule, limits: &Limits) -> Result<Module, RvmError> {
         name,
         version,
         entry,
+        types,
         structs: raw_structs,
         functions: raw_functions,
         imports,
@@ -1581,6 +1676,7 @@ fn lower(raw: RawModule, limits: &Limits) -> Result<Module, RvmError> {
         name,
         version,
         entry,
+        types,
         structs,
         functions,
     };
@@ -1594,7 +1690,7 @@ fn external_function(id: FnId, name: String) -> Function {
         id,
         name,
         params: Vec::new(),
-        ret: Type::Unit,
+        ret: rvm_spec::TYPE_UNIT,
         entry: 0,
         blocks: Vec::new(),
     }
@@ -1783,12 +1879,15 @@ fn lower_op(
             lhs: value(lhs)?,
             rhs: value(rhs)?,
         },
-        RawOp::Array(items) => {
+        RawOp::Array(ty, items) => {
             let mut resolved: Vec<ValueId> = Vec::new();
             for item in items {
                 resolved.push(value(item)?);
             }
-            Op::ArrayLiteral(resolved)
+            Op::ArrayLiteral {
+                ty: *ty,
+                items: resolved,
+            }
         }
         RawOp::ArrayLen(array) => Op::ArrayLen {
             array: value(array)?,
@@ -1831,8 +1930,9 @@ fn lower_op(
             field: field.clone(),
             value: value(element)?,
         },
-        RawOp::OptionNone(elem) => Op::OptionNone(*elem),
-        RawOp::OptionSome(payload) => Op::OptionSome {
+        RawOp::OptionNone(ty) => Op::OptionNone(*ty),
+        RawOp::OptionSome(ty, payload) => Op::OptionSome {
+            ty: *ty,
             value: value(payload)?,
         },
         RawOp::OptionIsSome(option) => Op::OptionIsSome {
@@ -1853,14 +1953,12 @@ fn lower_op(
             lhs: value(lhs)?,
             rhs: value(rhs)?,
         },
-        RawOp::ResultOk(ok, err, operand) => Op::ResultOk {
-            ok: *ok,
-            err: *err,
+        RawOp::ResultOk(ty, operand) => Op::ResultOk {
+            ty: *ty,
             value: value(operand)?,
         },
-        RawOp::ResultErr(ok, err, operand) => Op::ResultErr {
-            ok: *ok,
-            err: *err,
+        RawOp::ResultErr(ty, operand) => Op::ResultErr {
+            ty: *ty,
             value: value(operand)?,
         },
         RawOp::ResultIsOk(operand) => Op::ResultIsOk {
@@ -1987,7 +2085,7 @@ fn soma(a: i64, b: i64) -> i64 {
         let function = module.function(0).unwrap();
         assert_eq!(function.name, "soma");
         assert_eq!(function.params.len(), 2);
-        assert_eq!(function.ret, Type::I64);
+        assert_eq!(function.ret, rvm_spec::TYPE_I64);
         assert_eq!(function.blocks.len(), 1);
         let block = function.block(0).unwrap();
         assert_eq!(block.label, "entry");
@@ -2209,7 +2307,7 @@ fn nada() -> unit {
 "#;
         let module = parse_ok(texto);
         assert_eq!(module.functions.len(), 2);
-        assert_eq!(module.function(0).unwrap().ret, Type::Unit);
+        assert_eq!(module.function(0).unwrap().ret, rvm_spec::TYPE_UNIT);
         assert_eq!(module.function(1).unwrap().blocks.len(), 1);
         let printed = print(&module);
         assert!(printed.contains("call_static nada()"), "{printed}");

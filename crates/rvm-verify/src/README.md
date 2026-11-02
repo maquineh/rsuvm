@@ -71,9 +71,9 @@ desenvolvimento).
 - Cada valor tem no máximo uma definição e um tipo: `record_definition`
   (`lib.rs:707-729`) e `record_type` (`lib.rs:732-754`) recusam repetição e
   posição fora da faixa.
-- O mapa de tipos é próprio do verificador: `operation_type` deriva o tipo de
-  `call_static` de `Function::ret` da função alvo, sem usar
-  `Function::value_type` (`lib.rs:683-703`).
+- O mapa de tipos é próprio do verificador e usa `TypeId` da tabela do módulo
+  (ADR-0034); `resolve_op_type` deriva o tipo de `call_static` de `Function::ret`
+  da função alvo e resolve construções agregadas.
 - Aridade e tipos de chamada vêm da assinatura do alvo: aridade divergente,
   argumento com tipo divergente, `return` incompatível e condição não-`bool` são
   `invalid_type` (`lib.rs:219-237`, `lib.rs:251-290`); argumentos de desvio

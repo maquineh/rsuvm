@@ -90,12 +90,13 @@ aparecem durante a execução de um `VerifiedModule`.
 | N-034 `struct_new` com valor de tipo errado | `invalid_type` | verificação |
 | N-035 `option_unwrap` de `none` | `unwrap_none` | execução (trap) |
 | N-036 `option_is_some` de não-option | `invalid_type` | verificação |
-| N-037 `option_some` de não-escalar | `invalid_type` | verificação |
+| N-037 `option_some` com tipo de payload incompatível | `invalid_type` | verificação |
 | N-038 `option_eq` de não-option | `invalid_type` | verificação |
 | N-039 `field_set` com valor de tipo errado | `invalid_type` | verificação |
 | N-040 `field_set` com campo inexistente | `invalid_type` | verificação |
 | N-041 `result_unwrap` de `err` | `unwrap_error` | execução (trap) |
 | N-042 `result_is_ok` de não-`result` | `invalid_type` | verificação |
+| N-043 tipo de struct recursivo (ciclo) | `invalid_module` | estrutura |
 
 `invalid_module` também cobre limite estrutural excedido: a distinção entre
 "estrutura inválida" e "quota de execução" é feita por `class`, não pelo texto.

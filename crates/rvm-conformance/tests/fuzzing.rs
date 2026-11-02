@@ -21,7 +21,7 @@ use std::path::{Path, PathBuf};
 
 use rvm_ir::{testing, Block, BranchTarget, Function, Instr, Module, Op, Param, Terminator};
 use rvm_runtime::{CallDepthLimit, ExecConfig};
-use rvm_spec::{BinOp, CmpOp, Limits, Type};
+use rvm_spec::{builtin_types, BinOp, CmpOp, Limits, TYPE_BOOL, TYPE_I64, TYPE_UNIT};
 
 /// Sementes fixas do xorshift; a campanha é reprodutível e sem relógio.
 const SEEDS: [u64; 6] = [
@@ -94,11 +94,11 @@ fn pick<'a, T>(state: &mut u64, items: &'a mut [T]) -> Option<&'a mut T> {
     items.get_mut(index)
 }
 
-fn tipo(state: &mut u64) -> Type {
+fn tipo(state: &mut u64) -> rvm_spec::TypeId {
     match next(state) % 3 {
-        0 => Type::Unit,
-        1 => Type::Bool,
-        _ => Type::I64,
+        0 => TYPE_UNIT,
+        1 => TYPE_BOOL,
+        _ => TYPE_I64,
     }
 }
 
@@ -349,6 +349,7 @@ fn modulo_provedor() -> Module {
         name: "prov".to_string(),
         version: rvm_spec::IR_VERSION,
         entry: 0,
+        types: builtin_types(),
         structs: Vec::new(),
         functions: vec![Function {
             id: 0,
@@ -356,14 +357,14 @@ fn modulo_provedor() -> Module {
             params: vec![
                 Param {
                     name: "a".to_string(),
-                    ty: Type::I64,
+                    ty: TYPE_I64,
                 },
                 Param {
                     name: "b".to_string(),
-                    ty: Type::I64,
+                    ty: TYPE_I64,
                 },
             ],
-            ret: Type::I64,
+            ret: TYPE_I64,
             entry: 0,
             blocks: vec![Block {
                 id: 0,
@@ -389,13 +390,14 @@ fn modulo_com_import() -> Module {
         name: "app".to_string(),
         version: rvm_spec::IR_VERSION,
         entry: 0,
+        types: builtin_types(),
         structs: Vec::new(),
         functions: vec![
             Function {
                 id: 0,
                 name: "main".to_string(),
                 params: Vec::new(),
-                ret: Type::I64,
+                ret: TYPE_I64,
                 entry: 0,
                 blocks: vec![Block {
                     id: 0,
@@ -425,7 +427,7 @@ fn modulo_com_import() -> Module {
                 id: 1,
                 name: "alvo".to_string(),
                 params: Vec::new(),
-                ret: Type::Unit,
+                ret: TYPE_UNIT,
                 entry: 0,
                 blocks: Vec::new(),
             },

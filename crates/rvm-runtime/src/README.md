@@ -10,13 +10,12 @@ crate toca sistema operacional. Depende apenas de `rvm-spec`.
 ## Interface
 
 - `Value` — `Unit`, `Bool(bool)`, `I64(i64)`, `Str(String)`, `F64(f64)`,
-  `Array(Vec<Value>)`, `Struct { ty, fields }`, `Option { elem, value }`,
-  `Result { ok, err, value }` (Clone,
-  não `Copy` nem `Eq`); `ty`, `as_bool`, `as_i64`, `as_str`, `as_f64`, `as_array`,
-  `as_struct`, `as_option`, `as_result`, `matches_type`, `Display` estável (`i64:30`,
-  `bool:true`, `unit`, `str:<texto>`, `f64:1.5`, `array:[i64:1, i64:2]`,
-  `struct:0[i64:1]`, `none`, `some:i64:1`, `ok:i64:5`, `err:str:e`)
-  (`lib.rs:Value`).
+  `Array { ty, items }`, `Struct { ty, struct_id, fields }`, `Option { ty, value }`,
+  `Result { ty, value }` (Clone, não `Copy` nem `Eq`); `ty() -> TypeId`, `as_bool`,
+  `as_i64`, `as_str`, `as_f64`, `as_array`, `as_struct`, `as_option`, `as_result`,
+  `matches_type(TypeId)`, `Display` estável (`i64:30`, `bool:true`, `unit`,
+  `str:<texto>`, `f64:1.5`, `array:[i64:1, i64:2]`, `struct:0[i64:1]`, `none`,
+  `some:i64:1`, `ok:i64:5`, `err:str:e`) (`lib.rs:Value`).
 - `DEFAULT_FUEL` — saldo padrão de execução (`100_000`).
 - `DEFAULT_MEMORY_LIMIT_BYTES` (16 MiB), `FRAME_BASE_BYTES` (256), `SLOT_BYTES`
   (24), `frame_cost(slots) -> u64` e `arg_buffer_cost(args) -> u64` — modelo
@@ -52,7 +51,7 @@ crate toca sistema operacional. Depende apenas de `rvm-spec`.
   `arg_buffer_cost`), não medição de RSS: frame `256 + slots × 24` e buffer
   `args × 24`, saturados. `MemoryLimit` não é validado contra teto; o host
   escolhe, e `0` significa "nada cabe" (ADR-0013, ADR-0016).
-  valor conhece seu `Type` e não há conversão implícita.
+  valor conhece seu `TypeId` e não há conversão implícita.
 - `fuel` é `u64` sem validação extra; quem executa debita antes do despacho.
 
 ## Side Effects

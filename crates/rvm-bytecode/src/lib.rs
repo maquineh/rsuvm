@@ -37,7 +37,7 @@ use rvm_ir::{
     Block, BlockParam, BranchTarget, FieldDef, Function, Instr, Module, Op, Param, StructDef,
     Terminator, ValueId,
 };
-use rvm_spec::{ArrayElem, BinOp, CmpOp, ErrorCode, FloatOp, Limits, OptionalElem, RvmError, Type};
+use rvm_spec::{BinOp, CmpOp, ErrorCode, FloatOp, Limits, RvmError, TypeDef};
 
 /// Magic bytes no início de todo arquivo codificado: `RSVMB1`.
 pub const MAGIC: [u8; 6] = *b"RSVMB1";
@@ -137,6 +137,10 @@ pub fn encode(module: &Module) -> Vec<u8> {
     push_string(&mut out, &module.name);
     push_u16(&mut out, module.version);
     push_u32(&mut out, module.entry);
+    push_u16(&mut out, len_u16(module.types.len()));
+    for def in &module.types {
+        encode_typedef(&mut out, *def);
+    }
     push_u16(&mut out, len_u16(module.structs.len()));
     for def in &module.structs {
         encode_struct(&mut out, def);
@@ -203,6 +207,12 @@ pub fn decode(bytes: &[u8], limits: &Limits) -> Result<Module, RvmError> {
     let module_version = reader.read_u16("module_version")?;
     let entry = reader.read_u32("entry_fn")?;
 
+    let type_count = reader.read_count_u16(limits.max_types, "contagem de tipos")?;
+    let mut types = Vec::with_capacity(type_count);
+    for _ in 0..type_count {
+        types.push(read_typedef(&mut reader)?);
+    }
+
     let struct_count = reader.read_count_u16(limits.max_structs, "contagem de structs")?;
     let mut structs = Vec::with_capacity(struct_count);
     for _ in 0..struct_count {
@@ -230,6 +240,7 @@ pub fn decode(bytes: &[u8], limits: &Limits) -> Result<Module, RvmError> {
         name,
         version: module_version,
         entry,
+        types,
         structs,
         functions,
     };
@@ -247,7 +258,7 @@ fn encode_struct(out: &mut Vec<u8>, def: &StructDef) {
     push_u16(out, len_u16(def.fields.len()));
     for field in &def.fields {
         push_string(out, &field.name);
-        push_type(out, field.ty);
+        push_u32(out, field.ty);
     }
 }
 
@@ -255,12 +266,12 @@ fn encode_struct(out: &mut Vec<u8>, def: &StructDef) {
 fn encode_function(out: &mut Vec<u8>, function: &Function) {
     push_u32(out, function.id);
     push_string(out, &function.name);
-    push_type(out, function.ret);
+    push_u32(out, function.ret);
     push_u32(out, function.entry);
     push_u16(out, len_u16(function.params.len()));
     for param in &function.params {
         push_string(out, &param.name);
-        push_type(out, param.ty);
+        push_u32(out, param.ty);
     }
     push_u32(out, len_u32(function.blocks.len()));
     for block in &function.blocks {
@@ -276,7 +287,7 @@ fn encode_block(out: &mut Vec<u8>, block: &Block) {
     for param in &block.params {
         push_u32(out, param.value);
         push_string(out, &param.name);
-        push_type(out, param.ty);
+        push_u32(out, param.ty);
     }
     push_u32(out, len_u32(block.instrs.len()));
     for instr in &block.instrs {
@@ -329,8 +340,9 @@ fn encode_instr(out: &mut Vec<u8>, instr: &Instr) {
             push_u32(out, *lhs);
             push_u32(out, *rhs);
         }
-        Op::ArrayLiteral(items) => {
+        Op::ArrayLiteral { ty, items } => {
             push_u8(out, OP_ARRAY);
+            push_u32(out, *ty);
             push_u16(out, len_u16(items.len()));
             for item in items {
                 push_u32(out, *item);
@@ -378,12 +390,13 @@ fn encode_instr(out: &mut Vec<u8>, instr: &Instr) {
             push_string(out, field);
             push_u32(out, *value);
         }
-        Op::OptionNone(elem) => {
+        Op::OptionNone(ty) => {
             push_u8(out, OP_OPTION_NONE);
-            push_u8(out, optional_elem_tag(*elem));
+            push_u32(out, *ty);
         }
-        Op::OptionSome { value } => {
+        Op::OptionSome { ty, value } => {
             push_u8(out, OP_OPTION_SOME);
+            push_u32(out, *ty);
             push_u32(out, *value);
         }
         Op::OptionIsSome { value } => {
@@ -409,16 +422,14 @@ fn encode_instr(out: &mut Vec<u8>, instr: &Instr) {
             push_u32(out, *lhs);
             push_u32(out, *rhs);
         }
-        Op::ResultOk { ok, err, value } => {
+        Op::ResultOk { ty, value } => {
             push_u8(out, OP_RESULT_OK);
-            push_u8(out, optional_elem_tag(*ok));
-            push_u8(out, optional_elem_tag(*err));
+            push_u32(out, *ty);
             push_u32(out, *value);
         }
-        Op::ResultErr { ok, err, value } => {
+        Op::ResultErr { ty, value } => {
             push_u8(out, OP_RESULT_ERR);
-            push_u8(out, optional_elem_tag(*ok));
-            push_u8(out, optional_elem_tag(*err));
+            push_u32(out, *ty);
             push_u32(out, *value);
         }
         Op::ResultIsOk { value } => {
@@ -492,7 +503,7 @@ fn encode_target(out: &mut Vec<u8>, target: &BranchTarget) {
 fn read_function(reader: &mut Reader<'_>, limits: &Limits) -> Result<Function, RvmError> {
     let id = reader.read_u32("id de função")?;
     let name = reader.read_name(limits, "nome de função")?;
-    let ret = read_type(reader, "tipo de retorno")?;
+    let ret = reader.read_u32("tipo de retorno")?;
     let entry = reader.read_u32("bloco de entrada")?;
 
     // Contagem antes da alocação: bytes restantes e `max_params`.
@@ -500,7 +511,7 @@ fn read_function(reader: &mut Reader<'_>, limits: &Limits) -> Result<Function, R
     let mut params = Vec::with_capacity(param_count);
     for _ in 0..param_count {
         let param_name = reader.read_name(limits, "nome de parâmetro")?;
-        let ty = read_type(reader, "tipo de parâmetro")?;
+        let ty = reader.read_u32("tipo de parâmetro")?;
         params.push(Param {
             name: param_name,
             ty,
@@ -533,7 +544,7 @@ fn read_struct(reader: &mut Reader<'_>, limits: &Limits) -> Result<StructDef, Rv
     let mut fields = Vec::with_capacity(field_count);
     for _ in 0..field_count {
         let field_name = reader.read_name(limits, "nome de campo")?;
-        let ty = read_type(reader, "tipo de campo")?;
+        let ty = reader.read_u32("tipo de campo")?;
         fields.push(FieldDef {
             name: field_name,
             ty,
@@ -554,7 +565,7 @@ fn read_block(reader: &mut Reader<'_>, limits: &Limits) -> Result<Block, RvmErro
     for _ in 0..param_count {
         let value = reader.read_u32("valor do parâmetro de bloco")?;
         let name = reader.read_name(limits, "nome de parâmetro de bloco")?;
-        let ty = read_type(reader, "tipo de parâmetro de bloco")?;
+        let ty = reader.read_u32("tipo de parâmetro de bloco")?;
         params.push(BlockParam { value, name, ty });
     }
 
@@ -623,12 +634,13 @@ fn read_instr(reader: &mut Reader<'_>, limits: &Limits) -> Result<Instr, RvmErro
         OP_GT_F64 => read_float_operands(reader, FloatOp::Gt)?,
         OP_GE_F64 => read_float_operands(reader, FloatOp::Ge)?,
         OP_ARRAY => {
+            let ty = reader.read_u32("tipo de array")?;
             let count = reader.read_count_u16(limits.max_array_len, "contagem de array")?;
             let mut items: Vec<u32> = Vec::new();
             for _ in 0..count {
                 items.push(reader.read_u32("elemento de array")?);
             }
-            Op::ArrayLiteral(items)
+            Op::ArrayLiteral { ty, items }
         }
         OP_ARRAY_LEN => Op::ArrayLen {
             array: reader.read_u32("operando array_len")?,
@@ -661,8 +673,9 @@ fn read_instr(reader: &mut Reader<'_>, limits: &Limits) -> Result<Instr, RvmErro
             field: reader.read_name(limits, "campo de field_set")?,
             value: reader.read_u32("valor de field_set")?,
         },
-        OP_OPTION_NONE => Op::OptionNone(read_optional_elem(reader, "elemento de option_none")?),
+        OP_OPTION_NONE => Op::OptionNone(reader.read_u32("tipo de option_none")?),
         OP_OPTION_SOME => Op::OptionSome {
+            ty: reader.read_u32("tipo de option_some")?,
             value: reader.read_u32("payload de option_some")?,
         },
         OP_OPTION_IS_SOME => Op::OptionIsSome {
@@ -684,13 +697,12 @@ fn read_instr(reader: &mut Reader<'_>, limits: &Limits) -> Result<Instr, RvmErro
             rhs: reader.read_u32("operando direito de option_ne")?,
         },
         OP_RESULT_OK | OP_RESULT_ERR => {
-            let ok = read_optional_elem(reader, "payload ok de result")?;
-            let err = read_optional_elem(reader, "payload err de result")?;
+            let ty = reader.read_u32("tipo de result")?;
             let value = reader.read_u32("valor de result")?;
             if opcode == OP_RESULT_OK {
-                Op::ResultOk { ok, err, value }
+                Op::ResultOk { ty, value }
             } else {
-                Op::ResultErr { ok, err, value }
+                Op::ResultErr { ty, value }
             }
         }
         OP_RESULT_IS_OK => Op::ResultIsOk {
@@ -793,100 +805,53 @@ fn read_terminator(reader: &mut Reader<'_>, limits: &Limits) -> Result<Terminato
     }
 }
 
-/// Lê a tag de tipo; fora de `0..=2` é `unknown_type`.
-fn read_type(reader: &mut Reader<'_>, what: &'static str) -> Result<Type, RvmError> {
-    match reader.read_u8(what)? {
-        TAG_UNIT => Ok(Type::Unit),
-        TAG_BOOL => Ok(Type::Bool),
-        TAG_I64 => Ok(Type::I64),
-        TAG_STR => Ok(Type::Str),
-        TAG_F64 => Ok(Type::F64),
-        TAG_ARRAY => Ok(Type::Array(read_elem(reader, what)?)),
-        TAG_STRUCT => Ok(Type::Struct(reader.read_u32("id de struct do tipo")?)),
-        TAG_OPTIONAL => Ok(Type::Optional(read_optional_elem(
-            reader,
-            "elemento do tipo option",
-        )?)),
+/// Escreve uma definição de tipo na tabela: tag + referências (`u32`).
+fn encode_typedef(out: &mut Vec<u8>, def: TypeDef) {
+    match def {
+        TypeDef::Unit => push_u8(out, TAG_UNIT),
+        TypeDef::Bool => push_u8(out, TAG_BOOL),
+        TypeDef::I64 => push_u8(out, TAG_I64),
+        TypeDef::Str => push_u8(out, TAG_STR),
+        TypeDef::F64 => push_u8(out, TAG_F64),
+        TypeDef::Array(element) => {
+            push_u8(out, TAG_ARRAY);
+            push_u32(out, element);
+        }
+        TypeDef::Struct(id) => {
+            push_u8(out, TAG_STRUCT);
+            push_u32(out, id);
+        }
+        TypeDef::Optional(payload) => {
+            push_u8(out, TAG_OPTIONAL);
+            push_u32(out, payload);
+        }
+        TypeDef::Result(ok, err) => {
+            push_u8(out, TAG_RESULT);
+            push_u32(out, ok);
+            push_u32(out, err);
+        }
+    }
+}
+
+/// Lê uma definição de tipo da tabela.
+fn read_typedef(reader: &mut Reader<'_>) -> Result<TypeDef, RvmError> {
+    match reader.read_u8("tag de tipo")? {
+        TAG_UNIT => Ok(TypeDef::Unit),
+        TAG_BOOL => Ok(TypeDef::Bool),
+        TAG_I64 => Ok(TypeDef::I64),
+        TAG_STR => Ok(TypeDef::Str),
+        TAG_F64 => Ok(TypeDef::F64),
+        TAG_ARRAY => Ok(TypeDef::Array(reader.read_u32("elemento de array")?)),
+        TAG_STRUCT => Ok(TypeDef::Struct(reader.read_u32("struct do tipo")?)),
+        TAG_OPTIONAL => Ok(TypeDef::Optional(reader.read_u32("payload de option")?)),
         TAG_RESULT => {
-            let ok = read_optional_elem(reader, "payload ok do tipo result")?;
-            let err = read_optional_elem(reader, "payload err do tipo result")?;
-            Ok(Type::Result(ok, err))
+            let ok = reader.read_u32("payload ok de result")?;
+            let err = reader.read_u32("payload err de result")?;
+            Ok(TypeDef::Result(ok, err))
         }
         tag => Err(decode_error(
             ErrorCode::UnknownType,
-            format!("{what}: tag de tipo {tag} desconhecida"),
-        )),
-    }
-}
-
-/// Mapeia o [`Type`] para a tag `u8` do layout.
-const fn type_tag(ty: Type) -> u8 {
-    match ty {
-        Type::Unit => TAG_UNIT,
-        Type::Bool => TAG_BOOL,
-        Type::I64 => TAG_I64,
-        Type::Str => TAG_STR,
-        Type::F64 => TAG_F64,
-        Type::Array(_) => TAG_ARRAY,
-        Type::Struct(_) => TAG_STRUCT,
-        Type::Optional(_) => TAG_OPTIONAL,
-        Type::Result(..) => TAG_RESULT,
-    }
-}
-
-/// Escreve um [`Type`]; arrays escrevem a tag do elemento, structs o id,
-/// optionals a tag do payload e results as duas tags de payload.
-fn push_type(out: &mut Vec<u8>, ty: Type) {
-    push_u8(out, type_tag(ty));
-    match ty {
-        Type::Array(element) => push_u8(out, type_tag(element.ty())),
-        Type::Struct(id) => push_u32(out, id),
-        Type::Optional(elem) => push_u8(out, optional_elem_tag(elem)),
-        Type::Result(ok, err) => {
-            push_u8(out, optional_elem_tag(ok));
-            push_u8(out, optional_elem_tag(err));
-        }
-        _ => {}
-    }
-}
-
-/// Mapeia [`OptionalElem`] para a tag `u8` do layout.
-const fn optional_elem_tag(elem: OptionalElem) -> u8 {
-    match elem {
-        OptionalElem::Bool => TAG_BOOL,
-        OptionalElem::I64 => TAG_I64,
-        OptionalElem::Str => TAG_STR,
-        OptionalElem::F64 => TAG_F64,
-    }
-}
-
-/// Lê a tag do payload de um `option`.
-fn read_optional_elem(
-    reader: &mut Reader<'_>,
-    what: &'static str,
-) -> Result<OptionalElem, RvmError> {
-    match reader.read_u8(what)? {
-        TAG_BOOL => Ok(OptionalElem::Bool),
-        TAG_I64 => Ok(OptionalElem::I64),
-        TAG_STR => Ok(OptionalElem::Str),
-        TAG_F64 => Ok(OptionalElem::F64),
-        tag => Err(decode_error(
-            ErrorCode::UnknownType,
-            format!("{what}: tag de payload {tag} desconhecida"),
-        )),
-    }
-}
-
-/// Lê a tag do elemento de um array.
-fn read_elem(reader: &mut Reader<'_>, what: &'static str) -> Result<ArrayElem, RvmError> {
-    match reader.read_u8(what)? {
-        TAG_BOOL => Ok(ArrayElem::Bool),
-        TAG_I64 => Ok(ArrayElem::I64),
-        TAG_STR => Ok(ArrayElem::Str),
-        TAG_F64 => Ok(ArrayElem::F64),
-        tag => Err(decode_error(
-            ErrorCode::UnknownType,
-            format!("{what}: tag de elemento {tag} desconhecida"),
+            format!("tag de tipo {tag} desconhecida"),
         )),
     }
 }
@@ -1232,12 +1197,18 @@ mod tests {
         expected.extend_from_slice(b"unidade");
         expected.extend_from_slice(&1u16.to_le_bytes()); // module_version
         expected.extend_from_slice(&0u32.to_le_bytes()); // entry_fn
+        expected.extend_from_slice(&5u16.to_le_bytes()); // type_count
+        expected.push(0); // type 0: unit
+        expected.push(1); // type 1: bool
+        expected.push(2); // type 2: i64
+        expected.push(3); // type 3: string
+        expected.push(4); // type 4: f64
         expected.extend_from_slice(&0u16.to_le_bytes()); // struct_count
         expected.extend_from_slice(&1u32.to_le_bytes()); // function_count
         expected.extend_from_slice(&0u32.to_le_bytes()); // id da função
         expected.extend_from_slice(&4u16.to_le_bytes()); // comprimento de "main"
         expected.extend_from_slice(b"main");
-        expected.push(0); // ret_type: unit
+        expected.extend_from_slice(&0u32.to_le_bytes()); // ret_type: unit
         expected.extend_from_slice(&0u32.to_le_bytes()); // entry_block
         expected.extend_from_slice(&0u16.to_le_bytes()); // param_count
         expected.extend_from_slice(&1u32.to_le_bytes()); // block_count

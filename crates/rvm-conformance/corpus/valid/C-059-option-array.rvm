@@ -1,0 +1,17 @@
+; id: C-059
+; expect: value i64:2
+; extra: option de array (array<i64>?) no núcleo (ADR-0034)
+module c059 version 1
+entry f
+
+fn f() -> i64 {
+  entry:
+    v0 = const_i64 1
+    v1 = const_i64 2
+    v2 = array i64 v0, v1
+    v3 = option_some array i64 v2
+    v4 = option_unwrap v3
+    v5 = const_i64 1
+    v6 = array_get v4, v5
+    return v6
+}

@@ -436,11 +436,26 @@ expressável na RIR e está demonstrado no corpus: `C-056` (`Ok` → `ok:i64:12`
 `C-057` (`Err` → `err:str:e`). Detalhes e evidências em
 `docs/RELATORIOS/PROPAGACAO-INTERROGACAO.md`.
 
+### Tipos por id — ADR-0034 (implementada)
+
+O enum `Type: Copy` foi substituído por uma **tabela de tipos** no módulo
+(`Module.types`), com `TypeId`/`TypeDef` e builtins canônicos (`0..=4`); tipos
+compostos são recursivos por id e o verificador rejeita **ciclos**. `Value` carrega
+`TypeId`, e texto/bytecode/adaptador foram convertidos. Isso destrava `option`
+aninhado, `option` de array/struct e structs com campos agregados. Corpus
+`C-058` (option aninhado), `C-059` (option de array), `C-060` (option de struct),
+`N-043` (ciclo). O adaptador pré-interna tipos e cobre `option` de array/struct
+(oráculo `rsuvm-oracle15.lift` = `2 7`); o Lift não expressa opção aninhada.
+
+A nota sobre `?` continua válida: a propagação não existe no Lift
+(`docs/RELATORIOS/PROPAGACAO-INTERROGACAO.md`); o núcleo a expressa no CFG
+(`C-056`/`C-057`).
+
 ### Verificação (Resultado)
 
 | Comando | Resultado |
 |---|---|
-| `cargo test --workspace` | **148 passed, 0 failed**; corpus 57 válidos + 41 inválidos |
-| `cargo test --manifest-path frontends/lift-rir/Cargo.toml` | 42 passed, 0 failed (33 diferencial + 9 CLI) |
+| `cargo test --workspace` | **148 passed, 0 failed**; corpus 60 válidos + 42 inválidos |
+| `cargo test --manifest-path frontends/lift-rir/Cargo.toml` | 43 passed, 0 failed (34 diferencial + 9 CLI) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | exit 0 |
 | `cargo fmt --all -- --check` | exit 0 |

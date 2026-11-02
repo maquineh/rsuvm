@@ -3,7 +3,8 @@
 //! Este crate é independente de linguagem hospedeira (ADR-0001) e não depende de
 //! nenhum outro crate do workspace. Ele define:
 //!
-//! - os tipos do subset: [`Type::Unit`], [`Type::Bool`], [`Type::I64`];
+//! - os tipos do subset como [`TypeDef`] e os IDs canônicos ([`TypeId`],
+//!   [`TYPE_UNIT`], [`TYPE_BOOL`], [`TYPE_I64`], [`TYPE_STR`], [`TYPE_F64`]);
 //! - as operações aritméticas verificadas ([`BinOp`]) e as comparações ([`CmpOp`]);
 //! - a tabela estável de códigos/categorias de erro ([`ErrorCode`]);
 //! - o tipo de diagnóstico [`RvmError`] com localização;
@@ -33,139 +34,96 @@ use core::fmt;
 /// Módulos com outra versão são rejeitados com [`ErrorCode::UnsupportedVersion`].
 pub const IR_VERSION: u16 = 1;
 
-/// Tipo escalar usado como elemento de array, payload de `option` e payload de
-/// `result` (mantém `Type: Copy`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum ScalarKind {
-    /// Escalar `bool`.
-    Bool,
-    /// Escalar `i64`.
-    I64,
-    /// Escalar `string`.
-    Str,
-    /// Escalar `f64`.
-    F64,
-}
-
-impl ScalarKind {
-    /// Tipo do escalar.
-    #[must_use]
-    pub const fn ty(self) -> Type {
-        match self {
-            ScalarKind::Bool => Type::Bool,
-            ScalarKind::I64 => Type::I64,
-            ScalarKind::Str => Type::Str,
-            ScalarKind::F64 => Type::F64,
-        }
-    }
-
-    /// Nome estável do escalar.
-    #[must_use]
-    pub const fn name(self) -> &'static str {
-        match self {
-            ScalarKind::Bool => "bool",
-            ScalarKind::I64 => "i64",
-            ScalarKind::Str => "string",
-            ScalarKind::F64 => "f64",
-        }
-    }
-
-    /// Escalar correspondente a um tipo escalar, se houver.
-    #[must_use]
-    pub const fn from_type(ty: Type) -> Option<Self> {
-        match ty {
-            Type::Bool => Some(ScalarKind::Bool),
-            Type::I64 => Some(ScalarKind::I64),
-            Type::Str => Some(ScalarKind::Str),
-            Type::F64 => Some(ScalarKind::F64),
-            Type::Unit
-            | Type::Array(_)
-            | Type::Struct(_)
-            | Type::Optional(_)
-            | Type::Result(..) => None,
-        }
-    }
-}
-
-/// Elemento de um array (ADR-0027). Escalar; arrays aninhados ficam fora.
-pub type ArrayElem = ScalarKind;
-
-/// Payload de um `option` (ADR-0030). Escalar.
-pub type OptionalElem = ScalarKind;
-
 /// Identificador denso de uma struct declarada no módulo (ADR-0029).
 pub type StructId = u32;
 
-/// Tipo de valor do subset EXP-0.
+/// Identificador denso de um tipo na tabela do módulo (ADR-0034).
+pub type TypeId = u32;
+
+/// Tipo estrutural da tabela do módulo (ADR-0034).
 ///
-/// Não existe coerção implícita entre tipos: toda operação declara tipos de
-/// operandos e o verificador compara tipos exatos.
+/// Tipos são recursivos **por id**, o que permite `option<option<i64>>`,
+/// `array<option<i64>>`, `option<array<i64>>` e `result<Struct, Erro>` sem
+/// `Box<Type>` e mantendo `TypeId: Copy`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum Type {
-    /// Tipo unitário: ausência de valor útil. Único tipo aceitável como retorno
-    /// de função que não produz valor.
+pub enum TypeDef {
+    /// Tipo unitário: ausência de valor útil.
     Unit,
-    /// Booleano. Resultado de comparações e único tipo aceito como condição de
-    /// `cond_br`.
+    /// Booleano.
     Bool,
-    /// Inteiro assinado de 64 bits. Overflow em soma/subtração/multiplicação
-    /// produz o trap `integer_overflow`.
+    /// Inteiro assinado de 64 bits.
     I64,
-    /// Texto UTF-8 imutável (ADR-0024). Literais vivem no módulo; não há
-    /// concatenação nem alocação em execução no EXP-0.
+    /// Texto UTF-8 imutável.
     Str,
-    /// Ponto flutuante IEEE-754 de 64 bits (ADR-0026).
+    /// Ponto flutuante IEEE-754 de 64 bits.
     F64,
-    /// Array imutável de elementos escalares (ADR-0027).
-    Array(ArrayElem),
-    /// Struct com campos escalares (ADR-0029). O `StructId` indexa a tabela de
-    /// structs do módulo ([`crate`] não tem acesso a ela: o layout é resolvido por
-    /// `rvm-verify`).
+    /// Array imutável de elementos do tipo referenciado.
+    Array(TypeId),
+    /// Struct declarada no módulo.
     Struct(StructId),
-    /// Valor opcional de payload escalar (`T?`, ADR-0030).
-    Optional(OptionalElem),
-    /// Resultado com payloads `ok`/`err` escalares (`Result<T, E>`, ADR-0033).
-    Result(ScalarKind, ScalarKind),
+    /// Valor opcional de payload referenciado.
+    Optional(TypeId),
+    /// Resultado com payloads `ok`/`err` referenciados.
+    Result(TypeId, TypeId),
 }
 
-impl Type {
-    /// Nome estável do tipo no formato textual e nos relatórios.
+impl TypeDef {
+    /// Nome estável da forma do tipo.
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
-            Type::Unit => "unit",
-            Type::Bool => "bool",
-            Type::I64 => "i64",
-            Type::Str => "string",
-            Type::F64 => "f64",
-            Type::Array(_) => "array",
-            Type::Struct(_) => "struct",
-            Type::Optional(_) => "option",
-            Type::Result(..) => "result",
+            TypeDef::Unit => "unit",
+            TypeDef::Bool => "bool",
+            TypeDef::I64 => "i64",
+            TypeDef::Str => "string",
+            TypeDef::F64 => "f64",
+            TypeDef::Array(_) => "array",
+            TypeDef::Struct(_) => "struct",
+            TypeDef::Optional(_) => "option",
+            TypeDef::Result(..) => "result",
         }
     }
 
-    /// Converte um nome estável de tipo em [`Type`].
-    ///
-    /// Devolve [`None`] para qualquer nome fora do subset; quem chama deve
-    /// transformar isso em [`ErrorCode::UnknownType`].
+    /// `true` para tipos escalares (sem referências).
     #[must_use]
-    pub fn from_name(name: &str) -> Option<Self> {
-        match name {
-            "unit" => Some(Type::Unit),
-            "bool" => Some(Type::Bool),
-            "i64" => Some(Type::I64),
-            "string" => Some(Type::Str),
-            "f64" => Some(Type::F64),
-            _ => None,
-        }
+    pub const fn is_scalar(self) -> bool {
+        matches!(
+            self,
+            TypeDef::Unit | TypeDef::Bool | TypeDef::I64 | TypeDef::Str | TypeDef::F64
+        )
     }
 }
 
-impl fmt::Display for Type {
+impl fmt::Display for TypeDef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.name())
     }
+}
+
+/// Tipos embutidos canônicos: todo módulo começa a tabela com estes cinco.
+pub const TYPE_UNIT: TypeId = 0;
+/// `bool` embutido.
+pub const TYPE_BOOL: TypeId = 1;
+/// `i64` embutido.
+pub const TYPE_I64: TypeId = 2;
+/// `string` embutido.
+pub const TYPE_STR: TypeId = 3;
+/// `f64` embutido.
+pub const TYPE_F64: TypeId = 4;
+
+/// Quantidade de tipos embutidos (`types[0..BUILTIN_TYPE_COUNT]`).
+pub const BUILTIN_TYPE_COUNT: usize = 5;
+
+/// Tabela canônica dos cinco tipos embutidos.
+#[must_use]
+pub fn builtin_types() -> Vec<TypeDef> {
+    vec![
+        TypeDef::Unit,
+        TypeDef::Bool,
+        TypeDef::I64,
+        TypeDef::Str,
+        TypeDef::F64,
+    ]
 }
 
 /// Operação aritmética binária verificada sobre `i64`.
@@ -238,14 +196,14 @@ impl BinOp {
 
     /// Tipo exigido de cada operando.
     #[must_use]
-    pub const fn operand_type(self) -> Type {
-        Type::I64
+    pub const fn operand_type(self) -> TypeId {
+        TYPE_I64
     }
 
     /// Tipo do valor definido pela operação.
     #[must_use]
-    pub const fn result_type(self) -> Type {
-        Type::I64
+    pub const fn result_type(self) -> TypeId {
+        TYPE_I64
     }
 
     /// Aplica a operação com overflow verificado.
@@ -332,14 +290,14 @@ impl CmpOp {
 
     /// Tipo exigido de cada operando.
     #[must_use]
-    pub const fn operand_type(self) -> Type {
-        Type::I64
+    pub const fn operand_type(self) -> TypeId {
+        TYPE_I64
     }
 
     /// Tipo do valor definido pela comparação.
     #[must_use]
-    pub const fn result_type(self) -> Type {
-        Type::Bool
+    pub const fn result_type(self) -> TypeId {
+        TYPE_BOOL
     }
 
     /// Aplica a comparação assinada.
@@ -428,11 +386,11 @@ impl FloatOp {
 
     /// Tipo do resultado: `f64` para aritmética, `bool` para comparação.
     #[must_use]
-    pub const fn result_type(self) -> Type {
+    pub const fn result_type(self) -> TypeId {
         match self {
-            FloatOp::Add | FloatOp::Sub | FloatOp::Mul | FloatOp::Div => Type::F64,
+            FloatOp::Add | FloatOp::Sub | FloatOp::Mul | FloatOp::Div => TYPE_F64,
             FloatOp::Eq | FloatOp::Ne | FloatOp::Lt | FloatOp::Le | FloatOp::Gt | FloatOp::Ge => {
-                Type::Bool
+                TYPE_BOOL
             }
         }
     }
@@ -871,6 +829,8 @@ pub struct Limits {
     pub max_structs: u32,
     /// Número máximo de campos de uma struct (ADR-0029).
     pub max_fields_per_struct: u32,
+    /// Número máximo de tipos na tabela do módulo (ADR-0034).
+    pub max_types: u32,
     /// Tamanho máximo, em bytes, da entrada textual ou binária de um módulo.
     pub max_input_bytes: u32,
 }
@@ -890,6 +850,7 @@ impl Default for Limits {
             max_array_len: 4096,
             max_structs: 256,
             max_fields_per_struct: 256,
+            max_types: 1024,
             max_input_bytes: 1_048_576,
         }
     }
@@ -940,8 +901,14 @@ mod tests {
 
     #[test]
     fn nomes_de_tipo_e_operacao_sao_bidirecionais() {
-        for ty in [Type::Unit, Type::Bool, Type::I64, Type::Str, Type::F64] {
-            assert_eq!(Type::from_name(ty.name()), Some(ty));
+        for ty in [
+            TypeDef::Unit,
+            TypeDef::Bool,
+            TypeDef::I64,
+            TypeDef::Str,
+            TypeDef::F64,
+        ] {
+            assert_eq!(ty.name(), format!("{ty}"));
         }
         for op in [
             BinOp::AddI64Checked,
@@ -966,10 +933,9 @@ mod tests {
             CmpOp::Ge,
         ] {
             assert_eq!(CmpOp::from_name(op.name()), Some(op));
-            assert_eq!(op.result_type(), Type::Bool);
-            assert_eq!(op.operand_type(), Type::I64);
+            assert_eq!(op.result_type(), TYPE_BOOL);
+            assert_eq!(op.operand_type(), TYPE_I64);
         }
-        assert_eq!(Type::from_name("f32"), None);
         assert_eq!(BinOp::from_name("div_i64"), None);
     }
 
@@ -1070,8 +1036,8 @@ mod tests {
         assert!(FloatOp::Lt.eval_cmp(1.0, 2.0));
         assert!(!FloatOp::Lt.eval_cmp(f64::NAN, 2.0));
         assert!(FloatOp::Ne.eval_cmp(f64::NAN, f64::NAN));
-        assert_eq!(FloatOp::Add.result_type(), Type::F64);
-        assert_eq!(FloatOp::Lt.result_type(), Type::Bool);
+        assert_eq!(FloatOp::Add.result_type(), TYPE_F64);
+        assert_eq!(FloatOp::Lt.result_type(), TYPE_BOOL);
         assert_eq!(FloatOp::from_name("add_i64_checked"), None);
     }
 }

@@ -9,7 +9,7 @@ fn tamanho() -> i64 {
     v0 = const_i64 10
     v1 = const_i64 20
     v2 = const_i64 30
-    v3 = array v0, v1, v2
+    v3 = array i64 v0, v1, v2
     v4 = array_len v3
     return v4
 }

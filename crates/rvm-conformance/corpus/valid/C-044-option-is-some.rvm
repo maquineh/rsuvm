@@ -7,7 +7,7 @@ entry teste
 fn teste() -> bool {
   entry:
     v0 = const_str "x"
-    v1 = option_some v0
+    v1 = option_some string v0
     v2 = option_is_some v1
     return v2
 }

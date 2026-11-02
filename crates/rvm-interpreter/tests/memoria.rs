@@ -10,7 +10,7 @@ use rvm_interpreter::execute;
 use rvm_ir::testing;
 use rvm_ir::{Block, Function, Instr, Module, Op, Terminator};
 use rvm_runtime::{arg_buffer_cost, frame_cost, CallDepthLimit, ExecConfig, MemoryLimit, Value};
-use rvm_spec::{ErrorClass, ErrorCode, Limits, Type, IR_VERSION};
+use rvm_spec::{builtin_types, ErrorClass, ErrorCode, Limits, IR_VERSION, TYPE_STR};
 use rvm_verify::VerifiedModule;
 
 fn verificar(module: Module) -> VerifiedModule {
@@ -97,12 +97,13 @@ fn modulo_concat() -> Module {
         name: "concat".to_string(),
         version: IR_VERSION,
         entry: 0,
+        types: builtin_types(),
         structs: Vec::new(),
         functions: vec![Function {
             id: 0,
             name: "junta".to_string(),
             params: Vec::new(),
-            ret: Type::Str,
+            ret: TYPE_STR,
             entry: 0,
             blocks: vec![Block {
                 id: 0,

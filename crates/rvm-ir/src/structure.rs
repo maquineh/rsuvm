@@ -8,9 +8,11 @@
 
 use std::collections::BTreeSet;
 
-use rvm_spec::{ErrorCode, Limits, Location, RvmError, Type, IR_VERSION};
+use rvm_spec::{
+    ErrorCode, Limits, Location, RvmError, TypeDef, TypeId, BUILTIN_TYPE_COUNT, IR_VERSION,
+};
 
-use crate::{BranchTarget, Function, Module, Op, StructDef, Terminator};
+use crate::{BranchTarget, Function, Module, Op, Terminator};
 
 /// Resultado da checagem estrutural: `Ok(())` ou o primeiro diagnóstico.
 ///
@@ -29,6 +31,7 @@ pub fn check(module: &Module, limits: &Limits) -> Result<(), RvmError> {
     }
     check_name(&module.name, "nome do módulo", &Location::Module, limits)?;
     check_structs(module, limits)?;
+    check_types(module, limits)?;
 
     let function_count = module.functions.len();
     if function_count == 0 {
@@ -73,19 +76,12 @@ pub fn check(module: &Module, limits: &Limits) -> Result<(), RvmError> {
 
     let mut function_names: BTreeSet<&str> = BTreeSet::new();
     for (index, function) in module.functions.iter().enumerate() {
-        check_function(
-            function,
-            index,
-            function_count,
-            &module.structs,
-            limits,
-            &mut function_names,
-        )?;
+        check_function(function, index, module, limits, &mut function_names)?;
     }
     Ok(())
 }
 
-/// Valida a tabela de structs: IDs densos, nomes e campos válidos, campos escalares.
+/// Valida a tabela de structs: IDs densos, nomes e campos válidos.
 fn check_structs(module: &Module, limits: &Limits) -> Result<(), RvmError> {
     if module.structs.len() > limit(limits.max_structs) {
         return Err(invalid(
@@ -140,11 +136,11 @@ fn check_structs(module: &Module, limits: &Limits) -> Result<(), RvmError> {
                     Location::Module,
                 ));
             }
-            if !is_scalar_field(field.ty) {
+            if !index_in_range(field.ty, module.types.len()) {
                 return Err(invalid(
-                    ErrorCode::InvalidType,
+                    ErrorCode::InvalidModule,
                     format!(
-                        "campo `{}` da struct `{}` tem tipo {}; campos precisam ser escalares",
+                        "campo `{}` da struct `{}` referencia o tipo {} inexistente",
                         field.name, def.name, field.ty
                     ),
                     Location::Module,
@@ -155,21 +151,122 @@ fn check_structs(module: &Module, limits: &Limits) -> Result<(), RvmError> {
     Ok(())
 }
 
-/// Campo de struct precisa ser escalar (`bool`/`i64`/`string`/`f64`).
-fn is_scalar_field(ty: Type) -> bool {
-    matches!(ty, Type::Bool | Type::I64 | Type::Str | Type::F64)
-}
-
-/// Exige que um `Type::Struct(id)` referencie uma struct existente.
-fn check_type_ref(ty: Type, structs: &[StructDef], location: &Location) -> Result<(), RvmError> {
-    if let Type::Struct(id) = ty {
-        if !index_in_range(id, structs.len()) {
+/// Valida a tabela de tipos: builtins canônicos, referências em faixa e ausência
+/// de ciclos (ADR-0034).
+fn check_types(module: &Module, limits: &Limits) -> Result<(), RvmError> {
+    if module.types.len() < BUILTIN_TYPE_COUNT {
+        return Err(invalid(
+            ErrorCode::InvalidModule,
+            format!(
+                "tabela de tipos tem {} entradas; mínimo {BUILTIN_TYPE_COUNT}",
+                module.types.len()
+            ),
+            Location::Module,
+        ));
+    }
+    if module.types.len() > limit(limits.max_types) {
+        return Err(invalid(
+            ErrorCode::InvalidModule,
+            format!(
+                "limite de tipos excedido: {} > {}",
+                module.types.len(),
+                limits.max_types
+            ),
+            Location::Module,
+        ));
+    }
+    let builtins = [
+        TypeDef::Unit,
+        TypeDef::Bool,
+        TypeDef::I64,
+        TypeDef::Str,
+        TypeDef::F64,
+    ];
+    for (index, expected) in builtins.iter().enumerate() {
+        if module.types.get(index) != Some(expected) {
             return Err(invalid(
                 ErrorCode::InvalidModule,
-                format!("struct {id} referenciada não existe no módulo"),
-                location.clone(),
+                format!("tipo embutido {index} deveria ser {expected}"),
+                Location::Module,
             ));
         }
+    }
+    for id in 0..module.types.len() {
+        let Some(def) = module.types.get(id).copied() else {
+            continue;
+        };
+        for referenced in referenced_types(module, def) {
+            if !index_in_range(referenced, module.types.len()) {
+                return Err(invalid(
+                    ErrorCode::InvalidModule,
+                    format!("tipo {id} referencia o tipo {referenced} inexistente"),
+                    Location::Module,
+                ));
+            }
+        }
+    }
+    check_acyclic(module)
+}
+
+/// Tipos referenciados diretamente por `def` (campos de struct inclusos).
+fn referenced_types(module: &Module, def: TypeDef) -> Vec<TypeId> {
+    match def {
+        TypeDef::Unit | TypeDef::Bool | TypeDef::I64 | TypeDef::Str | TypeDef::F64 => Vec::new(),
+        TypeDef::Array(element) | TypeDef::Optional(element) => vec![element],
+        TypeDef::Result(ok, err) => vec![ok, err],
+        TypeDef::Struct(id) => module
+            .struct_def(id)
+            .map(|def| def.fields.iter().map(|field| field.ty).collect())
+            .unwrap_or_default(),
+    }
+}
+
+/// Garante que o grafo de tipos é acíclico (0=novo, 1=em visita, 2=concluído).
+fn check_acyclic(module: &Module) -> Result<(), RvmError> {
+    let mut state = vec![0u8; module.types.len()];
+    for id in 0..module.types.len() {
+        visit_type(module, id, &mut state)?;
+    }
+    Ok(())
+}
+
+fn visit_type(module: &Module, id: usize, state: &mut [u8]) -> Result<(), RvmError> {
+    match state.get(id).copied() {
+        Some(1) => {
+            return Err(invalid(
+                ErrorCode::InvalidModule,
+                format!("ciclo de tipos detectado envolvendo o tipo {id}"),
+                Location::Module,
+            ))
+        }
+        Some(2) => return Ok(()),
+        _ => {}
+    }
+    let Some(def) = module.types.get(id).copied() else {
+        return Ok(());
+    };
+    if let Some(slot) = state.get_mut(id) {
+        *slot = 1;
+    }
+    for referenced in referenced_types(module, def) {
+        if let Ok(referenced) = usize::try_from(referenced) {
+            visit_type(module, referenced, state)?;
+        }
+    }
+    if let Some(slot) = state.get_mut(id) {
+        *slot = 2;
+    }
+    Ok(())
+}
+
+/// Exige que `ty` referencie um tipo declarado na tabela do módulo.
+fn check_type_ref(ty: TypeId, types_len: usize, location: &Location) -> Result<(), RvmError> {
+    if !index_in_range(ty, types_len) {
+        return Err(invalid(
+            ErrorCode::InvalidModule,
+            format!("tipo {ty} referenciado não existe no módulo"),
+            location.clone(),
+        ));
     }
     Ok(())
 }
@@ -177,8 +274,7 @@ fn check_type_ref(ty: Type, structs: &[StructDef], location: &Location) -> Resul
 fn check_function<'a>(
     function: &'a Function,
     index: usize,
-    module_function_count: usize,
-    structs: &[StructDef],
+    module: &Module,
     limits: &Limits,
     function_names: &mut BTreeSet<&'a str>,
 ) -> Result<(), RvmError> {
@@ -186,7 +282,7 @@ fn check_function<'a>(
         function: function.name.clone(),
     };
 
-    if !index_in_range(function.id, module_function_count) || function.id as usize != index {
+    if !index_in_range(function.id, module.functions.len()) || function.id as usize != index {
         return Err(invalid(
             ErrorCode::InvalidModule,
             format!(
@@ -204,7 +300,7 @@ fn check_function<'a>(
             location,
         ));
     }
-    check_type_ref(function.ret, structs, &location)?;
+    check_type_ref(function.ret, module.types.len(), &location)?;
     if function.params.len() > limit(limits.max_params) {
         return Err(invalid(
             ErrorCode::InvalidModule,
@@ -222,7 +318,7 @@ fn check_function<'a>(
     for param in &function.params {
         check_name(&param.name, "nome de parâmetro", &location, limits)?;
         reject_reserved(&param.name, &location)?;
-        check_type_ref(param.ty, structs, &location)?;
+        check_type_ref(param.ty, module.types.len(), &location)?;
         if !named_values.insert(param.name.as_str()) {
             return Err(invalid(
                 ErrorCode::InvalidModule,
@@ -316,7 +412,7 @@ fn check_function<'a>(
                 limits,
             )?;
             reject_reserved(&param.name, &block_location)?;
-            check_type_ref(param.ty, structs, &block_location)?;
+            check_type_ref(param.ty, module.types.len(), &block_location)?;
             if !named_values.insert(param.name.as_str()) {
                 return Err(invalid(
                     ErrorCode::InvalidModule,
@@ -401,7 +497,7 @@ fn check_function<'a>(
                     ));
                 }
             }
-            if let Op::ArrayLiteral(items) = &instr.op {
+            if let Op::ArrayLiteral { items, .. } = &instr.op {
                 if items.is_empty() || items.len() > limit(limits.max_array_len) {
                     return Err(invalid(
                         ErrorCode::InvalidModule,
@@ -415,7 +511,7 @@ fn check_function<'a>(
                 }
             }
             if let Op::StructNew { struct_id, fields } = &instr.op {
-                if !index_in_range(*struct_id, structs.len()) {
+                if !index_in_range(*struct_id, module.structs.len()) {
                     return Err(invalid(
                         ErrorCode::InvalidModule,
                         format!("struct {struct_id} construída não existe no módulo"),
@@ -449,7 +545,7 @@ fn check_function<'a>(
                         instr_location.clone(),
                     ));
                 }
-                if !index_in_range(*callee, module_function_count) {
+                if !index_in_range(*callee, module.functions.len()) {
                     return Err(invalid(
                         ErrorCode::InvalidModule,
                         format!("função chamada {} não existe no módulo", callee),
@@ -636,7 +732,7 @@ mod tests {
     use super::*;
     use crate::testing;
     use crate::{BlockParam, Op, Param, Terminator, ValueId};
-    use rvm_spec::Type;
+    use rvm_spec::{builtin_types, TYPE_I64};
 
     fn soma() -> Module {
         testing::soma()
@@ -785,7 +881,7 @@ mod tests {
                 block.params.push(BlockParam {
                     value: 10,
                     name: "entrada".to_string(),
-                    ty: Type::I64,
+                    ty: TYPE_I64,
                 });
             }
         }
@@ -860,15 +956,16 @@ mod tests {
             name: "m".to_string(),
             version: IR_VERSION,
             entry: 0,
+            types: builtin_types(),
             structs: Vec::new(),
             functions: vec![Function {
                 id: 0,
                 name: "main".to_string(),
                 params: vec![Param {
                     name: "a".to_string(),
-                    ty: Type::I64,
+                    ty: TYPE_I64,
                 }],
-                ret: Type::I64,
+                ret: TYPE_I64,
                 entry: 0,
                 blocks: vec![crate::Block {
                     id: 0,
@@ -986,7 +1083,7 @@ mod tests {
             id: 2,
             name: "externa".to_string(),
             params: Vec::new(),
-            ret: Type::Unit,
+            ret: rvm_spec::TYPE_UNIT,
             entry: 0,
             blocks: Vec::new(),
         });
@@ -1011,7 +1108,7 @@ mod tests {
     #[test]
     fn rejeita_string_acima_do_limite() {
         let mut module = testing::constante(0);
-        module.functions[0].ret = Type::Str;
+        module.functions[0].ret = rvm_spec::TYPE_STR;
         module.functions[0].blocks[0].instrs[0].op = Op::ConstStr("x".repeat(10));
         let limits = Limits {
             max_string_bytes: 5,

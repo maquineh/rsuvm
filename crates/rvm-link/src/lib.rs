@@ -31,7 +31,9 @@ use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet};
 
 use rvm_ir::{FnId, Function, Module, Op};
-use rvm_spec::{ErrorCode, Limits, Location, RvmError, IR_VERSION};
+use rvm_spec::{
+    builtin_types, ErrorCode, Limits, Location, RvmError, BUILTIN_TYPE_COUNT, IR_VERSION,
+};
 
 /// Liga `modules` em um único módulo plano, com entrada `entry_function` do
 /// módulo `entry_module`.
@@ -62,9 +64,9 @@ pub fn link(
                 module.name
             )));
         }
-        if !module.structs.is_empty() {
+        if !module.structs.is_empty() || module.types.len() > BUILTIN_TYPE_COUNT {
             return Err(module_error(format!(
-                "módulo `{}` declara structs; ligação com structs ainda não é suportada (ADR-0029)",
+                "módulo `{}` declara tipos compostos/structs; ligação com tipos compostos ainda não é suportada (ADR-0034)",
                 module.name
             )));
         }
@@ -170,6 +172,7 @@ pub fn link(
         name: format!("linked_{entry_module_name}"),
         version: IR_VERSION,
         entry,
+        types: builtin_types(),
         structs: Vec::new(),
         functions: global_functions,
     };

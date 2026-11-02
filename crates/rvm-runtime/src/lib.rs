@@ -24,7 +24,9 @@
 
 use core::fmt;
 
-use rvm_spec::{ArrayElem, ErrorCode, OptionalElem, RvmError, ScalarKind, StructId, Type};
+use rvm_spec::{
+    ErrorCode, RvmError, StructId, TypeId, TYPE_BOOL, TYPE_F64, TYPE_I64, TYPE_STR, TYPE_UNIT,
+};
 
 /// Fuel padrão de uma execução quando o host não especifica outro valor.
 pub const DEFAULT_FUEL: u64 = 100_000;
@@ -92,10 +94,9 @@ impl Default for MemoryLimit {
 
 /// Valor de runtime do subset EXP-0.
 ///
-/// Um `Value` sempre conhece seu [`Type`] e nunca carrega ponteiro, referência ou
-/// handle do processo hospedeiro. `Str` carrega o texto UTF-8 por valor (ADR-0024)
-/// e `F64` um ponto flutuante IEEE-754 (ADR-0026). Não implementa `Eq` por causa
-/// de `NaN`.
+/// Cada valor carrega o [`TypeId`] do seu tipo (ADR-0034). `Str` carrega o texto
+/// UTF-8 por valor (ADR-0024) e `F64` um ponto flutuante IEEE-754 (ADR-0026). Não
+/// implementa `Eq` por causa de `NaN`.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
     /// Valor do tipo `unit`.
@@ -108,56 +109,52 @@ pub enum Value {
     Str(String),
     /// Valor do tipo `f64` (IEEE-754).
     F64(f64),
-    /// Valor do tipo `array` (imutável, elementos escalares, ADR-0027).
-    Array(Vec<Value>),
-    /// Valor de struct: id da struct e valores dos campos na ordem de declaração
-    /// (ADR-0029).
+    /// Valor do tipo `array` (ADR-0027/0034).
+    Array {
+        /// Tipo do array na tabela do módulo.
+        ty: TypeId,
+        /// Elementos, na ordem.
+        items: Vec<Value>,
+    },
+    /// Valor de struct (ADR-0029/0034).
     Struct {
+        /// Tipo da struct na tabela do módulo.
+        ty: TypeId,
         /// Struct da qual o valor é instância.
-        ty: StructId,
+        struct_id: StructId,
         /// Valores dos campos, na ordem de declaração.
         fields: Vec<Value>,
     },
-    /// Valor opcional de payload escalar (ADR-0030).
+    /// Valor opcional (ADR-0030/0034).
     Option {
-        /// Tipo do payload.
-        elem: OptionalElem,
+        /// Tipo do `option` na tabela do módulo.
+        ty: TypeId,
         /// `None` (ausente) ou `Some` com o payload.
         value: Option<Box<Value>>,
     },
-    /// Valor de resultado com payloads `ok`/`err` escalares (ADR-0033).
+    /// Valor de resultado (ADR-0033/0034).
     Result {
-        /// Tipo do payload `ok`.
-        ok: ScalarKind,
-        /// Tipo do payload `err`.
-        err: ScalarKind,
+        /// Tipo do `result` na tabela do módulo.
+        ty: TypeId,
         /// Variante: `Ok` com o payload, ou `Err` com o payload.
         value: std::result::Result<Box<Value>, Box<Value>>,
     },
 }
 
 impl Value {
-    /// Tipo do valor.
-    ///
-    /// Para `Array`, o tipo do elemento vem do primeiro elemento (arrays vazios
-    /// não são produzíveis no EXP-0).
+    /// `TypeId` do valor (os escalares usam os IDs canônicos).
     #[must_use]
-    pub fn ty(&self) -> Type {
+    pub fn ty(&self) -> TypeId {
         match self {
-            Value::Unit => Type::Unit,
-            Value::Bool(_) => Type::Bool,
-            Value::I64(_) => Type::I64,
-            Value::Str(_) => Type::Str,
-            Value::F64(_) => Type::F64,
-            Value::Array(items) => match items.first() {
-                Some(first) => ArrayElem::from_type(first.ty())
-                    .map(Type::Array)
-                    .unwrap_or(Type::Unit),
-                None => Type::Unit,
-            },
-            Value::Struct { ty, .. } => Type::Struct(*ty),
-            Value::Option { elem, .. } => Type::Optional(*elem),
-            Value::Result { ok, err, .. } => Type::Result(*ok, *err),
+            Value::Unit => TYPE_UNIT,
+            Value::Bool(_) => TYPE_BOOL,
+            Value::I64(_) => TYPE_I64,
+            Value::Str(_) => TYPE_STR,
+            Value::F64(_) => TYPE_F64,
+            Value::Array { ty, .. }
+            | Value::Struct { ty, .. }
+            | Value::Option { ty, .. }
+            | Value::Result { ty, .. } => *ty,
         }
     }
 
@@ -201,7 +198,7 @@ impl Value {
     #[must_use]
     pub fn as_array(&self) -> Option<&[Value]> {
         match self {
-            Value::Array(items) => Some(items.as_slice()),
+            Value::Array { items, .. } => Some(items.as_slice()),
             _ => None,
         }
     }
@@ -239,35 +236,8 @@ impl Value {
 
     /// `true` se o valor pertence ao tipo declarado (sem conversão implícita).
     #[must_use]
-    pub fn matches_type(&self, ty: Type) -> bool {
-        match (self, ty) {
-            (Value::Array(items), Type::Array(elem)) => {
-                items.iter().all(|item| item.matches_type(elem.ty()))
-            }
-            (Value::Struct { ty: id, .. }, Type::Struct(expected)) => *id == expected,
-            (Value::Option { elem, value }, Type::Optional(expected)) => {
-                *elem == expected
-                    && value
-                        .as_deref()
-                        .map_or(true, |inner| inner.matches_type(expected.ty()))
-            }
-            (Value::Result { ok, err, value }, Type::Result(expected_ok, expected_err)) => {
-                *ok == expected_ok
-                    && *err == expected_err
-                    && match value {
-                        Ok(inner) => inner.matches_type(expected_ok.ty()),
-                        Err(inner) => inner.matches_type(expected_err.ty()),
-                    }
-            }
-            _ => matches!(
-                (self, ty),
-                (Value::Unit, Type::Unit)
-                    | (Value::Bool(_), Type::Bool)
-                    | (Value::I64(_), Type::I64)
-                    | (Value::Str(_), Type::Str)
-                    | (Value::F64(_), Type::F64)
-            ),
-        }
+    pub fn matches_type(&self, ty: TypeId) -> bool {
+        self.ty() == ty
     }
 }
 
@@ -282,7 +252,7 @@ impl fmt::Display for Value {
             Value::I64(value) => write!(f, "i64:{value}"),
             Value::Str(value) => write!(f, "str:{value}"),
             Value::F64(value) => write!(f, "f64:{value}"),
-            Value::Array(items) => {
+            Value::Array { items, .. } => {
                 f.write_str("array:[")?;
                 for (index, item) in items.iter().enumerate() {
                     if index > 0 {
@@ -292,8 +262,10 @@ impl fmt::Display for Value {
                 }
                 f.write_str("]")
             }
-            Value::Struct { ty, fields } => {
-                write!(f, "struct:{ty}[")?;
+            Value::Struct {
+                struct_id, fields, ..
+            } => {
+                write!(f, "struct:{struct_id}[")?;
                 for (index, field) in fields.iter().enumerate() {
                     if index > 0 {
                         f.write_str(", ")?;
@@ -568,11 +540,11 @@ mod tests {
 
     #[test]
     fn valores_conhecem_seu_tipo() {
-        assert_eq!(Value::Unit.ty(), Type::Unit);
-        assert_eq!(Value::Bool(true).ty(), Type::Bool);
-        assert_eq!(Value::I64(-3).ty(), Type::I64);
-        assert!(Value::I64(0).matches_type(Type::I64));
-        assert!(!Value::I64(0).matches_type(Type::Bool));
+        assert_eq!(Value::Unit.ty(), TYPE_UNIT);
+        assert_eq!(Value::Bool(true).ty(), TYPE_BOOL);
+        assert_eq!(Value::I64(-3).ty(), TYPE_I64);
+        assert!(Value::I64(0).matches_type(TYPE_I64));
+        assert!(!Value::I64(0).matches_type(TYPE_BOOL));
         assert_eq!(Value::I64(30).to_string(), "i64:30");
         assert_eq!(Value::Bool(false).to_string(), "bool:false");
         assert_eq!(Value::Unit.to_string(), "unit");

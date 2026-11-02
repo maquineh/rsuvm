@@ -20,7 +20,7 @@ use std::time::Instant;
 use rvm_interpreter::execute;
 use rvm_ir::{Block, Function, Instr, Module, Op, Param, Terminator};
 use rvm_runtime::{CallDepthLimit, ExecConfig};
-use rvm_spec::{BinOp, Limits, Type, IR_VERSION};
+use rvm_spec::{builtin_types, BinOp, Limits, IR_VERSION, TYPE_I64, TYPE_UNIT};
 use rvm_verify::VerifiedModule;
 
 /// Função `inc(a) = a + 1` como bloco único.
@@ -30,9 +30,9 @@ fn funcao_inc(id: u32) -> Function {
         name: "inc".to_string(),
         params: vec![Param {
             name: "a".to_string(),
-            ty: Type::I64,
+            ty: TYPE_I64,
         }],
-        ret: Type::I64,
+        ret: TYPE_I64,
         entry: 0,
         blocks: vec![Block {
             id: 0,
@@ -85,7 +85,7 @@ fn cadeia(k: u32) -> Module {
         id: 0,
         name: "main".to_string(),
         params: Vec::new(),
-        ret: Type::I64,
+        ret: TYPE_I64,
         entry: 0,
         blocks: vec![Block {
             id: 0,
@@ -99,6 +99,7 @@ fn cadeia(k: u32) -> Module {
         name: format!("cadeia{k}"),
         version: IR_VERSION,
         entry: 0,
+        types: builtin_types(),
         structs: Vec::new(),
         functions: vec![main, funcao_inc(1)],
     }
@@ -112,7 +113,7 @@ fn app_externo(k: u32) -> Module {
         id: 0,
         name: "main".to_string(),
         params: Vec::new(),
-        ret: Type::I64,
+        ret: TYPE_I64,
         entry: 0,
         blocks: vec![Block {
             id: 0,
@@ -126,7 +127,7 @@ fn app_externo(k: u32) -> Module {
         id: 1,
         name: "inc".to_string(),
         params: Vec::new(),
-        ret: Type::Unit,
+        ret: TYPE_UNIT,
         entry: 0,
         blocks: Vec::new(),
     };
@@ -134,6 +135,7 @@ fn app_externo(k: u32) -> Module {
         name: "app".to_string(),
         version: IR_VERSION,
         entry: 0,
+        types: builtin_types(),
         structs: Vec::new(),
         functions: vec![main, externa],
     }
@@ -145,6 +147,7 @@ fn prov() -> Module {
         name: "prov".to_string(),
         version: IR_VERSION,
         entry: 0,
+        types: builtin_types(),
         structs: Vec::new(),
         functions: vec![funcao_inc(0)],
     }

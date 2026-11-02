@@ -7,7 +7,7 @@ entry pega
 fn pega() -> string {
   entry:
     v0 = const_str "ola"
-    v1 = option_some v0
+    v1 = option_some string v0
     v2 = option_unwrap v1
     return v2
 }

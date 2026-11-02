@@ -55,7 +55,8 @@ use rvm_ir::{
     Block, BlockId, BranchTarget, FnId, Function, Instr, Module, Op, StructDef, Terminator, ValueId,
 };
 use rvm_spec::{
-    ArrayElem, ErrorCode, Limits, Location, OptionalElem, RvmError, ScalarKind, StructId, Type,
+    ErrorCode, Limits, Location, RvmError, StructId, TypeDef, TypeId, TYPE_BOOL, TYPE_F64,
+    TYPE_I64, TYPE_STR, TYPE_UNIT,
 };
 
 /// Módulo que passou pela verificação completa.
@@ -163,7 +164,7 @@ struct ValueMaps {
     /// Definição de cada `ValueId` (`None` só em módulo estruturalmente inválido).
     definitions: Vec<Option<Def>>,
     /// Tipo de cada `ValueId`, incluindo o retorno de chamadas.
-    types: Vec<Option<Type>>,
+    types: Vec<Option<TypeId>>,
 }
 
 /// Fatos imutáveis de uma função usados na checagem de uso e de tipos.
@@ -229,62 +230,53 @@ impl<'a> FunctionFacts<'a> {
             Op::StrEq { lhs, rhs } | Op::StrNe { lhs, rhs } => {
                 self.check_use(block_index, instr_index, *lhs, location)?;
                 self.check_use(block_index, instr_index, *rhs, location)?;
-                self.check_operand_type(*lhs, Type::Str, location)?;
-                self.check_operand_type(*rhs, Type::Str, location)
+                self.check_operand_type(*lhs, TYPE_STR, location)?;
+                self.check_operand_type(*rhs, TYPE_STR, location)
             }
             Op::StrLen { operand } => {
                 self.check_use(block_index, instr_index, *operand, location)?;
-                self.check_operand_type(*operand, Type::Str, location)
+                self.check_operand_type(*operand, TYPE_STR, location)
             }
             Op::ConcatStr { lhs, rhs } => {
                 self.check_use(block_index, instr_index, *lhs, location)?;
                 self.check_use(block_index, instr_index, *rhs, location)?;
-                self.check_operand_type(*lhs, Type::Str, location)?;
-                self.check_operand_type(*rhs, Type::Str, location)
+                self.check_operand_type(*lhs, TYPE_STR, location)?;
+                self.check_operand_type(*rhs, TYPE_STR, location)
             }
             Op::Float { lhs, rhs, .. } => {
                 self.check_use(block_index, instr_index, *lhs, location)?;
                 self.check_use(block_index, instr_index, *rhs, location)?;
-                self.check_operand_type(*lhs, Type::F64, location)?;
-                self.check_operand_type(*rhs, Type::F64, location)
+                self.check_operand_type(*lhs, TYPE_F64, location)?;
+                self.check_operand_type(*rhs, TYPE_F64, location)
             }
-            Op::ArrayLiteral(items) => {
+            Op::ArrayLiteral { ty, items } => {
                 for item in items {
                     self.check_use(block_index, instr_index, *item, location)?;
                 }
-                let mut element: Option<ArrayElem> = None;
-                for item in items {
-                    let ty = self.type_of_value(*item, location)?;
-                    let this = ArrayElem::from_type(ty).ok_or_else(|| {
-                        invalid(
+                let expected = match self.module.type_def(*ty) {
+                    Some(TypeDef::Array(element)) => element,
+                    _ => {
+                        return Err(invalid(
                             ErrorCode::InvalidType,
-                            "elemento de array não é escalar".to_string(),
+                            format!("array com tipo {ty}, esperado array"),
                             location.clone(),
-                        )
-                    })?;
-                    match element {
-                        None => element = Some(this),
-                        Some(previous) if previous != this => {
-                            return Err(invalid(
-                                ErrorCode::InvalidType,
-                                "array heterogêneo".to_string(),
-                                location.clone(),
-                            ))
-                        }
-                        Some(_) => {}
+                        ))
                     }
+                };
+                for item in items {
+                    self.check_operand_type(*item, expected, location)?;
                 }
                 Ok(())
             }
             Op::ArrayLen { array } => {
                 self.check_use(block_index, instr_index, *array, location)?;
-                self.require_array(*array, location)
+                self.array_element_type(*array, location).map(|_| ())
             }
             Op::ArrayGet { array, index } => {
                 self.check_use(block_index, instr_index, *array, location)?;
                 self.check_use(block_index, instr_index, *index, location)?;
-                self.require_array(*array, location)?;
-                self.check_operand_type(*index, Type::I64, location)
+                self.array_element_type(*array, location)?;
+                self.check_operand_type(*index, TYPE_I64, location)
             }
             Op::ArraySet {
                 array,
@@ -295,8 +287,8 @@ impl<'a> FunctionFacts<'a> {
                 self.check_use(block_index, instr_index, *index, location)?;
                 self.check_use(block_index, instr_index, *value, location)?;
                 let element = self.array_element_type(*array, location)?;
-                self.check_operand_type(*index, Type::I64, location)?;
-                self.check_operand_type(*value, element.ty(), location)
+                self.check_operand_type(*index, TYPE_I64, location)?;
+                self.check_operand_type(*value, element, location)
             }
             Op::StructNew { struct_id, fields } => {
                 for field in fields {
@@ -350,34 +342,42 @@ impl<'a> FunctionFacts<'a> {
                 let declared_ty = declared.ty;
                 self.check_operand_type(*value, declared_ty, location)
             }
-            Op::OptionNone(_) => Ok(()),
-            Op::OptionSome { value } => {
+            Op::OptionNone(ty) => match self.module.type_def(*ty) {
+                Some(TypeDef::Optional(_)) => Ok(()),
+                _ => Err(invalid(
+                    ErrorCode::InvalidType,
+                    format!("option_none com tipo {ty}, esperado option"),
+                    location.clone(),
+                )),
+            },
+            Op::OptionSome { ty, value } => {
                 self.check_use(block_index, instr_index, *value, location)?;
-                if OptionalElem::from_type(self.type_of_value(*value, location)?).is_none() {
-                    return Err(invalid(
+                match self.module.type_def(*ty) {
+                    Some(TypeDef::Optional(payload)) => {
+                        self.check_operand_type(*value, payload, location)
+                    }
+                    _ => Err(invalid(
                         ErrorCode::InvalidType,
-                        "option_some exige payload escalar".to_string(),
+                        format!("option_some com tipo {ty}, esperado option"),
                         location.clone(),
-                    ));
+                    )),
                 }
-                Ok(())
             }
             Op::OptionIsSome { value } | Op::OptionUnwrap { value } => {
                 self.check_use(block_index, instr_index, *value, location)?;
-                self.require_optional(*value, location)
+                self.option_element(*value, location).map(|_| ())
             }
             Op::Coalesce { option, fallback } => {
                 self.check_use(block_index, instr_index, *option, location)?;
                 self.check_use(block_index, instr_index, *fallback, location)?;
-                let elem = self.option_element(*option, location)?;
+                let payload = self.option_element(*option, location)?;
+                let option_ty = self.type_of_value(*option, location)?;
                 let fallback_ty = self.type_of_value(*fallback, location)?;
-                if fallback_ty != elem.ty() && fallback_ty != Type::Optional(elem) {
+                if fallback_ty != payload && fallback_ty != option_ty {
                     return Err(invalid(
                         ErrorCode::InvalidType,
                         format!(
-                            "coalesce exige fallback `{}` ou `{}`, recebeu {fallback_ty}",
-                            elem.ty(),
-                            Type::Optional(elem)
+                            "coalesce exige fallback do payload ({payload}) ou do próprio option ({option_ty}), recebeu {fallback_ty}"
                         ),
                         location.clone(),
                     ));
@@ -388,7 +388,7 @@ impl<'a> FunctionFacts<'a> {
                 self.check_use(block_index, instr_index, *lhs, location)?;
                 self.check_use(block_index, instr_index, *rhs, location)?;
                 let lhs_ty = self.type_of_value(*lhs, location)?;
-                if !matches!(lhs_ty, Type::Optional(_)) {
+                if !matches!(self.module.type_def(lhs_ty), Some(TypeDef::Optional(_))) {
                     return Err(invalid(
                         ErrorCode::InvalidType,
                         format!(
@@ -399,13 +399,27 @@ impl<'a> FunctionFacts<'a> {
                 }
                 self.check_operand_type(*rhs, lhs_ty, location)
             }
-            Op::ResultOk { ok, value, .. } => {
+            Op::ResultOk { ty, value } => {
                 self.check_use(block_index, instr_index, *value, location)?;
-                self.check_operand_type(*value, ok.ty(), location)
+                match self.module.type_def(*ty) {
+                    Some(TypeDef::Result(ok, _)) => self.check_operand_type(*value, ok, location),
+                    _ => Err(invalid(
+                        ErrorCode::InvalidType,
+                        format!("result_ok com tipo {ty}, esperado result"),
+                        location.clone(),
+                    )),
+                }
             }
-            Op::ResultErr { err, value, .. } => {
+            Op::ResultErr { ty, value } => {
                 self.check_use(block_index, instr_index, *value, location)?;
-                self.check_operand_type(*value, err.ty(), location)
+                match self.module.type_def(*ty) {
+                    Some(TypeDef::Result(_, err)) => self.check_operand_type(*value, err, location),
+                    _ => Err(invalid(
+                        ErrorCode::InvalidType,
+                        format!("result_err com tipo {ty}, esperado result"),
+                        location.clone(),
+                    )),
+                }
             }
             Op::ResultIsOk { value }
             | Op::ResultUnwrap { value }
@@ -454,7 +468,7 @@ impl<'a> FunctionFacts<'a> {
         let position = block.instrs.len();
         match &block.term {
             Terminator::Return(None) => {
-                if self.function.ret == Type::Unit {
+                if self.function.ret == TYPE_UNIT {
                     Ok(())
                 } else {
                     Err(invalid(
@@ -468,7 +482,7 @@ impl<'a> FunctionFacts<'a> {
                 }
             }
             Terminator::Return(Some(value)) => {
-                if self.function.ret == Type::Unit {
+                if self.function.ret == TYPE_UNIT {
                     return Err(invalid(
                         ErrorCode::InvalidType,
                         format!(
@@ -488,7 +502,7 @@ impl<'a> FunctionFacts<'a> {
                 else_target,
             } => {
                 self.check_use(block_index, position, *cond, location)?;
-                self.check_operand_type(*cond, Type::Bool, location)?;
+                self.check_operand_type(*cond, TYPE_BOOL, location)?;
                 self.check_target(block_index, position, then_target, location)?;
                 self.check_target(block_index, position, else_target, location)
             }
@@ -580,7 +594,7 @@ impl<'a> FunctionFacts<'a> {
     fn check_operand_type(
         &self,
         value: ValueId,
-        expected: Type,
+        expected: TypeId,
         location: &Location,
     ) -> Result<(), RvmError> {
         let actual = self.type_of_value(value, location)?;
@@ -595,26 +609,22 @@ impl<'a> FunctionFacts<'a> {
         }
     }
 
-    /// Exige que `value` tenha tipo de array.
-    fn require_array(&self, value: ValueId, location: &Location) -> Result<(), RvmError> {
-        match self.type_of_value(value, location)? {
-            Type::Array(_) => Ok(()),
-            other => Err(invalid(
-                ErrorCode::InvalidType,
-                format!("valor v{value} tem tipo {other}, esperado array"),
+    /// Definição do tipo registrado de `value`.
+    fn type_def_of(&self, value: ValueId, location: &Location) -> Result<TypeDef, RvmError> {
+        let ty = self.type_of_value(value, location)?;
+        self.module.type_def(ty).ok_or_else(|| {
+            invalid(
+                ErrorCode::InvalidModule,
+                format!("tipo {ty} não existe no módulo"),
                 location.clone(),
-            )),
-        }
+            )
+        })
     }
 
-    /// Elemento do tipo de array de `value`, exigindo que seja um array.
-    fn array_element_type(
-        &self,
-        value: ValueId,
-        location: &Location,
-    ) -> Result<ArrayElem, RvmError> {
-        match self.type_of_value(value, location)? {
-            Type::Array(element) => Ok(element),
+    /// Elemento do array de `value`, exigindo que seja um array.
+    fn array_element_type(&self, value: ValueId, location: &Location) -> Result<TypeId, RvmError> {
+        match self.type_def_of(value, location)? {
+            TypeDef::Array(element) => Ok(element),
             other => Err(invalid(
                 ErrorCode::InvalidType,
                 format!("valor v{value} tem tipo {other}, esperado array"),
@@ -640,8 +650,8 @@ impl<'a> FunctionFacts<'a> {
         value: ValueId,
         location: &Location,
     ) -> Result<&StructDef, RvmError> {
-        match self.type_of_value(value, location)? {
-            Type::Struct(id) => self.struct_def(id, location),
+        match self.type_def_of(value, location)? {
+            TypeDef::Struct(id) => self.struct_def(id, location),
             other => Err(invalid(
                 ErrorCode::InvalidType,
                 format!("valor v{value} tem tipo {other}, esperado struct"),
@@ -650,10 +660,10 @@ impl<'a> FunctionFacts<'a> {
         }
     }
 
-    /// Exige que `value` tenha tipo `option`.
-    fn require_optional(&self, value: ValueId, location: &Location) -> Result<(), RvmError> {
-        match self.type_of_value(value, location)? {
-            Type::Optional(_) => Ok(()),
+    /// Payload do `option` de `value`, exigindo que seja um `option`.
+    fn option_element(&self, value: ValueId, location: &Location) -> Result<TypeId, RvmError> {
+        match self.type_def_of(value, location)? {
+            TypeDef::Optional(payload) => Ok(payload),
             other => Err(invalid(
                 ErrorCode::InvalidType,
                 format!("valor v{value} tem tipo {other}, esperado option"),
@@ -662,31 +672,14 @@ impl<'a> FunctionFacts<'a> {
         }
     }
 
-    /// Payload do tipo `option` de `value`, exigindo que seja um `option`.
-    fn option_element(
-        &self,
-        value: ValueId,
-        location: &Location,
-    ) -> Result<OptionalElem, RvmError> {
-        match self.type_of_value(value, location)? {
-            Type::Optional(elem) => Ok(elem),
-            other => Err(invalid(
-                ErrorCode::InvalidType,
-                format!("valor v{value} tem tipo {other}, esperado option"),
-                location.clone(),
-            )),
-        }
-    }
-
-    /// Payloads `ok`/`err` do tipo `result` de `value`, exigindo que seja um
-    /// `result`.
+    /// Payloads `ok`/`err` do `result` de `value`, exigindo que seja um `result`.
     fn require_result(
         &self,
         value: ValueId,
         location: &Location,
-    ) -> Result<(ScalarKind, ScalarKind), RvmError> {
-        match self.type_of_value(value, location)? {
-            Type::Result(ok, err) => Ok((ok, err)),
+    ) -> Result<(TypeId, TypeId), RvmError> {
+        match self.type_def_of(value, location)? {
+            TypeDef::Result(ok, err) => Ok((ok, err)),
             other => Err(invalid(
                 ErrorCode::InvalidType,
                 format!("valor v{value} tem tipo {other}, esperado result"),
@@ -696,7 +689,7 @@ impl<'a> FunctionFacts<'a> {
     }
 
     /// Tipo registrado de `value` no mapa da função.
-    fn type_of_value(&self, value: ValueId, location: &Location) -> Result<Type, RvmError> {
+    fn type_of_value(&self, value: ValueId, location: &Location) -> Result<TypeId, RvmError> {
         let index = value_index(value, location)?;
         match self.values.types.get(index).copied().flatten() {
             Some(ty) => Ok(ty),
@@ -978,262 +971,78 @@ fn build_values(
                 },
                 location,
             )?;
-            let ty = match &instr.op {
-                Op::ArrayLiteral(items) => {
-                    let first = items.first().ok_or_else(|| {
-                        invalid(
-                            ErrorCode::InvalidModule,
-                            "array literal vazio".to_string(),
-                            location.clone(),
-                        )
-                    })?;
-                    let first_index = value_index(*first, location)?;
-                    let element_ty =
-                        types.get(first_index).copied().flatten().ok_or_else(|| {
-                            invalid(
-                                ErrorCode::InvalidModule,
-                                "tipo do elemento de array desconhecido".to_string(),
-                                location.clone(),
-                            )
-                        })?;
-                    let element = ArrayElem::from_type(element_ty).ok_or_else(|| {
-                        invalid(
-                            ErrorCode::InvalidType,
-                            "elemento de array não é escalar".to_string(),
-                            location.clone(),
-                        )
-                    })?;
-                    Type::Array(element)
-                }
-                Op::ArrayGet { array, .. } => {
-                    let array_index = value_index(*array, location)?;
-                    let array_ty = types.get(array_index).copied().flatten().ok_or_else(|| {
-                        invalid(
-                            ErrorCode::InvalidModule,
-                            "tipo do array desconhecido".to_string(),
-                            location.clone(),
-                        )
-                    })?;
-                    match array_ty {
-                        Type::Array(element) => element.ty(),
-                        _ => {
-                            return Err(invalid(
-                                ErrorCode::InvalidType,
-                                "array_get sobre valor que não é array".to_string(),
-                                location.clone(),
-                            ))
-                        }
-                    }
-                }
-                Op::ArraySet { array, .. } => {
-                    let array_index = value_index(*array, location)?;
-                    let array_ty = types.get(array_index).copied().flatten().ok_or_else(|| {
-                        invalid(
-                            ErrorCode::InvalidModule,
-                            "tipo do array desconhecido".to_string(),
-                            location.clone(),
-                        )
-                    })?;
-                    match array_ty {
-                        Type::Array(element) => Type::Array(element),
-                        _ => {
-                            return Err(invalid(
-                                ErrorCode::InvalidType,
-                                "array_set sobre valor que não é array".to_string(),
-                                location.clone(),
-                            ))
-                        }
-                    }
-                }
-                Op::StructNew { struct_id, .. } => Type::Struct(*struct_id),
-                Op::FieldGet { object, field } => {
-                    let object_index = value_index(*object, location)?;
-                    let object_ty =
-                        types.get(object_index).copied().flatten().ok_or_else(|| {
-                            invalid(
-                                ErrorCode::InvalidModule,
-                                "tipo do objeto desconhecido".to_string(),
-                                location.clone(),
-                            )
-                        })?;
-                    match object_ty {
-                        Type::Struct(id) => {
-                            let def = module.struct_def(id).ok_or_else(|| {
-                                invalid(
-                                    ErrorCode::InvalidModule,
-                                    format!("struct {id} não existe no módulo"),
-                                    location.clone(),
-                                )
-                            })?;
-                            def.field(field)
-                                .map(|declared| declared.ty)
-                                .ok_or_else(|| {
-                                    invalid(
-                                        ErrorCode::InvalidType,
-                                        format!("struct `{}` não tem campo `{field}`", def.name),
-                                        location.clone(),
-                                    )
-                                })?
-                        }
-                        _ => {
-                            return Err(invalid(
-                                ErrorCode::InvalidType,
-                                "field_get sobre valor que não é struct".to_string(),
-                                location.clone(),
-                            ))
-                        }
-                    }
-                }
-                Op::FieldSet { object, .. } => {
-                    let object_index = value_index(*object, location)?;
-                    let object_ty =
-                        types.get(object_index).copied().flatten().ok_or_else(|| {
-                            invalid(
-                                ErrorCode::InvalidModule,
-                                "tipo do objeto desconhecido".to_string(),
-                                location.clone(),
-                            )
-                        })?;
-                    match object_ty {
-                        Type::Struct(_) => object_ty,
-                        _ => {
-                            return Err(invalid(
-                                ErrorCode::InvalidType,
-                                "field_set sobre valor que não é struct".to_string(),
-                                location.clone(),
-                            ))
-                        }
-                    }
-                }
-                Op::OptionNone(elem) => Type::Optional(*elem),
-                Op::OptionSome { value } => {
-                    let index = value_index(*value, location)?;
-                    let ty = types.get(index).copied().flatten().ok_or_else(|| {
-                        invalid(
-                            ErrorCode::InvalidModule,
-                            "tipo do payload desconhecido".to_string(),
-                            location.clone(),
-                        )
-                    })?;
-                    let elem = OptionalElem::from_type(ty).ok_or_else(|| {
-                        invalid(
-                            ErrorCode::InvalidType,
-                            "option_some exige payload escalar".to_string(),
-                            location.clone(),
-                        )
-                    })?;
-                    Type::Optional(elem)
-                }
-                Op::OptionIsSome { .. } => Type::Bool,
-                Op::OptionUnwrap { value } => {
-                    let index = value_index(*value, location)?;
-                    let ty = types.get(index).copied().flatten().ok_or_else(|| {
-                        invalid(
-                            ErrorCode::InvalidModule,
-                            "tipo do option desconhecido".to_string(),
-                            location.clone(),
-                        )
-                    })?;
-                    match ty {
-                        Type::Optional(elem) => elem.ty(),
-                        _ => {
-                            return Err(invalid(
-                                ErrorCode::InvalidType,
-                                "option_unwrap sobre valor que não é option".to_string(),
-                                location.clone(),
-                            ))
-                        }
-                    }
-                }
-                Op::Coalesce { fallback, .. } => {
-                    let index = value_index(*fallback, location)?;
-                    types.get(index).copied().flatten().ok_or_else(|| {
-                        invalid(
-                            ErrorCode::InvalidModule,
-                            "tipo do fallback desconhecido".to_string(),
-                            location.clone(),
-                        )
-                    })?
-                }
-                Op::ResultOk { ok, err, .. } | Op::ResultErr { ok, err, .. } => {
-                    Type::Result(*ok, *err)
-                }
-                Op::ResultIsOk { .. } => Type::Bool,
-                Op::ResultUnwrap { value } => {
-                    let (ok, _) = result_elems(&types, *value, location)?;
-                    ok.ty()
-                }
-                Op::ResultUnwrapErr { value } => {
-                    let (_, err) = result_elems(&types, *value, location)?;
-                    err.ty()
-                }
-                other => operation_type(module, other, location)?,
-            };
+            let ty = resolve_op_type(module, &instr.op, &types, location)?;
             record_type(&mut types, index, ty, location)?;
         }
     }
     Ok(ValueMaps { definitions, types })
 }
 
-/// Payloads `ok`/`err` do `result` definido por `value`, a partir do mapa de tipos.
-fn result_elems(
-    types: &[Option<Type>],
-    value: ValueId,
+/// Resolve o `TypeId` definido por uma operação, consultando os tipos já
+/// registrados dos operandos e a tabela do módulo (ADR-0034).
+fn resolve_op_type(
+    module: &Module,
+    op: &Op,
+    types: &[Option<TypeId>],
     location: &Location,
-) -> Result<(ScalarKind, ScalarKind), RvmError> {
-    let index = value_index(value, location)?;
-    let ty = types.get(index).copied().flatten().ok_or_else(|| {
-        invalid(
-            ErrorCode::InvalidModule,
-            "tipo do result desconhecido".to_string(),
-            location.clone(),
-        )
-    })?;
-    match ty {
-        Type::Result(ok, err) => Ok((ok, err)),
-        _ => Err(invalid(
-            ErrorCode::InvalidType,
-            "result_unwrap sobre valor que não é result".to_string(),
-            location.clone(),
-        )),
+) -> Result<TypeId, RvmError> {
+    if let Some(ty) = op.result_type() {
+        return Ok(ty);
     }
-}
-
-/// Tipo do valor definido por uma operação.
-///
-/// Para `call_static` o tipo vem de [`Function::ret`] da função chamada; não se
-/// usa o atalho [`Function::value_type`], que devolve [`None`] para chamadas.
-fn operation_type(module: &Module, op: &Op, location: &Location) -> Result<Type, RvmError> {
     match op {
-        Op::ConstI64(_) => Ok(Type::I64),
-        Op::ConstBool(_) => Ok(Type::Bool),
-        Op::ConstStr(_) => Ok(Type::Str),
-        Op::ConstF64(_) => Ok(Type::F64),
-        Op::Bin { op, .. } => Ok(op.result_type()),
-        Op::Cmp { op, .. } => Ok(op.result_type()),
-        Op::StrEq { .. } | Op::StrNe { .. } => Ok(Type::Bool),
-        Op::StrLen { .. } => Ok(Type::I64),
-        Op::ConcatStr { .. } => Ok(Type::Str),
-        Op::Float { op, .. } => Ok(op.result_type()),
-        // `ArrayLiteral`/`ArrayGet` são resolvidos em `build_values` (dependem dos
-        // tipos dos operandos); aqui só se mantém a exaustividade.
-        Op::ArrayLiteral(_) => Ok(Type::Array(ArrayElem::I64)),
-        Op::ArrayLen { .. } => Ok(Type::I64),
-        Op::ArrayGet { .. } => Ok(Type::I64),
-        Op::ArraySet { .. } => Ok(Type::Array(ArrayElem::I64)),
-        Op::StructNew { struct_id, .. } => Ok(Type::Struct(*struct_id)),
-        // `FieldGet` é resolvido em `build_values` (depende do tipo do objeto).
-        Op::FieldGet { .. } => Ok(Type::Unit),
-        Op::FieldSet { .. } => Ok(Type::Unit),
-        Op::OptionNone(elem) => Ok(Type::Optional(*elem)),
-        Op::OptionSome { .. } => Ok(Type::Optional(OptionalElem::I64)),
-        Op::OptionIsSome { .. } => Ok(Type::Bool),
-        Op::OptionUnwrap { .. } => Ok(Type::I64),
-        Op::Coalesce { .. } => Ok(Type::I64),
-        Op::OptionEq { .. } | Op::OptionNe { .. } => Ok(Type::Bool),
-        Op::ResultOk { ok, err, .. } | Op::ResultErr { ok, err, .. } => Ok(Type::Result(*ok, *err)),
-        Op::ResultIsOk { .. } => Ok(Type::Bool),
-        Op::ResultUnwrap { .. } | Op::ResultUnwrapErr { .. } => Ok(Type::I64),
+        Op::ArrayGet { array, .. } => match module.type_def(type_at(types, *array, location)?) {
+            Some(TypeDef::Array(element)) => Ok(element),
+            _ => Err(invalid(
+                ErrorCode::InvalidType,
+                "array_get sobre valor que não é array".to_string(),
+                location.clone(),
+            )),
+        },
+        Op::ArraySet { array, .. } => match module.type_def(type_at(types, *array, location)?) {
+            Some(TypeDef::Array(_)) => type_at(types, *array, location),
+            _ => Err(invalid(
+                ErrorCode::InvalidType,
+                "array_set sobre valor que não é array".to_string(),
+                location.clone(),
+            )),
+        },
+        Op::StructNew { struct_id, .. } => find_type(module, TypeDef::Struct(*struct_id), location),
+        Op::FieldGet { object, field } => {
+            let def = object_struct_def(module, types, *object, location)?;
+            def.field(field).map(|declared| declared.ty).ok_or_else(|| {
+                invalid(
+                    ErrorCode::InvalidType,
+                    format!("struct `{}` não tem campo `{field}`", def.name),
+                    location.clone(),
+                )
+            })
+        }
+        Op::FieldSet { object, .. } => type_at(types, *object, location),
+        Op::OptionUnwrap { value } => match module.type_def(type_at(types, *value, location)?) {
+            Some(TypeDef::Optional(payload)) => Ok(payload),
+            _ => Err(invalid(
+                ErrorCode::InvalidType,
+                "option_unwrap sobre valor que não é option".to_string(),
+                location.clone(),
+            )),
+        },
+        Op::Coalesce { fallback, .. } => type_at(types, *fallback, location),
+        Op::ResultUnwrap { value } => match module.type_def(type_at(types, *value, location)?) {
+            Some(TypeDef::Result(ok, _)) => Ok(ok),
+            _ => Err(invalid(
+                ErrorCode::InvalidType,
+                "result_unwrap sobre valor que não é result".to_string(),
+                location.clone(),
+            )),
+        },
+        Op::ResultUnwrapErr { value } => match module.type_def(type_at(types, *value, location)?) {
+            Some(TypeDef::Result(_, err)) => Ok(err),
+            _ => Err(invalid(
+                ErrorCode::InvalidType,
+                "result_unwrap_err sobre valor que não é result".to_string(),
+                location.clone(),
+            )),
+        },
         Op::Call { callee, .. } => module
             .function(*callee)
             .map(|target| target.ret)
@@ -1244,6 +1053,62 @@ fn operation_type(module: &Module, op: &Op, location: &Location) -> Result<Type,
                     location.clone(),
                 )
             }),
+        _ => Err(invalid(
+            ErrorCode::InvalidModule,
+            "operação sem tipo resolvido".to_string(),
+            location.clone(),
+        )),
+    }
+}
+
+/// Tipo registrado de `value` no mapa em construção.
+fn type_at(
+    types: &[Option<TypeId>],
+    value: ValueId,
+    location: &Location,
+) -> Result<TypeId, RvmError> {
+    let index = value_index(value, location)?;
+    types.get(index).copied().flatten().ok_or_else(|| {
+        invalid(
+            ErrorCode::InvalidModule,
+            format!("tipo do valor v{value} desconhecido"),
+            location.clone(),
+        )
+    })
+}
+
+/// Exige que `def` exista na tabela e devolve o `TypeId` correspondente.
+fn find_type(module: &Module, def: TypeDef, location: &Location) -> Result<TypeId, RvmError> {
+    module.find_type(def).ok_or_else(|| {
+        invalid(
+            ErrorCode::InvalidModule,
+            format!("tipo {def} não declarado na tabela do módulo"),
+            location.clone(),
+        )
+    })
+}
+
+/// Definição da struct do tipo de `value`, a partir do mapa em construção.
+fn object_struct_def<'a>(
+    module: &'a Module,
+    types: &[Option<TypeId>],
+    value: ValueId,
+    location: &Location,
+) -> Result<&'a StructDef, RvmError> {
+    let ty = type_at(types, value, location)?;
+    match module.type_def(ty) {
+        Some(TypeDef::Struct(id)) => module.struct_def(id).ok_or_else(|| {
+            invalid(
+                ErrorCode::InvalidModule,
+                format!("struct {id} não existe no módulo"),
+                location.clone(),
+            )
+        }),
+        _ => Err(invalid(
+            ErrorCode::InvalidType,
+            format!("valor v{value} tem tipo {ty}, esperado struct"),
+            location.clone(),
+        )),
     }
 }
 
@@ -1274,9 +1139,9 @@ fn record_definition(
 
 /// Registra o tipo de um valor, recusando posição repetida ou fora da faixa.
 fn record_type(
-    types: &mut [Option<Type>],
+    types: &mut [Option<TypeId>],
     index: usize,
-    ty: Type,
+    ty: TypeId,
     location: &Location,
 ) -> Result<(), RvmError> {
     match types.get_mut(index) {
@@ -1342,7 +1207,7 @@ mod tests {
     use super::*;
     use rvm_ir::testing;
     use rvm_ir::Param;
-    use rvm_spec::{BinOp, CmpOp, ErrorClass, IR_VERSION};
+    use rvm_spec::{builtin_types, BinOp, CmpOp, ErrorClass, IR_VERSION};
 
     fn funcao_mut(module: &mut Module, index: usize) -> &mut Function {
         module.functions.get_mut(index).expect("função de teste")
@@ -1403,15 +1268,16 @@ mod tests {
             name: "entrada".to_string(),
             version: IR_VERSION,
             entry: 0,
+            types: builtin_types(),
             structs: Vec::new(),
             functions: vec![Function {
                 id: 0,
                 name: "main".to_string(),
                 params: vec![Param {
                     name: "a".to_string(),
-                    ty: Type::I64,
+                    ty: TYPE_I64,
                 }],
-                ret: Type::I64,
+                ret: TYPE_I64,
                 entry: 0,
                 blocks: vec![Block {
                     id: 0,
@@ -1490,7 +1356,7 @@ mod tests {
     #[test]
     fn rejeita_tipo_de_retorno_divergente() {
         let mut module = testing::constante(1);
-        funcao_mut(&mut module, 0).ret = Type::Bool;
+        funcao_mut(&mut module, 0).ret = TYPE_BOOL;
         assert_erro(module, ErrorCode::InvalidType);
     }
 

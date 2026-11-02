@@ -25,7 +25,8 @@ pode importar Lift: adaptadores ficam fora de `crates/`.
    permanece sem dependências externas.
 3. **Subconjunto** suportado: funções com parâmetros/retorno `int` (`i64`),
    `boolean` (`bool`), `string` (`string`), `number` (`f64`), arrays desses tipos
-   (`array`), structs (`interface`) com campos escalares, opcionais (`T?`) ou
+   (`array`), structs (`interface`) com campos de qualquer tipo, opcionais (`T?`),
+   resultados (`Result<T, E>`) ou
    `void` (`unit`);
    `let`/`const`, **atribuição** (a binding, a
    **elemento de array** `xs[i] = v` e a **campo** `obj.campo = v`), `return`,
@@ -51,7 +52,7 @@ pode importar Lift: adaptadores ficam fora de `crates/`.
    foram habilitadas por tipos/ops novos no núcleo. Arrays do adaptador cobrem
    literais, indexação e **atribuição a elemento** `xs[i] = v` (só quando `xs` é um
    local não-aliasado); structs cobrem `interface`, literal, `obj.campo` e
-   **atribuição a campo** `obj.campo = v` (campos escalares, local não-aliasado);
+   **atribuição a campo** `obj.campo = v` (local não-aliasado);
    opcionais cobrem `null`, `option.some`/`is_some`/`unwrap`, `??`
    (fallback preguiçoso) e `== null`/`!= null` (ADR-0030/0031).
 6. **Teste diferencial**: o valor executado na RSUVM é comparado com o **oráculo do
@@ -80,7 +81,8 @@ pode importar Lift: adaptadores ficam fora de `crates/`.
 
 - Positivas: demonstra a rota frontend→RIR com um frontend real; roda um
   subconjunto Lift na RSUVM; o núcleo permanece puro e sem dependências.
-- Negativas: cobre só `int`/`boolean`/`void`/`string`/`number`/arrays de escalares
+- Negativas: cobre só `int`/`boolean`/`void`/`string`/`number`/arrays/structs
+  (com tipos recursivos por id, ADR-0034)
   (sem efeitos, objetos nem closures); a atribuição a elemento de array exige
   análise de aliasing conservadora; o adaptador carrega as dependências do Lift
   (`logos`, `serde`, …) no **seu** workspace; depende de um commit fixado do Lift.

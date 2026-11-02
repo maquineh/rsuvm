@@ -11,8 +11,9 @@ semântica de overflow independente do perfil de compilação: toda aritmética 
 
 ## Interface
 
-- `Type` — `unit`, `bool`, `i64`; `Type::name`, `Type::from_name`,
-  `Display` (`lib.rs:Type`).
+- `TypeDef`/`TypeId` — tipos escalares e compostos (`array`, `struct`, `option`,
+  `result`), recursivos por id; builtins canônicos (`TYPE_UNIT`..`TYPE_F64`),
+  `builtin_types`, `TypeDef::name`/`is_scalar`, `Display` (`lib.rs:TypeDef`).
 - `BinOp` — `AddI64Checked`, `SubI64Checked`, `MulI64Checked`;
   `eval_i64(lhs, rhs) -> Option<i64>` (devolve `None` no transbordo),
   `operand_type`, `result_type`, `name`, `from_name` (`lib.rs:BinOp`).

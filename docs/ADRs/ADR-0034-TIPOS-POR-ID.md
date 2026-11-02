@@ -1,6 +1,6 @@
 # ADR-0034 — Representação de tipos por id (tabela no módulo)
 
-- **Status:** **Proposto** — decisão de design registrada; **não implementada**.
+- **Status:** **Aceito experimentalmente** — implementado nesta rodada.
 - **Data:** 2026-11-02
 - **Requisitos:** destravar `Option`/`Result` de agregados e aninhados; manter
   determinismo, ausência de `unsafe` e zero dependências externas.
@@ -91,6 +91,54 @@ estrutural: um tipo recursivo por valor exige indireção (`Box`), e `Box` remov
 
 ## Observação de escopo
 
-Esta ADR **não** altera código nesta rodada: o repositório permanece no enum
-`Type: Copy` e nos limites das ADR-0027/0029/0030/0033. A implementação exige a
-migração faseada acima e uma nova rodada de revisão.
+A migração faseada foi executada em uma única troca atômica (o workspace não
+compila com duas representações convivendo). O enum `Type` foi **removido**;
+`TypeId`/`TypeDef` são a representação única. `ScalarKind`, `ArrayElem` e
+`OptionalElem` também foram removidos: payloads são `TypeId` e a tabela resolve
+tudo.
+
+## Implementação (resultado)
+
+- `rvm-spec`: `TypeId`, `TypeDef`, `builtin_types()` e IDs canônicos
+  `TYPE_UNIT=0`, `TYPE_BOOL=1`, `TYPE_I64=2`, `TYPE_STR=3`, `TYPE_F64=4`; limite
+  `max_types` (1024).
+- `rvm-ir`: `Module.types`, `Param.ty`/`BlockParam.ty`/`Function.ret`/`FieldDef.ty`
+  como `TypeId`; `Op::ArrayLiteral { ty, items }`, `Op::OptionNone(TypeId)`,
+  `Op::OptionSome { ty, value }`, `Op::ResultOk/Err { ty, value }`. `Op::result_type`
+  devolve `Option<TypeId>` (o verificador resolve o resto).
+- `rvm-ir::structure`: builtins canônicos, referências em faixa e **detecção de
+  ciclos** no grafo de tipos (structs inclusas).
+- `rvm-verify`: resolve e compara `TypeId`; valida payloads de array/option/result
+  e campos de struct contra a tabela.
+- `rvm-runtime`: `Value` carrega `TypeId` em array/struct/option/result; `ty()`
+  devolve `TypeId`; `matches_type` compara ids.
+- `rvm-interpreter`: constrói valores com o `ty` do op; arrays/structs/options de
+  agregados e **option aninhado** funcionam.
+- `rvm-text`: parser interna tipos (`array T`, `option T`, `result T T`,
+  `struct Nome`) e aceita `type <id> = <tipo>` para preservar IDs na reimpressão;
+  `array <tipo> ...`, `option_none <tipo>`, `option_some <tipo> v`,
+  `result_ok/err <tipo> <tipo> v`.
+- `rvm-bytecode`: serializa a tabela de tipos; referências viram `u32 TypeId`
+  (inclusive payloads de ops).
+- `rvm-link`: liga apenas módulos com tipos embutidos (tipos compostos ainda não
+  são remapeados entre módulos).
+- Adaptador Lift→RIR: pré-interna todos os tipos do programa e emite `TypeId`; o
+  `??` preguiçoso e os builtins de option continuam iguais.
+
+### Validação executada
+
+- `cargo test --workspace`: **148 passed, 0 failed**; corpus **60 válidos + 42
+  inválidos** (inclui `C-058` option aninhado, `C-059` option de array, `C-060`
+  option de struct, `N-043` ciclo de tipos).
+- `cargo test --manifest-path frontends/lift-rir/Cargo.toml`: **43 passed, 0
+  failed** (34 diferencial + 9 CLI); oráculo `rsuvm-oracle15.lift` = `2 7` (option
+  de array/struct). O Lift **rejeita** opção aninhada na fonte, mas o núcleo a
+  suporta (C-058).
+- `cargo clippy --workspace --all-targets -- -D warnings` e `cargo fmt --all --
+  --check`: exit 0.
+
+### Lacunas remanescentes
+
+- Ligação inter-módulo com tipos compostos (remapeamento de `TypeId`) fica fora.
+- O Lift não expressa `option` aninhado; o adaptador cobre `option` de array/struct.
+- Limite `max_types` e recursão de verificação são lineares no tamanho da tabela.

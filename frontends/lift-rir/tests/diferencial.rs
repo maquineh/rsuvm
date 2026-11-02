@@ -374,44 +374,30 @@ fn struct_literal_e_acesso() {
 }
 
 #[test]
-fn struct_com_campo_nao_escalar_e_rejeitado() {
-    let source = "interface Bag { xs: int[] } function f(): int { return 0; }";
-    let error = lower_source(source, "f").expect_err("campo não escalar");
-    assert!(
-        matches!(error, AdapterError::Unsupported(_)),
-        "erro inesperado: {error:?}"
-    );
+fn struct_com_campo_array() {
+    // Campos agregados são suportados pela tabela de tipos (ADR-0034).
+    let source = "interface Bag { xs: int[] } \
+        function f(): int { const b: Bag = { xs: [1, 2, 3] }; return b.xs[1]; }";
+    assert_eq!(executar(source, "f", &[]), Value::I64(2));
 }
 
 #[test]
 fn option_some_none_coalesce_e_builtins() {
     // Oráculo do Lift (`rsuvm-oracle11.lift`): `hi missing 7 9 5 true false`.
     let source = "function resolve(value: string?): string { return value ?? \"missing\"; } \
+        function resolve_some(): string { return resolve(option.some(\"hi\")); } \
+        function resolve_none(): string { return resolve(null); } \
         function maybe(present: boolean): int? { if present { return option.some(7); } return null; } \
         function teste(present: boolean): int { return maybe(present) ?? 9; } \
         function some_val(): int { const x: int? = option.some(5); return option.unwrap(x); } \
         function is_some_val(): boolean { const x: int? = option.some(5); return option.is_some(x); } \
         function is_none_val(): boolean { const x: int? = null; return option.is_some(x); }";
     assert_eq!(
-        executar(
-            source,
-            "resolve",
-            &[Value::Option {
-                elem: rvm_spec::OptionalElem::Str,
-                value: Some(Box::new(Value::Str("hi".to_string()))),
-            }]
-        ),
+        executar(source, "resolve_some", &[]),
         Value::Str("hi".to_string())
     );
     assert_eq!(
-        executar(
-            source,
-            "resolve",
-            &[Value::Option {
-                elem: rvm_spec::OptionalElem::Str,
-                value: None,
-            }]
-        ),
+        executar(source, "resolve_none", &[]),
         Value::Str("missing".to_string())
     );
     assert_eq!(
@@ -425,6 +411,16 @@ fn option_some_none_coalesce_e_builtins() {
     assert_eq!(executar(source, "some_val", &[]), Value::I64(5));
     assert_eq!(executar(source, "is_some_val", &[]), Value::Bool(true));
     assert_eq!(executar(source, "is_none_val", &[]), Value::Bool(false));
+}
+
+#[test]
+fn option_de_array_e_struct() {
+    // Oráculo do Lift (`rsuvm-oracle15.lift`): `2`, `7`.
+    let source = "interface P { x: int } \
+        function opt_array(): int { const xs: int[]? = option.some([1, 2, 3]); const ys: int[] = xs ?? [9]; return ys[1]; } \
+        function opt_struct(): int { const p: P? = option.some({ x: 7 }); const q: P = p ?? { x: 0 }; return q.x; }";
+    assert_eq!(executar(source, "opt_array", &[]), Value::I64(2));
+    assert_eq!(executar(source, "opt_struct", &[]), Value::I64(7));
 }
 
 #[test]
@@ -451,31 +447,15 @@ fn option_fallback_avaliado_quando_none_trapa() {
 fn comparacao_com_null() {
     // Oráculo do Lift (`rsuvm-oracle13.lift`): `true false true false`.
     let source = "function eh_nulo(x: int?): boolean { return x == null; } \
-        function nao_nulo(x: int?): boolean { return x != null; }";
-    let none = Value::Option {
-        elem: rvm_spec::OptionalElem::I64,
-        value: None,
-    };
-    let some = Value::Option {
-        elem: rvm_spec::OptionalElem::I64,
-        value: Some(Box::new(Value::I64(1))),
-    };
-    assert_eq!(
-        executar(source, "eh_nulo", std::slice::from_ref(&none)),
-        Value::Bool(true)
-    );
-    assert_eq!(
-        executar(source, "eh_nulo", std::slice::from_ref(&some)),
-        Value::Bool(false)
-    );
-    assert_eq!(
-        executar(source, "nao_nulo", std::slice::from_ref(&some)),
-        Value::Bool(true)
-    );
-    assert_eq!(
-        executar(source, "nao_nulo", std::slice::from_ref(&none)),
-        Value::Bool(false)
-    );
+        function nao_nulo(x: int?): boolean { return x != null; } \
+        function eh_nulo_none(): boolean { return eh_nulo(null); } \
+        function eh_nulo_some(): boolean { return eh_nulo(option.some(1)); } \
+        function nao_nulo_some(): boolean { return nao_nulo(option.some(1)); } \
+        function nao_nulo_none(): boolean { return nao_nulo(null); }";
+    assert_eq!(executar(source, "eh_nulo_none", &[]), Value::Bool(true));
+    assert_eq!(executar(source, "eh_nulo_some", &[]), Value::Bool(false));
+    assert_eq!(executar(source, "nao_nulo_some", &[]), Value::Bool(true));
+    assert_eq!(executar(source, "nao_nulo_none", &[]), Value::Bool(false));
 }
 
 #[test]

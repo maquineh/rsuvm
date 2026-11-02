@@ -311,15 +311,39 @@ possivelmente aliasadas devolvem `Unsupported`.
 
 Resultado: `33 passed` (diferencial) + `9 passed` (CLI) = **42 passed; 0 failed**.
 
+### 2.12 Tabela de tipos e `option` de agregados (ADR-0034)
+
+Com a representação de tipos por id, o adaptador pré-interna os tipos do programa
+e emite `TypeId`; `option` de array e de struct passam a ser suportados
+(`rsuvm-oracle15.lift`):
+
+```bash
+cargo run -p lift_cli -- run examples/rsuvm-oracle15.lift
+```
+
+Saída do Lift (oráculo): `2 7`.
+
+| Caso (Lift) | Chamada | Oráculo Lift | RSUVM (RIR) | Igual? |
+|---|---|---|---|---|
+| `opt_array` (`int[]?`) | `opt_array()` | 2 | `i64:2` | sim |
+| `opt_struct` (`P?`) | `opt_struct()` | 7 | `i64:7` | sim |
+
+O **`option` aninhado** é suportado pelo **núcleo** (`C-058`), mas o Lift o rejeita
+na fonte ("opcional aninhado ... não é suportado"), então o adaptador não o
+exercita.
+
+Resultado: `34 passed` (diferencial) + `9 passed` (CLI) = **43 passed; 0 failed**.
+
 ## 3. Limitações
 
 1. Subconjunto ainda estreito: **sem** closures, `console.log`/`import`. Fora
    disso, `AdapterError::Unsupported`. Divisão/resto, `string` (com concatenação),
    `f64` (`number`), arrays (literal, índice e `xs[i] = v`), structs (`interface`,
-   literal e `obj.campo`) e opcionais (`null`, `option.some`/`is_some`/`unwrap`,
-   `??`, `== null`/`!= null`) são suportados; a atribuição a elemento/campo exige
-   que o array/struct seja um local não-aliasado (ADR-0028/0032); structs só aceitam
-   campos escalares (ADR-0029).
+   literal, `obj.campo` e `obj.campo = v`) e opcionais (`null`,
+   `option.some`/`is_some`/`unwrap`, `??`, `== null`/`!= null`), inclusive
+   `option` de array/struct, são suportados; a atribuição a elemento/campo exige
+   que o alvo seja um local não-aliasado (ADR-0028/0032); o Lift não expressa
+   `option` aninhado (o núcleo expressa, ADR-0034).
 2. O adaptador é um **workspace separado** e depende do Lift por git fixado; o
    núcleo RSUVM continua sem dependências externas.
 3. O teste compara com o oráculo do Lift **registrado**; não invoca o compilador do

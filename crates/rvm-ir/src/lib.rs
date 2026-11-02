@@ -32,7 +32,9 @@
     )
 )]
 
-use rvm_spec::{ArrayElem, BinOp, CmpOp, FloatOp, OptionalElem, ScalarKind, StructId, Type};
+use rvm_spec::{
+    BinOp, CmpOp, FloatOp, StructId, TypeDef, TypeId, TYPE_BOOL, TYPE_F64, TYPE_I64, TYPE_STR,
+};
 
 pub mod structure;
 #[cfg(any(test, feature = "test-helpers"))]
@@ -60,8 +62,11 @@ pub struct Module {
     pub version: u16,
     /// Função de entrada executada por padrão pelo host.
     pub entry: FnId,
+    /// Tabela de tipos do módulo (ADR-0034), indexada pelo próprio [`TypeId`].
+    /// Os cinco primeiros são canônicos: `unit`, `bool`, `i64`, `string`, `f64`.
+    pub types: Vec<TypeDef>,
     /// Structs declaradas no módulo (ADR-0029), indexadas pelo próprio
-    /// [`StructId`]. Campos são escalares (`bool`/`i64`/`string`/`f64`).
+    /// [`StructId`]. Campos referenciam a tabela de tipos.
     pub structs: Vec<StructDef>,
     /// Funções do módulo, indexadas pelo próprio `FnId`.
     pub functions: Vec<Function>,
@@ -92,13 +97,13 @@ impl StructDef {
     }
 }
 
-/// Campo de uma struct: nome e tipo escalar (ADR-0029).
+/// Campo de uma struct: nome e tipo (ADR-0029/0034).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FieldDef {
     /// Nome do campo (identificador, único dentro da struct).
     pub name: String,
-    /// Tipo do campo; escalar (`bool`/`i64`/`string`/`f64`).
-    pub ty: Type,
+    /// Tipo do campo, referenciando a tabela do módulo.
+    pub ty: TypeId,
 }
 
 /// Função RIR: assinatura, bloco de entrada e blocos.
@@ -111,7 +116,7 @@ pub struct Function {
     /// Parâmetros na ordem de declaração; ocupam os `ValueId` `0..len`.
     pub params: Vec<Param>,
     /// Tipo de retorno declarado.
-    pub ret: Type,
+    pub ret: TypeId,
     /// Bloco executado primeiro.
     pub entry: BlockId,
     /// Blocos da função, indexados pelo próprio `BlockId`.
@@ -124,7 +129,7 @@ pub struct Param {
     /// Nome do parâmetro (identificador, único entre valores nomeados da função).
     pub name: String,
     /// Tipo exigido na chamada.
-    pub ty: Type,
+    pub ty: TypeId,
 }
 
 /// Bloco básico: parâmetros, instruções e exatamente um terminador.
@@ -159,7 +164,7 @@ pub struct BlockParam {
     /// Nome usado na impressão canônica e em diagnósticos.
     pub name: String,
     /// Tipo do valor.
-    pub ty: Type,
+    pub ty: TypeId,
 }
 
 /// Instrução: define um valor SSA aplicando uma operação.
@@ -240,7 +245,12 @@ pub enum Op {
         rhs: ValueId,
     },
     /// Cria um array imutável a partir de elementos já definidos (`array`), ADR-0027.
-    ArrayLiteral(Vec<ValueId>),
+    ArrayLiteral {
+        /// Tipo do array (na tabela do módulo).
+        ty: TypeId,
+        /// Elementos.
+        items: Vec<ValueId>,
+    },
     /// Comprimento de um array (`array_len`), produzindo `i64`, ADR-0027.
     ArrayLen {
         /// Operando array.
@@ -288,11 +298,13 @@ pub enum Op {
         /// Novo valor do campo; precisa ter o tipo do campo.
         value: ValueId,
     },
-    /// Define `none` de um `option` escalar (`option_none`), ADR-0030.
-    OptionNone(OptionalElem),
-    /// Envolve um escalar em `some` (`option_some`), ADR-0030.
+    /// Define `none` de um `option`; o `TypeId` é o do próprio `option`, ADR-0030.
+    OptionNone(TypeId),
+    /// Envolve um valor em `some` (`option_some`), ADR-0030.
     OptionSome {
-        /// Payload escalar.
+        /// Tipo do `option` (na tabela do módulo).
+        ty: TypeId,
+        /// Payload.
         value: ValueId,
     },
     /// Testa se um `option` é `some` (`option_is_some`), produzindo `bool`, ADR-0030.
@@ -328,22 +340,20 @@ pub enum Op {
         /// Operando direito.
         rhs: ValueId,
     },
-    /// Constrói um `result` com a variante `ok` (`result_ok`), ADR-0033.
+    /// Constrói um `result` com a variante `ok` (`result_ok`), ADR-0033. O
+    /// `TypeId` é o do próprio `result`.
     ResultOk {
-        /// Tipo do payload `ok`.
-        ok: ScalarKind,
-        /// Tipo do payload `err`.
-        err: ScalarKind,
-        /// Valor `ok` (no tipo `ok`).
+        /// Tipo do `result` (na tabela do módulo).
+        ty: TypeId,
+        /// Valor `ok`.
         value: ValueId,
     },
-    /// Constrói um `result` com a variante `err` (`result_err`), ADR-0033.
+    /// Constrói um `result` com a variante `err` (`result_err`), ADR-0033. O
+    /// `TypeId` é o do próprio `result`.
     ResultErr {
-        /// Tipo do payload `ok`.
-        ok: ScalarKind,
-        /// Tipo do payload `err`.
-        err: ScalarKind,
-        /// Valor `err` (no tipo `err`).
+        /// Tipo do `result` (na tabela do módulo).
+        ty: TypeId,
+        /// Valor `err`.
         value: ValueId,
     },
     /// Testa se um `result` é `ok` (`result_is_ok`), ADR-0033.
@@ -373,45 +383,43 @@ pub enum Op {
 }
 
 impl Op {
-    /// Tipo do valor definido pela operação.
+    /// Tipo do valor definido pela operação, quando conhecido só pela forma da
+    /// operação.
+    ///
+    /// Devolve [`None`] quando o tipo depende dos operandos ou da tabela do
+    /// módulo (arrays, structs, opcionais, resultados e chamadas); o verificador
+    /// resolve esses casos em `build_values`.
     #[must_use]
-    pub fn result_type(&self) -> Type {
+    pub fn result_type(&self) -> Option<TypeId> {
         match self {
-            Op::ConstI64(_) => Type::I64,
-            Op::ConstBool(_) => Type::Bool,
-            Op::ConstStr(_) => Type::Str,
-            Op::ConstF64(_) => Type::F64,
-            Op::Bin { op, .. } => op.result_type(),
-            Op::Cmp { op, .. } => op.result_type(),
-            Op::StrEq { .. } | Op::StrNe { .. } => Type::Bool,
-            Op::StrLen { .. } => Type::I64,
-            Op::ConcatStr { .. } => Type::Str,
-            Op::Float { op, .. } => op.result_type(),
-            // O tipo do elemento é resolvido pelo verificador a partir dos itens.
-            Op::ArrayLiteral(_) => Type::Array(ArrayElem::I64),
-            Op::ArrayLen { .. } => Type::I64,
-            // O tipo do elemento é resolvido pelo verificador a partir do array.
-            Op::ArrayGet { .. } => Type::I64,
-            // O tipo (array do elemento) é resolvido pelo verificador.
-            Op::ArraySet { .. } => Type::Array(ArrayElem::I64),
-            Op::StructNew { struct_id, .. } => Type::Struct(*struct_id),
-            // O tipo é resolvido pelo verificador a partir da struct do objeto.
-            Op::FieldGet { .. } => Type::Unit,
-            // O tipo (struct do objeto) é resolvido pelo verificador.
-            Op::FieldSet { .. } => Type::Unit,
-            Op::OptionNone(elem) => Type::Optional(*elem),
-            // Resolvido pelo verificador a partir do payload.
-            Op::OptionSome { .. } => Type::Optional(OptionalElem::I64),
-            Op::OptionIsSome { .. } => Type::Bool,
-            // Resolvidos pelo verificador a partir do `option`.
-            Op::OptionUnwrap { .. } => Type::I64,
-            Op::Coalesce { .. } => Type::I64,
-            Op::OptionEq { .. } | Op::OptionNe { .. } => Type::Bool,
-            Op::ResultOk { ok, err, .. } | Op::ResultErr { ok, err, .. } => Type::Result(*ok, *err),
-            Op::ResultIsOk { .. } => Type::Bool,
-            // Resolvidos pelo verificador a partir do `result`.
-            Op::ResultUnwrap { .. } | Op::ResultUnwrapErr { .. } => Type::I64,
-            Op::Call { .. } => Type::I64, // substituído pelo tipo de retorno no verificador
+            Op::ConstI64(_) => Some(TYPE_I64),
+            Op::ConstBool(_) => Some(TYPE_BOOL),
+            Op::ConstStr(_) => Some(TYPE_STR),
+            Op::ConstF64(_) => Some(TYPE_F64),
+            Op::Bin { op, .. } => Some(op.result_type()),
+            Op::Cmp { op, .. } => Some(op.result_type()),
+            Op::StrEq { .. } | Op::StrNe { .. } => Some(TYPE_BOOL),
+            Op::StrLen { .. } => Some(TYPE_I64),
+            Op::ConcatStr { .. } => Some(TYPE_STR),
+            Op::Float { op, .. } => Some(op.result_type()),
+            Op::ArrayLiteral { ty, .. } => Some(*ty),
+            Op::ArrayLen { .. } => Some(TYPE_I64),
+            Op::OptionNone(ty) => Some(*ty),
+            Op::OptionSome { ty, .. } => Some(*ty),
+            Op::OptionIsSome { .. } => Some(TYPE_BOOL),
+            Op::OptionEq { .. } | Op::OptionNe { .. } => Some(TYPE_BOOL),
+            Op::ResultOk { ty, .. } | Op::ResultErr { ty, .. } => Some(*ty),
+            Op::ResultIsOk { .. } => Some(TYPE_BOOL),
+            Op::ArrayGet { .. }
+            | Op::ArraySet { .. }
+            | Op::StructNew { .. }
+            | Op::FieldGet { .. }
+            | Op::FieldSet { .. }
+            | Op::OptionUnwrap { .. }
+            | Op::Coalesce { .. }
+            | Op::ResultUnwrap { .. }
+            | Op::ResultUnwrapErr { .. }
+            | Op::Call { .. } => None,
         }
     }
 
@@ -430,7 +438,7 @@ impl Op {
             | Op::ConcatStr { lhs, rhs }
             | Op::Float { lhs, rhs, .. } => vec![*lhs, *rhs],
             Op::StrLen { operand } => vec![*operand],
-            Op::ArrayLiteral(items) => items.clone(),
+            Op::ArrayLiteral { items, .. } => items.clone(),
             Op::ArrayLen { array } => vec![*array],
             Op::ArrayGet { array, index } => vec![*array, *index],
             Op::ArraySet {
@@ -442,7 +450,9 @@ impl Op {
             Op::FieldGet { object, .. } => vec![*object],
             Op::FieldSet { object, value, .. } => vec![*object, *value],
             Op::OptionNone(_) => Vec::new(),
-            Op::OptionSome { value } | Op::OptionIsSome { value } | Op::OptionUnwrap { value } => {
+            Op::OptionSome { value, .. }
+            | Op::OptionIsSome { value }
+            | Op::OptionUnwrap { value } => {
                 vec![*value]
             }
             Op::Coalesce { option, fallback } => vec![*option, *fallback],
@@ -526,6 +536,21 @@ impl Module {
     pub fn struct_def(&self, id: StructId) -> Option<&StructDef> {
         self.structs.get(id as usize)
     }
+
+    /// Definição do tipo `id`.
+    #[must_use]
+    pub fn type_def(&self, id: TypeId) -> Option<TypeDef> {
+        self.types.get(id as usize).copied()
+    }
+
+    /// Primeiro `TypeId` cuja definição é exatamente `def`.
+    #[must_use]
+    pub fn find_type(&self, def: TypeDef) -> Option<TypeId> {
+        self.types
+            .iter()
+            .position(|candidate| *candidate == def)
+            .and_then(|index| TypeId::try_from(index).ok())
+    }
 }
 
 impl Function {
@@ -557,57 +582,19 @@ impl Function {
     pub fn is_external(&self) -> bool {
         self.blocks.is_empty()
     }
-
-    /// Tipo de um valor conhecido.
-    ///
-    /// Pressupõe que [`structure::check`] já aceitou o módulo (IDs densos). Para
-    /// módulos não verificados devolve [`None`] em vez de arriscar indexação.
-    ///
-    /// Devolve [`None`] também para valores definidos por `call_static`: o tipo
-    /// depende da assinatura da função chamada, que só o verificador (`rvm-verify`)
-    /// resolve. Não use este atalho para inferência de tipos.
-    #[must_use]
-    pub fn value_type(&self, id: ValueId) -> Option<Type> {
-        if let Some(param) = self.params.get(id as usize) {
-            return Some(param.ty);
-        }
-        for block in &self.blocks {
-            for param in &block.params {
-                if param.value == id {
-                    return Some(param.ty);
-                }
-            }
-            for instr in &block.instrs {
-                if instr.def == id {
-                    return match &instr.op {
-                        Op::Call { .. }
-                        | Op::FieldGet { .. }
-                        | Op::FieldSet { .. }
-                        | Op::OptionSome { .. }
-                        | Op::OptionUnwrap { .. }
-                        | Op::Coalesce { .. }
-                        | Op::ResultUnwrap { .. }
-                        | Op::ResultUnwrapErr { .. } => None,
-                        op => Some(op.result_type()),
-                    };
-                }
-            }
-        }
-        None
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rvm_spec::Limits;
+    use rvm_spec::{Limits, TYPE_I64};
 
     #[test]
     fn modulo_de_teste_passa_pela_checagem_estrutural() {
         let module = testing::soma();
         assert!(structure::check(&module, &Limits::default()).is_ok());
         assert_eq!(module.function_by_name("soma").map(|f| f.id), Some(1));
-        assert_eq!(module.function(1).map(|f| f.ret), Some(Type::I64));
+        assert_eq!(module.function(1).map(|f| f.ret), Some(TYPE_I64));
     }
 
     #[test]

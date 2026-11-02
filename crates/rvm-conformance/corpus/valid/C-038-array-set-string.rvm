@@ -8,7 +8,7 @@ fn troca() -> string {
   entry:
     v0 = const_str "velho"
     v1 = const_str "outro"
-    v2 = array v0, v1
+    v2 = array string v0, v1
     v3 = const_i64 0
     v4 = const_str "novo"
     v5 = array_set v2, v3, v4

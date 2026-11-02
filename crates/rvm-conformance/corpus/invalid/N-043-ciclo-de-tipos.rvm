@@ -1,0 +1,15 @@
+; id: N-043
+; expect: error invalid_module
+; extra: tipo de struct recursivo (ciclo) é rejeitado pela tabela (ADR-0034)
+module n043 version 1
+entry f
+
+struct A {
+  next: option struct A
+}
+
+fn f() -> i64 {
+  entry:
+    v0 = const_i64 0
+    return v0
+}

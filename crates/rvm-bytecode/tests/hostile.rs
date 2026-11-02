@@ -37,6 +37,7 @@ struct Fixture {
     module_version: usize,
     entry: usize,
     function_count: usize,
+    type_tag: usize,
     ret_type: usize,
     instr_count: usize,
     instr_opcode: usize,
@@ -55,6 +56,9 @@ impl Fixture {
         push_u16(&mut bytes, 1);
         let entry = bytes.len();
         push_u32(&mut bytes, 0);
+        push_u16(&mut bytes, 5); // type_count
+        let type_tag = bytes.len();
+        bytes.extend_from_slice(&[0, 1, 2, 3, 4]); // unit, bool, i64, string, f64
         push_u16(&mut bytes, 0); // struct_count
         let function_count = bytes.len();
         push_u32(&mut bytes, 1);
@@ -63,7 +67,7 @@ impl Fixture {
         push_u32(&mut bytes, 0);
         push_string(&mut bytes, "main");
         let ret_type = bytes.len();
-        bytes.push(2); // i64
+        push_u32(&mut bytes, 2); // i64
         push_u32(&mut bytes, 0); // entry_block
         push_u16(&mut bytes, 0); // param_count
         push_u32(&mut bytes, 1); // block_count
@@ -88,6 +92,7 @@ impl Fixture {
             module_version,
             entry,
             function_count,
+            type_tag,
             ret_type,
             instr_count,
             instr_opcode,
@@ -248,7 +253,7 @@ fn opcode_desconhecido_e_unknown_opcode() {
 #[test]
 fn tag_de_tipo_desconhecida_e_unknown_type() {
     let mut fixture = Fixture::new();
-    fixture.bytes[fixture.ret_type] = 9;
+    fixture.bytes[fixture.type_tag] = 200;
     assert_eq!(
         error_code(&fixture.bytes, &Limits::default()),
         ErrorCode::UnknownType

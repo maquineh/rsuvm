@@ -56,7 +56,7 @@
 
 use rvm_ir::{BlockId, FnId, Function, Module, Op, Terminator, ValueId};
 use rvm_runtime::{arg_buffer_cost, frame_cost, ExecConfig, Value, SLOT_BYTES};
-use rvm_spec::{BinOp, ErrorCode, Location, OptionalElem, RvmError, Type};
+use rvm_spec::{BinOp, ErrorCode, Location, RvmError, TypeDef, TYPE_F64};
 
 use rvm_verify::VerifiedModule;
 
@@ -423,7 +423,7 @@ impl<'a> Interpreter<'a> {
                 Op::Float { op, lhs, rhs } => {
                     let left = self.read_f64(&stack, top, *lhs, &site)?;
                     let right = self.read_f64(&stack, top, *rhs, &site)?;
-                    let value = if op.result_type() == Type::F64 {
+                    let value = if op.result_type() == TYPE_F64 {
                         Value::F64(op.eval_f64(left, right))
                     } else {
                         Value::Bool(op.eval_cmp(left, right))
@@ -431,7 +431,7 @@ impl<'a> Interpreter<'a> {
                     self.write_current(&mut stack, top, instr.def, value, &site)?;
                     self.advance(&mut stack, top, &site)?;
                 }
-                Op::ArrayLiteral(items) => {
+                Op::ArrayLiteral { ty, items } => {
                     let mut values: Vec<Value> = Vec::new();
                     {
                         let frame = stack.get(top).ok_or_else(|| {
@@ -457,7 +457,16 @@ impl<'a> Interpreter<'a> {
                         .unwrap_or(u64::MAX)
                         .saturating_mul(SLOT_BYTES);
                     self.charge_memory(bytes, &site)?;
-                    self.write_current(&mut stack, top, instr.def, Value::Array(values), &site)?;
+                    self.write_current(
+                        &mut stack,
+                        top,
+                        instr.def,
+                        Value::Array {
+                            ty: *ty,
+                            items: values,
+                        },
+                        &site,
+                    )?;
                     self.advance(&mut stack, top, &site)?;
                 }
                 Op::ArrayLen { array } => {
@@ -542,6 +551,7 @@ impl<'a> Interpreter<'a> {
                             )
                         })?;
                         let array_value = read_slot(frame, *array, &site)?;
+                        let array_ty = array_value.ty();
                         let items = array_value.as_array().ok_or_else(|| {
                             error_at(
                                 ErrorCode::InvalidModule,
@@ -581,7 +591,13 @@ impl<'a> Interpreter<'a> {
                         let bytes = u64::try_from(updated.len())
                             .unwrap_or(u64::MAX)
                             .saturating_mul(SLOT_BYTES);
-                        (Value::Array(updated), bytes)
+                        (
+                            Value::Array {
+                                ty: array_ty,
+                                items: updated,
+                            },
+                            bytes,
+                        )
                     };
                     // A atualização funcional produz um array novo; cobra os
                     // bytes novamente (cumulativo, ADR-0028).
@@ -614,13 +630,24 @@ impl<'a> Interpreter<'a> {
                     let bytes = u64::try_from(fields.len())
                         .unwrap_or(u64::MAX)
                         .saturating_mul(SLOT_BYTES);
+                    let ty = self
+                        .module
+                        .find_type(TypeDef::Struct(*struct_id))
+                        .ok_or_else(|| {
+                            error_at(
+                                ErrorCode::InvalidModule,
+                                "tipo da struct não declarado no módulo".to_string(),
+                                &site,
+                            )
+                        })?;
                     self.charge_memory(bytes, &site)?;
                     self.write_current(
                         &mut stack,
                         top,
                         instr.def,
                         Value::Struct {
-                            ty: *struct_id,
+                            ty,
+                            struct_id: *struct_id,
                             fields: values,
                         },
                         &site,
@@ -638,11 +665,13 @@ impl<'a> Interpreter<'a> {
                         })?;
                         let object_value = read_slot(frame, *object, &site)?;
                         match &object_value {
-                            Value::Struct { ty, fields } => {
-                                let def = self.module.struct_def(*ty).ok_or_else(|| {
+                            Value::Struct {
+                                struct_id, fields, ..
+                            } => {
+                                let def = self.module.struct_def(*struct_id).ok_or_else(|| {
                                     error_at(
                                         ErrorCode::InvalidModule,
-                                        format!("struct {ty} não existe no módulo"),
+                                        format!("struct {struct_id} não existe no módulo"),
                                         &site,
                                     )
                                 })?;
@@ -688,11 +717,15 @@ impl<'a> Interpreter<'a> {
                         })?;
                         let struct_value = read_slot(frame, *object, &site)?;
                         match &struct_value {
-                            Value::Struct { ty, fields } => {
-                                let def = self.module.struct_def(*ty).ok_or_else(|| {
+                            Value::Struct {
+                                ty,
+                                struct_id,
+                                fields,
+                            } => {
+                                let def = self.module.struct_def(*struct_id).ok_or_else(|| {
                                     error_at(
                                         ErrorCode::InvalidModule,
-                                        format!("struct {ty} não existe no módulo"),
+                                        format!("struct {struct_id} não existe no módulo"),
                                         &site,
                                     )
                                 })?;
@@ -722,6 +755,7 @@ impl<'a> Interpreter<'a> {
                                 (
                                     Value::Struct {
                                         ty: *ty,
+                                        struct_id: *struct_id,
                                         fields: updated,
                                     },
                                     bytes,
@@ -742,20 +776,20 @@ impl<'a> Interpreter<'a> {
                     self.write_current(&mut stack, top, instr.def, updated, &site)?;
                     self.advance(&mut stack, top, &site)?;
                 }
-                Op::OptionNone(elem) => {
+                Op::OptionNone(ty) => {
                     self.write_current(
                         &mut stack,
                         top,
                         instr.def,
                         Value::Option {
-                            elem: *elem,
+                            ty: *ty,
                             value: None,
                         },
                         &site,
                     )?;
                     self.advance(&mut stack, top, &site)?;
                 }
-                Op::OptionSome { value } => {
+                Op::OptionSome { ty, value } => {
                     let payload = {
                         let frame = stack.get(top).ok_or_else(|| {
                             error_at(
@@ -766,19 +800,12 @@ impl<'a> Interpreter<'a> {
                         })?;
                         read_slot(frame, *value, &site)?
                     };
-                    let elem = OptionalElem::from_type(payload.ty()).ok_or_else(|| {
-                        error_at(
-                            ErrorCode::InvalidModule,
-                            "option_some com payload não escalar",
-                            &site,
-                        )
-                    })?;
                     self.write_current(
                         &mut stack,
                         top,
                         instr.def,
                         Value::Option {
-                            elem,
+                            ty: *ty,
                             value: Some(Box::new(payload)),
                         },
                         &site,
@@ -853,12 +880,12 @@ impl<'a> Interpreter<'a> {
                         let fallback_value = read_slot(frame, *fallback, &site)?;
                         match option_value {
                             Value::Option {
-                                elem,
+                                ty,
                                 value: Some(inner),
                             } => {
                                 if matches!(fallback_value, Value::Option { .. }) {
                                     Value::Option {
-                                        elem,
+                                        ty,
                                         value: Some(inner),
                                     }
                                 } else {
@@ -910,7 +937,7 @@ impl<'a> Interpreter<'a> {
                     self.write_current(&mut stack, top, instr.def, Value::Bool(different), &site)?;
                     self.advance(&mut stack, top, &site)?;
                 }
-                Op::ResultOk { ok, err, value } => {
+                Op::ResultOk { ty, value } => {
                     let payload = {
                         let frame = stack.get(top).ok_or_else(|| {
                             error_at(
@@ -926,15 +953,14 @@ impl<'a> Interpreter<'a> {
                         top,
                         instr.def,
                         Value::Result {
-                            ok: *ok,
-                            err: *err,
+                            ty: *ty,
                             value: Ok(Box::new(payload)),
                         },
                         &site,
                     )?;
                     self.advance(&mut stack, top, &site)?;
                 }
-                Op::ResultErr { ok, err, value } => {
+                Op::ResultErr { ty, value } => {
                     let payload = {
                         let frame = stack.get(top).ok_or_else(|| {
                             error_at(
@@ -950,8 +976,7 @@ impl<'a> Interpreter<'a> {
                         top,
                         instr.def,
                         Value::Result {
-                            ok: *ok,
-                            err: *err,
+                            ty: *ty,
                             value: Err(Box::new(payload)),
                         },
                         &site,

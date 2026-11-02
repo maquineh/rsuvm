@@ -13,7 +13,7 @@ fn extrai(x: option i64) -> i64 {
 fn usa() -> i64 {
   entry:
     v1 = const_i64 5
-    v2 = option_some v1
+    v2 = option_some i64 v1
     v3 = call_static extrai(v2)
     return v3
 }

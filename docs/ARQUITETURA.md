@@ -56,10 +56,9 @@ linguagem (ADR-0009).
 
 ## 3. Subset semântico (EXP-0)
 
-- Tipos: `unit`, `bool`, `i64`, `string`, `f64`, `array`, `struct` (campos
-  escalares, ADR-0029), `option` (payload escalar, ADR-0030), `result` (payloads
-  escalares, ADR-0033). Sem coerção
-  implícita.
+- Tipos: `unit`, `bool`, `i64`, `string`, `f64` mais os compostos `array T`,
+  `struct Nome`, `option T` e `result T T`, todos recursivos pela **tabela de
+  tipos** do módulo (ADR-0034). Sem coerção implícita.
 - Operações: `const_i64`, `const_bool`, `const_str`, `const_f64`, `add_i64_checked`,
   `sub_i64_checked`, `mul_i64_checked`, `div_i64_checked`, `rem_i64_checked`,
   `shl_i64_checked`, `shr_i64_checked`, `and_i64`, `or_i64`, `xor_i64`, `eq_i64`,
@@ -75,14 +74,12 @@ linguagem (ADR-0009).
 - Fora do EXP-0: referências, closures, `unsafe`, FFI,
   exceções recuperáveis, threads, async. Arrays existem **imutáveis** (ADR-0027),
   com atualização **funcional** por `array_set` (ADR-0028, sem referências), sem
-  mutação in-place, sem slicing e sem arrays aninhados; structs existem com
-  **campos escalares** (ADR-0029), com atualização **funcional** por `field_set`
-  (ADR-0032), sem mutação in-place nem aninhamento;
-  `option` existe com **payload escalar** (ADR-0030), sem `option` aninhado; com
-  igualdade `option_eq`/`option_ne` (ADR-0031); `result` existe com **payloads
-  escalares** (ADR-0033), sem payload agregado; `f64`
-  existe (ADR-0026) sem `%`/`pow`/conversões;
-  concatenação de `string` existe (ADR-0025), sem slicing.
+  mutação in-place nem slicing; structs existem com qualquer tipo de campo
+  (ADR-0029/0034), com atualização **funcional** por `field_set` (ADR-0032), sem
+  mutação in-place; `option`/`result` existem com **qualquer payload**, inclusive
+  agregados e aninhados (ADR-0030/0033/0034), com igualdade
+  `option_eq`/`option_ne` (ADR-0031); `f64` existe (ADR-0026) sem
+  `%`/`pow`/conversões; concatenação de `string` existe (ADR-0025), sem slicing.
 
 Semântica aritmética: `i64::checked_*`; resultado fora de `[-2^63, 2^63-1]`
 produz o trap `integer_overflow`, divisão/resto por zero produz

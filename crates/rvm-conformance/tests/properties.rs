@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 
 use rvm_ir::Module;
 use rvm_runtime::{CallDepthLimit, Effect, ExecConfig, HostApi, Value};
-use rvm_spec::{ErrorClass, ErrorCode, Limits, Type};
+use rvm_spec::{ErrorClass, ErrorCode, Limits, TYPE_BOOL, TYPE_UNIT};
 
 fn config(fuel: u64, depth: u16) -> ExecConfig {
     ExecConfig::new(
@@ -224,11 +224,11 @@ fn unidade_e_comparacao_tem_tipos_estaveis() {
     let outcome =
         rvm_interpreter::execute(&unidade, unidade.entry(), &[], &config(10, 4)).expect("unit");
     assert_eq!(outcome.value, Value::Unit);
-    assert_eq!(outcome.value.ty(), Type::Unit);
+    assert_eq!(outcome.value.ty(), TYPE_UNIT);
 
     let comparacao = verified(rvm_ir::testing::comparacao());
     let outcome = rvm_interpreter::execute(&comparacao, comparacao.entry(), &[], &config(10, 4))
         .expect("bool");
     assert_eq!(outcome.value, Value::Bool(true));
-    assert_eq!(outcome.value.ty(), Type::Bool);
+    assert_eq!(outcome.value.ty(), TYPE_BOOL);
 }

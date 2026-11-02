@@ -7,8 +7,9 @@
 //! # Subconjunto suportado
 //!
 //! - funções com parâmetros/retorno em `int` (`i64`), `boolean` (`bool`),
-//!   `string` (`string`), `number` (`f64`), arrays desses tipos (`array`), structs
-//!   (`interface`) com campos escalares, opcionais (`T?`) ou `void` (`unit`);
+//!   `string` (`string`), `number` (`f64`), arrays (`array`), structs
+//!   (`interface`), opcionais (`T?`), resultados (`Result<T, E>`) ou `void`
+//!   (`unit`); a tabela de tipos é montada por id (ADR-0034);
 //! - `let`/`const`, **atribuição** a binding mutável, a **elemento de array**
 //!   (`xs[i] = v`) e a **campo** (`obj.campo = v`), `return`, `if`/`else if`/
 //!   `else` (com merge) e `while`;
@@ -24,7 +25,7 @@
 //! Divisão/resto por zero e `i64::MIN / -1` produzem os traps
 //! `division_by_zero`/`integer_overflow` (ADR-0022). `xs[i] = v` e `obj.campo = v`
 //! só são baixados quando o alvo é um array/struct local **não-aliasado**
-//! (ADR-0028/0032); structs aceitam apenas campos escalares (ADR-0029); `??`
+//! (ADR-0028/0032); `??`
 //! preserva o fallback preguiçoso via fluxo de controle (ADR-0030).
 //!
 //! # Semântica (construção CFG/SSA)
@@ -49,7 +50,10 @@ use rvm_ir::{
     Block, BlockId, BlockParam, BranchTarget, FieldDef, FnId, Function, Instr, Module, Op, Param,
     StructDef, Terminator, ValueId,
 };
-use rvm_spec::{ArrayElem, BinOp, CmpOp, FloatOp, OptionalElem, StructId, Type, IR_VERSION};
+use rvm_spec::{
+    BinOp, CmpOp, FloatOp, StructId, TypeDef, TypeId, IR_VERSION, TYPE_BOOL, TYPE_F64, TYPE_I64,
+    TYPE_STR, TYPE_UNIT,
+};
 
 /// Erro do adaptador.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -140,7 +144,27 @@ pub fn lower(program: &HirProgram, entry: &str) -> Result<Module, AdapterError> 
         AdapterError::Unsupported(format!("função de entrada `{entry}` não declarada"))
     })?;
 
-    // Tabela de structs do módulo, com campos escalares resolvidos.
+    // Tabela de tipos do módulo (ADR-0034): builtins + tipos usados no programa.
+    let mut table = TypeTable::new();
+    for declaration in &program.declarations {
+        match declaration {
+            HirDeclaration::Struct(def) => {
+                for field in &def.fields {
+                    intern_type(&field.ty, &structs, &mut table)?;
+                }
+            }
+            HirDeclaration::Function(function) => {
+                intern_type(&function.return_type, &structs, &mut table)?;
+                for parameter in &function.parameters {
+                    intern_type(&parameter.ty, &structs, &mut table)?;
+                }
+                collect_statement_types(&function.body.statements, &structs, &mut table)?;
+            }
+            _ => {}
+        }
+    }
+
+    // Tabela de structs do módulo, com campos resolvidos.
     let mut struct_defs: Vec<StructDef> = Vec::new();
     for declaration in &program.declarations {
         if let HirDeclaration::Struct(def) = declaration {
@@ -150,13 +174,12 @@ pub fn lower(program: &HirProgram, entry: &str) -> Result<Module, AdapterError> 
                 .ok_or_else(|| AdapterError::Unsupported("struct sem id (bug)".to_string()))?;
             let mut fields: Vec<FieldDef> = Vec::new();
             for field in &def.fields {
-                let ty = map_type(&field.ty, &structs)?;
-                if !is_scalar_type(ty) {
-                    return Err(AdapterError::Unsupported(format!(
-                        "campo `{}` de `{}` não é escalar",
+                let ty = resolved_type_id(&field.ty, &structs, &table.index).ok_or_else(|| {
+                    AdapterError::Unsupported(format!(
+                        "campo `{}` de `{}` tem tipo não suportado",
                         field.name, def.name
-                    )));
-                }
+                    ))
+                })?;
                 fields.push(FieldDef {
                     name: field.name.clone(),
                     ty,
@@ -174,62 +197,257 @@ pub fn lower(program: &HirProgram, entry: &str) -> Result<Module, AdapterError> 
     for (index, function) in functions.iter().enumerate() {
         let id = u32::try_from(index)
             .map_err(|_| AdapterError::Unsupported("funções demais".to_string()))?;
-        lowered.push(lower_function(function, id, &names, &structs)?);
+        lowered.push(lower_function(function, id, &names, &structs, &table)?);
     }
 
     Ok(Module {
         name: "lift_program".to_string(),
         version: IR_VERSION,
         entry: entry_id,
+        types: table.types,
         structs: struct_defs,
         functions: lowered,
     })
 }
 
-/// `true` para tipos escalares aceitos em campos de struct (ADR-0029).
-fn is_scalar_type(ty: Type) -> bool {
-    matches!(ty, Type::Bool | Type::I64 | Type::Str | Type::F64)
+/// Tabela de tipos do módulo: builtins canônicos + tipos internados.
+struct TypeTable {
+    types: Vec<TypeDef>,
+    index: BTreeMap<TypeDef, TypeId>,
 }
 
-/// Mapeia um tipo Lift resolvido para um tipo do subset EXP-0.
-fn map_type(
-    ty: &ResolvedType,
-    structs: &BTreeMap<String, (StructId, Vec<String>)>,
-) -> Result<Type, AdapterError> {
-    match ty {
-        ResolvedType::Int => Ok(Type::I64),
-        ResolvedType::Boolean => Ok(Type::Bool),
-        ResolvedType::Void => Ok(Type::Unit),
-        ResolvedType::String => Ok(Type::Str),
-        ResolvedType::Number => Ok(Type::F64),
-        ResolvedType::Struct(name) => {
-            let (id, _) = structs.get(name).cloned().ok_or_else(|| {
-                AdapterError::Unsupported(format!("struct `{name}` não declarada"))
-            })?;
-            Ok(Type::Struct(id))
+impl TypeTable {
+    fn new() -> Self {
+        let types = rvm_spec::builtin_types();
+        let mut index = BTreeMap::new();
+        for (position, def) in types.iter().enumerate() {
+            if let Ok(id) = TypeId::try_from(position) {
+                index.insert(*def, id);
+            }
         }
-        ResolvedType::Optional(inner) => {
-            let inner = map_type(inner, structs)?;
-            let elem = OptionalElem::from_type(inner)
-                .ok_or_else(|| AdapterError::Unsupported(format!("option de `{inner}`")))?;
-            Ok(Type::Optional(elem))
+        Self { types, index }
+    }
+
+    fn intern(&mut self, def: TypeDef) -> Result<TypeId, AdapterError> {
+        if let Some(id) = self.index.get(&def) {
+            return Ok(*id);
         }
-        ResolvedType::Array(inner) => {
-            let element = match inner.as_ref() {
-                ResolvedType::Int => ArrayElem::I64,
-                ResolvedType::Boolean => ArrayElem::Bool,
-                ResolvedType::String => ArrayElem::Str,
-                ResolvedType::Number => ArrayElem::F64,
-                other => return Err(AdapterError::Unsupported(format!("array de `{other}`"))),
-            };
-            Ok(Type::Array(element))
-        }
-        other => Err(AdapterError::Unsupported(format!("tipo `{other}`"))),
+        let id = TypeId::try_from(self.types.len())
+            .map_err(|_| AdapterError::Unsupported("tipos demais".to_string()))?;
+        self.types.push(def);
+        self.index.insert(def, id);
+        Ok(id)
     }
 }
 
+/// Interna o tipo e todos os seus componentes; `None` para tipos fora do subset.
+fn intern_type(
+    ty: &ResolvedType,
+    structs: &BTreeMap<String, (StructId, Vec<String>)>,
+    table: &mut TypeTable,
+) -> Result<Option<TypeId>, AdapterError> {
+    let def = match ty {
+        ResolvedType::Int => return Ok(Some(TYPE_I64)),
+        ResolvedType::Boolean => return Ok(Some(TYPE_BOOL)),
+        ResolvedType::Void => return Ok(Some(TYPE_UNIT)),
+        ResolvedType::String => return Ok(Some(TYPE_STR)),
+        ResolvedType::Number => return Ok(Some(TYPE_F64)),
+        ResolvedType::Struct(name) => {
+            let (id, _) = structs.get(name).ok_or_else(|| {
+                AdapterError::Unsupported(format!("struct `{name}` não declarada"))
+            })?;
+            TypeDef::Struct(*id)
+        }
+        ResolvedType::Array(inner) => {
+            let Some(element) = intern_type(inner, structs, table)? else {
+                return Ok(None);
+            };
+            TypeDef::Array(element)
+        }
+        ResolvedType::Optional(inner) => {
+            let Some(payload) = intern_type(inner, structs, table)? else {
+                return Ok(None);
+            };
+            TypeDef::Optional(payload)
+        }
+        ResolvedType::Result(ok, err) => {
+            let (Some(ok), Some(err)) = (
+                intern_type(ok, structs, table)?,
+                intern_type(err, structs, table)?,
+            ) else {
+                return Ok(None);
+            };
+            TypeDef::Result(ok, err)
+        }
+        other => {
+            let _ = other;
+            return Ok(None);
+        }
+    };
+    table.intern(def).map(Some)
+}
+
+/// `TypeId` já internado para `ty` (consulta pura após a pré-passagem).
+fn resolved_type_id(
+    ty: &ResolvedType,
+    structs: &BTreeMap<String, (StructId, Vec<String>)>,
+    index: &BTreeMap<TypeDef, TypeId>,
+) -> Option<TypeId> {
+    match ty {
+        ResolvedType::Int => index.get(&TypeDef::I64).copied(),
+        ResolvedType::Boolean => index.get(&TypeDef::Bool).copied(),
+        ResolvedType::Void => index.get(&TypeDef::Unit).copied(),
+        ResolvedType::String => index.get(&TypeDef::Str).copied(),
+        ResolvedType::Number => index.get(&TypeDef::F64).copied(),
+        ResolvedType::Struct(name) => {
+            let (id, _) = structs.get(name)?;
+            index.get(&TypeDef::Struct(*id)).copied()
+        }
+        ResolvedType::Array(inner) => {
+            let element = resolved_type_id(inner, structs, index)?;
+            index.get(&TypeDef::Array(element)).copied()
+        }
+        ResolvedType::Optional(inner) => {
+            let payload = resolved_type_id(inner, structs, index)?;
+            index.get(&TypeDef::Optional(payload)).copied()
+        }
+        ResolvedType::Result(ok, err) => {
+            let ok = resolved_type_id(ok, structs, index)?;
+            let err = resolved_type_id(err, structs, index)?;
+            index.get(&TypeDef::Result(ok, err)).copied()
+        }
+        _ => None,
+    }
+}
+
+/// Percorre statements internando os tipos das expressões.
+fn collect_statement_types(
+    statements: &[HirStatement],
+    structs: &BTreeMap<String, (StructId, Vec<String>)>,
+    table: &mut TypeTable,
+) -> Result<(), AdapterError> {
+    for statement in statements {
+        match statement {
+            HirStatement::Variable(declaration) => {
+                intern_type(&declaration.ty, structs, table)?;
+                collect_expr_types(&declaration.initializer, structs, table)?;
+            }
+            HirStatement::Assignment(assignment) => {
+                collect_expr_types(&assignment.target, structs, table)?;
+                collect_expr_types(&assignment.value, structs, table)?;
+            }
+            HirStatement::Expression(expression) => {
+                collect_expr_types(&expression.expression, structs, table)?;
+            }
+            HirStatement::Return(ret) => {
+                if let Some(value) = &ret.value {
+                    collect_expr_types(value, structs, table)?;
+                }
+            }
+            HirStatement::If(node) => {
+                collect_expr_types(&node.condition, structs, table)?;
+                collect_statement_types(&node.then_branch.statements, structs, table)?;
+                match &node.else_branch {
+                    Some(HirElseBranch::Block(block)) => {
+                        collect_statement_types(&block.statements, structs, table)?;
+                    }
+                    Some(HirElseBranch::ElseIf(nested)) => {
+                        collect_if_types(nested, structs, table)?;
+                    }
+                    None => {}
+                }
+            }
+            HirStatement::While(node) => {
+                collect_expr_types(&node.condition, structs, table)?;
+                collect_statement_types(&node.body.statements, structs, table)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn collect_if_types(
+    node: &HirIf,
+    structs: &BTreeMap<String, (StructId, Vec<String>)>,
+    table: &mut TypeTable,
+) -> Result<(), AdapterError> {
+    collect_expr_types(&node.condition, structs, table)?;
+    collect_statement_types(&node.then_branch.statements, structs, table)?;
+    match &node.else_branch {
+        Some(HirElseBranch::Block(block)) => {
+            collect_statement_types(&block.statements, structs, table)?;
+        }
+        Some(HirElseBranch::ElseIf(nested)) => collect_if_types(nested, structs, table)?,
+        None => {}
+    }
+    Ok(())
+}
+
+fn collect_expr_types(
+    expression: &HirExpr,
+    structs: &BTreeMap<String, (StructId, Vec<String>)>,
+    table: &mut TypeTable,
+) -> Result<(), AdapterError> {
+    intern_type(&expression.ty, structs, table)?;
+    match &expression.kind {
+        HirExprKind::Closure { captures, .. } => {
+            for (_, value) in captures {
+                collect_expr_types(value, structs, table)?;
+            }
+        }
+        HirExprKind::ClosureCall { callee, arguments } => {
+            collect_expr_types(callee, structs, table)?;
+            for argument in arguments {
+                collect_expr_types(argument, structs, table)?;
+            }
+        }
+        HirExprKind::OptionSome(payload) => collect_expr_types(payload, structs, table)?,
+        HirExprKind::Coalesce {
+            option, fallback, ..
+        } => {
+            collect_expr_types(option, structs, table)?;
+            collect_expr_types(fallback, structs, table)?;
+        }
+        HirExprKind::StructLiteral { fields, .. } => {
+            for field in fields {
+                collect_expr_types(&field.value, structs, table)?;
+            }
+        }
+        HirExprKind::ArrayLiteral(items) => {
+            for item in items {
+                collect_expr_types(item, structs, table)?;
+            }
+        }
+        HirExprKind::Unary { operand, .. }
+        | HirExprKind::Grouping(operand)
+        | HirExprKind::Move(operand) => collect_expr_types(operand, structs, table)?,
+        HirExprKind::Clone { expression, .. } => collect_expr_types(expression, structs, table)?,
+        HirExprKind::Binary { left, right, .. } => {
+            collect_expr_types(left, structs, table)?;
+            collect_expr_types(right, structs, table)?;
+        }
+        HirExprKind::FieldAccess { object, .. } => collect_expr_types(object, structs, table)?,
+        HirExprKind::Call { arguments, .. } => {
+            for argument in arguments {
+                collect_expr_types(&argument.expression, structs, table)?;
+            }
+        }
+        HirExprKind::Index { object, index } => {
+            collect_expr_types(object, structs, table)?;
+            collect_expr_types(index, structs, table)?;
+        }
+        HirExprKind::IntegerLiteral(_)
+        | HirExprKind::NumberLiteral(_)
+        | HirExprKind::StringLiteral(_)
+        | HirExprKind::BooleanLiteral(_)
+        | HirExprKind::OptionNone
+        | HirExprKind::Local { .. } => {}
+    }
+    Ok(())
+}
+
 /// Ambiente de bindings: `BindingId` → (ValueId corrente, tipo RIR).
-type Env = BTreeMap<BindingId, (ValueId, Type)>;
+type Env = BTreeMap<BindingId, (ValueId, TypeId)>;
 
 /// Bloco em construção (ainda sem terminador).
 struct Cursor {
@@ -251,6 +469,10 @@ struct FuncLower {
     mutable_locals: BTreeSet<BindingId>,
     /// Structs do programa: nome → (id, ordem dos campos) (ADR-0029).
     structs: BTreeMap<String, (StructId, Vec<String>)>,
+    /// Índice da tabela de tipos (ADR-0034).
+    types_index: BTreeMap<TypeDef, TypeId>,
+    /// Definições de tipo por `TypeId` (para consultas).
+    types: Vec<TypeDef>,
 }
 
 impl FuncLower {
@@ -262,12 +484,20 @@ impl FuncLower {
             current: None,
             mutable_locals: BTreeSet::new(),
             structs: BTreeMap::new(),
+            types_index: BTreeMap::new(),
+            types: Vec::new(),
         }
     }
 
-    /// Mapeia um tipo Lift resolvido para o tipo RIR.
-    fn map_type(&self, ty: &ResolvedType) -> Result<Type, AdapterError> {
-        map_type(ty, &self.structs)
+    /// Definição do tipo `ty`.
+    fn type_def(&self, ty: TypeId) -> Option<TypeDef> {
+        self.types.get(usize::try_from(ty).ok()?).copied()
+    }
+
+    /// Mapeia um tipo Lift resolvido para o `TypeId` já internado.
+    fn map_type(&self, ty: &ResolvedType) -> Result<TypeId, AdapterError> {
+        resolved_type_id(ty, &self.structs, &self.types_index)
+            .ok_or_else(|| AdapterError::Unsupported(format!("tipo `{ty}`")))
     }
 
     fn new_value(&mut self) -> Result<ValueId, AdapterError> {
@@ -422,7 +652,7 @@ impl FuncLower {
                                         "atribuição indexada a binding não mapeado".to_string(),
                                     )
                                 })?;
-                            if !matches!(ty, Type::Array(_)) {
+                            if !matches!(self.type_def(ty), Some(TypeDef::Array(_))) {
                                 return Err(AdapterError::Unsupported(
                                     "atribuição indexada a valor que não é array".to_string(),
                                 ));
@@ -456,7 +686,7 @@ impl FuncLower {
                                         "atribuição a campo de binding não mapeado".to_string(),
                                     )
                                 })?;
-                            if !matches!(ty, Type::Struct(_)) {
+                            if !matches!(self.type_def(ty), Some(TypeDef::Struct(_))) {
                                 return Err(AdapterError::Unsupported(
                                     "atribuição a campo de valor que não é struct".to_string(),
                                 ));
@@ -713,7 +943,7 @@ impl FuncLower {
             vec![BlockParam {
                 value: result,
                 name: format!("logic{merge_id}"),
-                ty: Type::Bool,
+                ty: TYPE_BOOL,
             }],
         );
         Ok(result)
@@ -766,7 +996,7 @@ impl FuncLower {
             vec![BlockParam {
                 value: result,
                 name: format!("not{merge_id}"),
-                ty: Type::Bool,
+                ty: TYPE_BOOL,
             }],
         );
         Ok(result)
@@ -858,7 +1088,8 @@ impl FuncLower {
                 for item in items {
                     values.push(self.lower_expr(names, item, env)?);
                 }
-                self.emit(Op::ArrayLiteral(values))
+                let ty = self.map_type(&expression.ty)?;
+                self.emit(Op::ArrayLiteral { ty, items: values })
             }
             HirExprKind::Index { object, index } => {
                 let array = self.lower_expr(names, object, env)?;
@@ -903,16 +1134,13 @@ impl FuncLower {
                 })
             }
             HirExprKind::OptionNone => {
-                let Type::Optional(elem) = self.map_type(&expression.ty)? else {
-                    return Err(AdapterError::Unsupported(
-                        "`null` sem tipo option".to_string(),
-                    ));
-                };
-                self.emit(Op::OptionNone(elem))
+                let ty = self.map_type(&expression.ty)?;
+                self.emit(Op::OptionNone(ty))
             }
             HirExprKind::OptionSome(payload) => {
                 let value = self.lower_expr(names, payload, env)?;
-                self.emit(Op::OptionSome { value })
+                let ty = self.map_type(&expression.ty)?;
+                self.emit(Op::OptionSome { ty, value })
             }
             HirExprKind::Coalesce {
                 option, fallback, ..
@@ -1310,12 +1538,16 @@ fn lower_function(
     id: FnId,
     names: &BTreeMap<String, FnId>,
     structs: &BTreeMap<String, (StructId, Vec<String>)>,
+    table: &TypeTable,
 ) -> Result<Function, AdapterError> {
-    let ret = map_type(&function.return_type, structs)?;
+    let ret = resolved_type_id(&function.return_type, structs, &table.index)
+        .ok_or_else(|| AdapterError::Unsupported("tipo de retorno não suportado".to_string()))?;
     let mut params: Vec<Param> = Vec::new();
     let mut env: Env = BTreeMap::new();
     for (index, parameter) in function.parameters.iter().enumerate() {
-        let ty = map_type(&parameter.ty, structs)?;
+        let ty = resolved_type_id(&parameter.ty, structs, &table.index).ok_or_else(|| {
+            AdapterError::Unsupported("tipo de parâmetro não suportado".to_string())
+        })?;
         let value = u32::try_from(index)
             .map_err(|_| AdapterError::Unsupported("parâmetros demais".to_string()))?;
         if env.insert(parameter.id, (value, ty)).is_some() {
@@ -1335,11 +1567,13 @@ fn lower_function(
     let mut lower = FuncLower::new(first_value);
     lower.mutable_locals = collect_mutable_locals(function);
     lower.structs = structs.clone();
+    lower.types_index = table.index.clone();
+    lower.types = table.types.clone();
     let entry = lower.alloc_block();
     lower.start(entry, "entry".to_string(), Vec::new());
     let out = lower.lower_block(names, &function.body.statements, env)?;
     if out.is_some() {
-        if ret != Type::Unit {
+        if ret != TYPE_UNIT {
             return Err(AdapterError::Unsupported(
                 "função não retorna em todos os caminhos".to_string(),
             ));
