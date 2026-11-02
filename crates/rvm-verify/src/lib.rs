@@ -330,6 +330,24 @@ impl<'a> FunctionFacts<'a> {
                 }
                 Ok(())
             }
+            Op::FieldSet {
+                object,
+                field,
+                value,
+            } => {
+                self.check_use(block_index, instr_index, *object, location)?;
+                self.check_use(block_index, instr_index, *value, location)?;
+                let def = self.object_struct_def(*object, location)?;
+                let declared = def.field(field).ok_or_else(|| {
+                    invalid(
+                        ErrorCode::InvalidType,
+                        format!("struct `{}` não tem campo `{field}`", def.name),
+                        location.clone(),
+                    )
+                })?;
+                let declared_ty = declared.ty;
+                self.check_operand_type(*value, declared_ty, location)
+            }
             Op::OptionNone(_) => Ok(()),
             Op::OptionSome { value } => {
                 self.check_use(block_index, instr_index, *value, location)?;
@@ -1033,6 +1051,27 @@ fn build_values(
                         }
                     }
                 }
+                Op::FieldSet { object, .. } => {
+                    let object_index = value_index(*object, location)?;
+                    let object_ty =
+                        types.get(object_index).copied().flatten().ok_or_else(|| {
+                            invalid(
+                                ErrorCode::InvalidModule,
+                                "tipo do objeto desconhecido".to_string(),
+                                location.clone(),
+                            )
+                        })?;
+                    match object_ty {
+                        Type::Struct(_) => object_ty,
+                        _ => {
+                            return Err(invalid(
+                                ErrorCode::InvalidType,
+                                "field_set sobre valor que não é struct".to_string(),
+                                location.clone(),
+                            ))
+                        }
+                    }
+                }
                 Op::OptionNone(elem) => Type::Optional(*elem),
                 Op::OptionSome { value } => {
                     let index = value_index(*value, location)?;
@@ -1116,6 +1155,7 @@ fn operation_type(module: &Module, op: &Op, location: &Location) -> Result<Type,
         Op::StructNew { struct_id, .. } => Ok(Type::Struct(*struct_id)),
         // `FieldGet` é resolvido em `build_values` (depende do tipo do objeto).
         Op::FieldGet { .. } => Ok(Type::Unit),
+        Op::FieldSet { .. } => Ok(Type::Unit),
         Op::OptionNone(elem) => Ok(Type::Optional(*elem)),
         Op::OptionSome { .. } => Ok(Type::Optional(OptionalElem::I64)),
         Op::OptionIsSome { .. } => Ok(Type::Bool),

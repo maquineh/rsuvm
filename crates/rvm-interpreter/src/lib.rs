@@ -673,6 +673,75 @@ impl<'a> Interpreter<'a> {
                     self.write_current(&mut stack, top, instr.def, value, &site)?;
                     self.advance(&mut stack, top, &site)?;
                 }
+                Op::FieldSet {
+                    object,
+                    field,
+                    value,
+                } => {
+                    let (updated, bytes) = {
+                        let frame = stack.get(top).ok_or_else(|| {
+                            error_at(
+                                ErrorCode::InvalidModule,
+                                "frame ausente ao atualizar struct",
+                                &site,
+                            )
+                        })?;
+                        let struct_value = read_slot(frame, *object, &site)?;
+                        match &struct_value {
+                            Value::Struct { ty, fields } => {
+                                let def = self.module.struct_def(*ty).ok_or_else(|| {
+                                    error_at(
+                                        ErrorCode::InvalidModule,
+                                        format!("struct {ty} não existe no módulo"),
+                                        &site,
+                                    )
+                                })?;
+                                let index = def.field_index(field).ok_or_else(|| {
+                                    error_at(
+                                        ErrorCode::InvalidType,
+                                        format!("struct `{}` não tem campo `{field}`", def.name),
+                                        &site,
+                                    )
+                                })?;
+                                let replacement = read_slot(frame, *value, &site)?;
+                                let mut updated: Vec<Value> = Vec::new();
+                                updated.try_reserve_exact(fields.len()).map_err(|_| {
+                                    error_at(
+                                        ErrorCode::InvalidModule,
+                                        "não foi possível alocar a struct",
+                                        &site,
+                                    )
+                                })?;
+                                updated.extend_from_slice(fields);
+                                if let Some(slot) = updated.get_mut(index) {
+                                    *slot = replacement;
+                                }
+                                let bytes = u64::try_from(updated.len())
+                                    .unwrap_or(u64::MAX)
+                                    .saturating_mul(SLOT_BYTES);
+                                (
+                                    Value::Struct {
+                                        ty: *ty,
+                                        fields: updated,
+                                    },
+                                    bytes,
+                                )
+                            }
+                            _ => {
+                                return Err(error_at(
+                                    ErrorCode::InvalidModule,
+                                    format!("v{object} não é uma struct"),
+                                    &site,
+                                ))
+                            }
+                        }
+                    };
+                    // A atualização funcional produz uma struct nova; cobra os
+                    // bytes novamente (cumulativo, ADR-0032).
+                    self.charge_memory(bytes, &site)?;
+                    self.write_current(&mut stack, top, instr.def, updated, &site)?;
+                    self.advance(&mut stack, top, &site)?;
+                }
                 Op::OptionNone(elem) => {
                     self.write_current(
                         &mut stack,

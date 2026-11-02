@@ -38,6 +38,7 @@ operação   = "const_i64" inteiro
            | "array_set" valor "," valor "," valor
            | "struct_new" ident valor { "," valor }
            | "field_get" valor "," ident
+           | "field_set" valor "," ident "," valor
            | "option_none" ident
            | "option_some" valor
            | "option_is_some" valor

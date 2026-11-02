@@ -33,6 +33,7 @@ memória/transferência, integração Lift e integração Rio).
 | [0029](ADR-0029-OBJETOS-STRUCTS.md) | Objetos/structs no núcleo | Aceito experimentalmente |
 | [0030](ADR-0030-OPTION-COALESCE.md) | `Option`/`coalesce` no núcleo | Aceito experimentalmente |
 | [0031](ADR-0031-IGUALDADE-OPTION.md) | Igualdade de `option` no núcleo | Aceito experimentalmente |
+| [0032](ADR-0032-FIELD-SET-FUNCIONAL.md) | Mutação de campo por atualização funcional (`field_set`) | Aceito experimentalmente |
 
 Estados usados: `Proposto`, `Aceito experimentalmente`, `Validado no escopo`,
 `Rejeitado`, `Substituído`. "Validado no escopo" exige critério e evidência

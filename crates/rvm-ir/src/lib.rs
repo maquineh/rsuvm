@@ -278,6 +278,16 @@ pub enum Op {
         /// Nome do campo; o tipo é resolvido pelo verificador.
         field: String,
     },
+    /// Substitui um campo de uma struct (`field_set`), devolvendo uma **nova**
+    /// struct; a de origem não é alterada (atualização funcional, ADR-0032).
+    FieldSet {
+        /// Operando struct.
+        object: ValueId,
+        /// Nome do campo.
+        field: String,
+        /// Novo valor do campo; precisa ter o tipo do campo.
+        value: ValueId,
+    },
     /// Define `none` de um `option` escalar (`option_none`), ADR-0030.
     OptionNone(OptionalElem),
     /// Envolve um escalar em `some` (`option_some`), ADR-0030.
@@ -352,6 +362,8 @@ impl Op {
             Op::StructNew { struct_id, .. } => Type::Struct(*struct_id),
             // O tipo é resolvido pelo verificador a partir da struct do objeto.
             Op::FieldGet { .. } => Type::Unit,
+            // O tipo (struct do objeto) é resolvido pelo verificador.
+            Op::FieldSet { .. } => Type::Unit,
             Op::OptionNone(elem) => Type::Optional(*elem),
             // Resolvido pelo verificador a partir do payload.
             Op::OptionSome { .. } => Type::Optional(OptionalElem::I64),
@@ -389,6 +401,7 @@ impl Op {
             } => vec![*array, *index, *value],
             Op::StructNew { fields, .. } => fields.clone(),
             Op::FieldGet { object, .. } => vec![*object],
+            Op::FieldSet { object, value, .. } => vec![*object, *value],
             Op::OptionNone(_) => Vec::new(),
             Op::OptionSome { value } | Op::OptionIsSome { value } | Op::OptionUnwrap { value } => {
                 vec![*value]
@@ -526,6 +539,7 @@ impl Function {
                     return match &instr.op {
                         Op::Call { .. }
                         | Op::FieldGet { .. }
+                        | Op::FieldSet { .. }
                         | Op::OptionSome { .. }
                         | Op::OptionUnwrap { .. }
                         | Op::Coalesce { .. } => None,

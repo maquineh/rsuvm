@@ -1,0 +1,19 @@
+; id: N-039
+; expect: error invalid_type
+; extra: field_set exige valor do tipo do campo (ADR-0032)
+module n039 version 1
+entry f
+
+struct Ponto {
+  x: i64
+}
+
+fn f() -> i64 {
+  entry:
+    v0 = const_i64 1
+    v1 = struct_new Ponto v0
+    v2 = const_bool true
+    v3 = field_set v1, x, v2
+    v4 = field_get v3, x
+    return v4
+}

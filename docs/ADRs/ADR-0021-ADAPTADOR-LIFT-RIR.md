@@ -27,8 +27,9 @@ pode importar Lift: adaptadores ficam fora de `crates/`.
    `boolean` (`bool`), `string` (`string`), `number` (`f64`), arrays desses tipos
    (`array`), structs (`interface`) com campos escalares, opcionais (`T?`) ou
    `void` (`unit`);
-   `let`/`const`, **atribuição** (a binding e a
-   **elemento de array** `xs[i] = v`), `return`, `if`/`else if`/`else` (inclusive
+   `let`/`const`, **atribuição** (a binding, a
+   **elemento de array** `xs[i] = v` e a **campo** `obj.campo = v`), `return`,
+   `if`/`else if`/`else` (inclusive
    **merge** e `if` sem `else`) e **`while`**;
    expressões `int`/`boolean`/`string`/`number` literais, **literais de array**
    `[...]`, **indexação** `xs[i]`, **literais de struct** `{ campo: valor }`,
@@ -45,11 +46,13 @@ pode importar Lift: adaptadores ficam fora de `crates/`.
 5. Fora do subconjunto (closures, `console.log`,
    `import`, statements de topo) devolve [`AdapterError::Unsupported`], nunca um
    módulo incorreto. Divisão/resto (ADR-0022), `string` (ADR-0024/0025), `f64`
-   (ADR-0026), arrays (ADR-0027/0028), structs (ADR-0029) e opcionais (ADR-0030)
+   (ADR-0026), arrays (ADR-0027/0028), structs (ADR-0029/0032) e opcionais
+   (ADR-0030/0031)
    foram habilitadas por tipos/ops novos no núcleo. Arrays do adaptador cobrem
    literais, indexação e **atribuição a elemento** `xs[i] = v` (só quando `xs` é um
-   local não-aliasado); structs cobrem `interface`, literal e `obj.campo` (campos
-   escalares); opcionais cobrem `null`, `option.some`/`is_some`/`unwrap`, `??`
+   local não-aliasado); structs cobrem `interface`, literal, `obj.campo` e
+   **atribuição a campo** `obj.campo = v` (campos escalares, local não-aliasado);
+   opcionais cobrem `null`, `option.some`/`is_some`/`unwrap`, `??`
    (fallback preguiçoso) e `== null`/`!= null` (ADR-0030/0031).
 6. **Teste diferencial**: o valor executado na RSUVM é comparado com o **oráculo do
    Lift** (mesmo programa rodado pelo compilador do Lift), registrado em
@@ -90,7 +93,8 @@ pode importar Lift: adaptadores ficam fora de `crates/`.
   (`tests/diferencial.rs`: 31; `tests/cli.rs`: 9) — inclui `while` + atribuição,
   `if`/`else if`/`else` com merge, `&&`/`||`/`!` com curto-circuito, recursão
   `fib`, `/` e `%`, `string`, `f64` (`number`), arrays (literal, índice e
-  `xs[i] = v` com rejeição de alias), structs (`interface`, literal e campo),
+  `xs[i] = v` com rejeição de alias), structs (`interface`, literal, campo e
+  `obj.campo = v` com rejeição de alias),
   opcionais (`??` preguiçoso, `option.some`/`is_some`/`unwrap`, `== null`/`!= null`), os
   traps de divisão por zero, de índice fora dos limites e de `unwrap` de `none`,
   rejeição de `console.log` e os códigos de exit do `lift-run` (0/2/3/4).

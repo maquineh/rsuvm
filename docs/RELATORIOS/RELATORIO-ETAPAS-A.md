@@ -321,7 +321,7 @@ Oráculo do Lift: `cargo run -p lift_cli -- run examples/rsuvm-oracle.lift` →
 |---|---|
 | `cargo test --manifest-path frontends/lift-rir/Cargo.toml` | 31 passed, 0 failed (22 diferencial + 9 CLI) |
 | `cargo run --bin lift-run -- fib.lift fib --arg i64:10` | `i64:55` (exit 0) |
-| oráculo do Lift (`rsuvm-oracle*.lift`) | `30 5 7 9 3 true false 25 12 55 0` / `15 0 7 0 1 2 10 3 6 0` / `3 -3 2 -2` / `-1 0 1 true false false true false true false true true true` / `ola true false true` / `ola mundo` / `1.5 true false` / `20` / `9 14 6` / `7 ana 42` / `hi missing 7 9 5 true false` / `5` / `true false true false` |
+| oráculo do Lift (`rsuvm-oracle*.lift`) | `30 5 7 9 3 true false 25 12 55 0` / `15 0 7 0 1 2 10 3 6 0` / `3 -3 2 -2` / `-1 0 1 true false false true false true false true true true` / `ola true false true` / `ola mundo` / `1.5 true false` / `20` / `9 14 6` / `7 ana 42` / `hi missing 7 9 5 true false` / `5` / `true false true false` / `11 3 bia` |
 | `cargo test --workspace` (núcleo) | verde; **não** compila `frontends/` |
 
 Limites: o subconjunto do adaptador ainda **não** cobre strings/arrays/objetos,
@@ -403,11 +403,19 @@ Núcleo ganhou `option_eq`/`option_ne` (mesmo payload; `none == none` é `true`,
 `x == null`/`x != null` (e `==`/`!=` entre opcionais); oráculo
 (`rsuvm-oracle13.lift`): `true false true false` — bate.
 
+### Mutação de campo por atualização funcional (ADR-0032)
+
+Núcleo ganhou `field_set` (atualização **funcional**: devolve struct nova, origem
+inalterada), com verificação de campo/tipo e quota cumulativa `campos × 24`. Corpus
+`C-050`..`C-052`/`N-039`/`N-040`. O adaptador mapeia `obj.campo = v` quando `obj` é
+uma struct local não-aliasada (análise de aliasing generalizada); oráculo
+(`rsuvm-oracle14.lift`): `11 3 bia` — bate.
+
 ### Verificação (Resultado)
 
 | Comando | Resultado |
 |---|---|
-| `cargo test --workspace` | **148 passed, 0 failed**; corpus 49 válidos + 37 inválidos |
-| `cargo test --manifest-path frontends/lift-rir/Cargo.toml` | 40 passed, 0 failed (31 diferencial + 9 CLI) |
+| `cargo test --workspace` | **148 passed, 0 failed**; corpus 52 válidos + 39 inválidos |
+| `cargo test --manifest-path frontends/lift-rir/Cargo.toml` | 42 passed, 0 failed (33 diferencial + 9 CLI) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | exit 0 |
 | `cargo fmt --all -- --check` | exit 0 |

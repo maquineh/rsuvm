@@ -104,6 +104,7 @@ const OP_OPTION_UNWRAP: u8 = 44;
 const OP_COALESCE: u8 = 45;
 const OP_OPTION_EQ: u8 = 46;
 const OP_OPTION_NE: u8 = 47;
+const OP_FIELD_SET: u8 = 48;
 
 // Tipos de terminador (tabela de `BYTECODE-EXP-0-IMPLEMENTACAO.md` §1).
 const TERM_RETURN: u8 = 0;
@@ -361,6 +362,16 @@ fn encode_instr(out: &mut Vec<u8>, instr: &Instr) {
             push_u32(out, *object);
             push_string(out, field);
         }
+        Op::FieldSet {
+            object,
+            field,
+            value,
+        } => {
+            push_u8(out, OP_FIELD_SET);
+            push_u32(out, *object);
+            push_string(out, field);
+            push_u32(out, *value);
+        }
         Op::OptionNone(elem) => {
             push_u8(out, OP_OPTION_NONE);
             push_u8(out, optional_elem_tag(*elem));
@@ -614,6 +625,11 @@ fn read_instr(reader: &mut Reader<'_>, limits: &Limits) -> Result<Instr, RvmErro
         OP_FIELD_GET => Op::FieldGet {
             object: reader.read_u32("operando field_get")?,
             field: reader.read_name(limits, "campo de field_get")?,
+        },
+        OP_FIELD_SET => Op::FieldSet {
+            object: reader.read_u32("operando field_set")?,
+            field: reader.read_name(limits, "campo de field_set")?,
+            value: reader.read_u32("valor de field_set")?,
         },
         OP_OPTION_NONE => Op::OptionNone(read_optional_elem(reader, "elemento de option_none")?),
         OP_OPTION_SOME => Op::OptionSome {

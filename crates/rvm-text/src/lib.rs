@@ -348,6 +348,18 @@ fn print_op(module: &Module, function: &Function, op: &Op, out: &mut String) {
             out.push_str(", ");
             out.push_str(field);
         }
+        Op::FieldSet {
+            object,
+            field,
+            value,
+        } => {
+            out.push_str("field_set ");
+            print_value(function, *object, out);
+            out.push_str(", ");
+            out.push_str(field);
+            out.push_str(", ");
+            print_value(function, *value, out);
+        }
         Op::OptionNone(elem) => {
             out.push_str("option_none ");
             out.push_str(elem.name());
@@ -771,6 +783,7 @@ enum RawOp {
     ArraySet(String, String, String),
     StructNew(String, Vec<String>),
     FieldGet(String, String),
+    FieldSet(String, String, String),
     OptionNone(OptionalElem),
     OptionSome(String),
     OptionIsSome(String),
@@ -1275,6 +1288,14 @@ impl Parser {
                 let field = self.expect_ident("nome do campo")?;
                 RawOp::FieldGet(object, field)
             }
+            "field_set" => {
+                let object = self.expect_ident("operando struct")?;
+                self.expect_token(Token::Comma, "`,` entre operandos")?;
+                let field = self.expect_ident("nome do campo")?;
+                self.expect_token(Token::Comma, "`,` entre operandos")?;
+                let value = self.expect_ident("valor do campo")?;
+                RawOp::FieldSet(object, field, value)
+            }
             "option_none" => {
                 let elem = self.expect_ident("elemento do option")?;
                 let elem = optional_elem_from_name(&elem).ok_or_else(|| {
@@ -1727,6 +1748,11 @@ fn lower_op(
         RawOp::FieldGet(object, field) => Op::FieldGet {
             object: value(object)?,
             field: field.clone(),
+        },
+        RawOp::FieldSet(object, field, element) => Op::FieldSet {
+            object: value(object)?,
+            field: field.clone(),
+            value: value(element)?,
         },
         RawOp::OptionNone(elem) => Op::OptionNone(*elem),
         RawOp::OptionSome(payload) => Op::OptionSome {

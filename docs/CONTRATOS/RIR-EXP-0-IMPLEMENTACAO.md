@@ -19,7 +19,7 @@ Instr     { def: ValueId, op: Op }
 Op        = const_i64 | const_bool | const_str | const_f64 | bin(op,lhs,rhs) | cmp(op,lhs,rhs)
           | str_eq(lhs,rhs) | str_ne(lhs,rhs) | str_len(operand) | concat_str(lhs,rhs)
           | float(op,lhs,rhs) | array(items) | array_len(v) | array_get(v,i) | array_set(v,i,x)
-          | struct_new(sid, fields) | field_get(v, field)
+          | struct_new(sid, fields) | field_get(v, field) | field_set(v, field, x)
           | option_none(elem) | option_some(v) | option_is_some(v) | option_unwrap(v)
           | coalesce(o,f) | option_eq(lhs,rhs) | option_ne(lhs,rhs) | call(callee,args)
 Term      = return [v] | br(target,args) | cond_br(cond, target, target)
@@ -101,6 +101,7 @@ Depois de `structure::check`:
    | `array_set` | `array`, `i64`, elemento do array | `array` |
    | `struct_new` | um valor por campo, no tipo do campo | `struct` |
    | `field_get` | `struct`, nome de campo existente | tipo do campo |
+   | `field_set` | `struct`, nome de campo existente, valor do tipo do campo | `struct` |
    | `option_none` | — | `option` |
    | `option_some` | um escalar | `option` |
    | `option_is_some` | `option` | `bool` |
@@ -152,7 +153,9 @@ terminador por último. O primeiro erro vence.
   check (`index_out_of_bounds`); cobra `len × 24` bytes cumulativos.
 - `struct_new` cria um valor de struct (campos escalares, ADR-0029) e cobra
   `campos × 24` bytes cumulativos; `field_get` lê um campo pelo nome (o campo
-  precisa existir e o objeto ser struct). Não há `field_set` nesta rodada.
+  precisa existir e o objeto ser struct); `field_set` é uma **atualização
+  funcional** que devolve uma struct **nova** com o campo substituído, sem alterar
+  a de origem (ADR-0032), cobrando `campos × 24` bytes cumulativos.
 - `option_none`/`option_some` criam `none`/`some` (payload escalar, ADR-0030);
   `option_is_some` testa; `option_unwrap` extrai o payload e produz o trap
   `unwrap_none` sobre `none`; `coalesce` devolve o payload se `some`, senão o

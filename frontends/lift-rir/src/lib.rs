@@ -9,8 +9,9 @@
 //! - funções com parâmetros/retorno em `int` (`i64`), `boolean` (`bool`),
 //!   `string` (`string`), `number` (`f64`), arrays desses tipos (`array`), structs
 //!   (`interface`) com campos escalares, opcionais (`T?`) ou `void` (`unit`);
-//! - `let`/`const`, **atribuição** a binding mutável e a **elemento de array**
-//!   (`xs[i] = v`), `return`, `if`/`else if`/`else` (com merge) e `while`;
+//! - `let`/`const`, **atribuição** a binding mutável, a **elemento de array**
+//!   (`xs[i] = v`) e a **campo** (`obj.campo = v`), `return`, `if`/`else if`/
+//!   `else` (com merge) e `while`;
 //! - expressões: literais `int`/`boolean`/`string`/`number`, **literais de array**
 //!   `[...]`, **indexação** `xs[i]`, **literais de struct** `{ campo: valor }`,
 //!   **acesso a campo** `obj.campo`, `null`, `option.some`/`is_some`/`unwrap`, `??`,
@@ -21,10 +22,10 @@
 //! Fora do subconjunto (closures, `console.log`, `import`, statements de topo):
 //! devolve [`AdapterError::Unsupported`].
 //! Divisão/resto por zero e `i64::MIN / -1` produzem os traps
-//! `division_by_zero`/`integer_overflow` (ADR-0022). `xs[i] = v` só é baixado
-//! quando `xs` é um array local **não-aliasado** (ADR-0028); structs aceitam
-//! apenas campos escalares (ADR-0029); `??` preserva o fallback preguiçoso via
-//! fluxo de controle (ADR-0030).
+//! `division_by_zero`/`integer_overflow` (ADR-0022). `xs[i] = v` e `obj.campo = v`
+//! só são baixados quando o alvo é um array/struct local **não-aliasado**
+//! (ADR-0028/0032); structs aceitam apenas campos escalares (ADR-0029); `??`
+//! preserva o fallback preguiçoso via fluxo de controle (ADR-0030).
 //!
 //! # Semântica (construção CFG/SSA)
 //!
@@ -244,9 +245,10 @@ struct FuncLower {
     next_value: ValueId,
     next_label: u32,
     current: Option<Cursor>,
-    /// Locais de array comprovadamente não-aliasados (ADR-0028): podem receber
-    /// atribuição a elemento via atualização funcional.
-    safe_arrays: BTreeSet<BindingId>,
+    /// Locais comprovadamente não-aliasados (ADR-0028/0032): arrays e structs
+    /// declarados por literal que podem receber atribuição funcional a elemento/
+    /// campo.
+    mutable_locals: BTreeSet<BindingId>,
     /// Structs do programa: nome → (id, ordem dos campos) (ADR-0029).
     structs: BTreeMap<String, (StructId, Vec<String>)>,
 }
@@ -258,7 +260,7 @@ impl FuncLower {
             next_value: first_value,
             next_label: 0,
             current: None,
-            safe_arrays: BTreeSet::new(),
+            mutable_locals: BTreeSet::new(),
             structs: BTreeMap::new(),
         }
     }
@@ -403,12 +405,12 @@ impl FuncLower {
                             // `xs[i] = v`: atualização funcional (ADR-0028). Só é
                             // baixada quando `xs` é um array local não-aliasado;
                             // caso contrário, `Unsupported` (nunca módulo errado).
-                            let binding = index_object_binding(object).ok_or_else(|| {
+                            let binding = place_root_binding(object).ok_or_else(|| {
                                 AdapterError::Unsupported(
                                     "atribuição indexada exige array local".to_string(),
                                 )
                             })?;
-                            if !self.safe_arrays.contains(&binding) {
+                            if !self.mutable_locals.contains(&binding) {
                                 return Err(AdapterError::Unsupported(
                                     "atribuição a elemento de array possivelmente aliasado"
                                         .to_string(),
@@ -434,10 +436,42 @@ impl FuncLower {
                             })?;
                             env.insert(binding, (updated, ty));
                         }
+                        HirExprKind::FieldAccess { object, field } => {
+                            // `obj.campo = v`: atualização funcional (ADR-0032). Só é
+                            // baixada quando `obj` é uma struct local não-aliasada.
+                            let binding = place_root_binding(object).ok_or_else(|| {
+                                AdapterError::Unsupported(
+                                    "atribuição a campo exige struct local".to_string(),
+                                )
+                            })?;
+                            if !self.mutable_locals.contains(&binding) {
+                                return Err(AdapterError::Unsupported(
+                                    "atribuição a campo de struct possivelmente aliasada"
+                                        .to_string(),
+                                ));
+                            }
+                            let (struct_value, ty) =
+                                env.get(&binding).copied().ok_or_else(|| {
+                                    AdapterError::Unsupported(
+                                        "atribuição a campo de binding não mapeado".to_string(),
+                                    )
+                                })?;
+                            if !matches!(ty, Type::Struct(_)) {
+                                return Err(AdapterError::Unsupported(
+                                    "atribuição a campo de valor que não é struct".to_string(),
+                                ));
+                            }
+                            let element = self.lower_expr(names, &assignment.value, &env)?;
+                            let updated = self.emit(Op::FieldSet {
+                                object: struct_value,
+                                field: field.clone(),
+                                value: element,
+                            })?;
+                            env.insert(binding, (updated, ty));
+                        }
                         _ => {
                             return Err(AdapterError::Unsupported(
-                                "alvo de atribuição não é variável nem elemento de array"
-                                    .to_string(),
+                                "alvo de atribuição não é variável, elemento ou campo".to_string(),
                             ))
                         }
                     }
@@ -1095,40 +1129,45 @@ impl FuncLower {
     }
 }
 
-/// Raiz de binding de um objeto de indexação, desembrulhando agrupamentos,
-/// `Move` e `Clone`.
-fn index_object_binding(expression: &HirExpr) -> Option<BindingId> {
+/// Raiz de binding de um "lugar" (objeto de indexação ou acesso a campo),
+/// desembrulhando agrupamentos, `Move`, `Clone`, `FieldAccess` e `Index`.
+fn place_root_binding(expression: &HirExpr) -> Option<BindingId> {
     match &expression.kind {
         HirExprKind::Local { id, .. } => Some(*id),
-        HirExprKind::Grouping(inner) | HirExprKind::Move(inner) => index_object_binding(inner),
-        HirExprKind::Clone { expression, .. } => index_object_binding(expression),
+        HirExprKind::Grouping(inner) | HirExprKind::Move(inner) => place_root_binding(inner),
+        HirExprKind::Clone { expression, .. } => place_root_binding(expression),
+        HirExprKind::FieldAccess { object, .. } | HirExprKind::Index { object, .. } => {
+            place_root_binding(object)
+        }
         _ => None,
     }
 }
 
-/// `true` se a expressão é um literal de array (possivelmente agrupado).
+/// `true` se a expressão é um literal de array ou struct (possivelmente agrupado).
 fn initializer_is_literal(expression: &HirExpr) -> bool {
     match &expression.kind {
-        HirExprKind::ArrayLiteral(_) => true,
+        HirExprKind::ArrayLiteral(_) | HirExprKind::StructLiteral { .. } => true,
         HirExprKind::Grouping(inner) => initializer_is_literal(inner),
         _ => false,
     }
 }
 
-/// Coleta locais de array declarados por um literal `[...]` na função.
-fn collect_literal_array_locals(statements: &[HirStatement], out: &mut BTreeSet<BindingId>) {
+/// Coleta locais de array/struct declarados por um literal na função.
+fn collect_literal_locals(statements: &[HirStatement], out: &mut BTreeSet<BindingId>) {
     for statement in statements {
         match statement {
             HirStatement::Variable(declaration) => {
-                if matches!(declaration.ty, ResolvedType::Array(_))
-                    && initializer_is_literal(&declaration.initializer)
+                if matches!(
+                    declaration.ty,
+                    ResolvedType::Array(_) | ResolvedType::Struct(_)
+                ) && initializer_is_literal(&declaration.initializer)
                 {
                     out.insert(declaration.id);
                 }
             }
-            HirStatement::If(node) => collect_literal_array_locals_if(node, out),
+            HirStatement::If(node) => collect_literal_locals_if(node, out),
             HirStatement::While(node) => {
-                collect_literal_array_locals(&node.body.statements, out);
+                collect_literal_locals(&node.body.statements, out);
             }
             HirStatement::Assignment(_) | HirStatement::Expression(_) | HirStatement::Return(_) => {
             }
@@ -1136,20 +1175,20 @@ fn collect_literal_array_locals(statements: &[HirStatement], out: &mut BTreeSet<
     }
 }
 
-fn collect_literal_array_locals_if(node: &HirIf, out: &mut BTreeSet<BindingId>) {
-    collect_literal_array_locals(&node.then_branch.statements, out);
+fn collect_literal_locals_if(node: &HirIf, out: &mut BTreeSet<BindingId>) {
+    collect_literal_locals(&node.then_branch.statements, out);
     match &node.else_branch {
         Some(HirElseBranch::Block(block)) => {
-            collect_literal_array_locals(&block.statements, out);
+            collect_literal_locals(&block.statements, out);
         }
-        Some(HirElseBranch::ElseIf(nested)) => collect_literal_array_locals_if(nested, out),
+        Some(HirElseBranch::ElseIf(nested)) => collect_literal_locals_if(nested, out),
         None => {}
     }
 }
 
-/// Marca os bindings usados como **valor** (qualquer uso que não seja objeto de
-/// indexação). Um local de array que apareça aqui escapa e não pode ser mutado
-/// com segurança sob semântica funcional.
+/// Marca os bindings usados como **valor** (qualquer uso que não seja um "lugar":
+/// objeto de indexação ou acesso a campo). Um local que apareça aqui escapa e não
+/// pode ser mutado com segurança sob semântica funcional.
 fn scan_block(statements: &[HirStatement], escaping: &mut BTreeSet<BindingId>) {
     for statement in statements {
         scan_statement(statement, escaping);
@@ -1191,10 +1230,16 @@ fn scan_expr(expression: &HirExpr, escaping: &mut BTreeSet<BindingId>) {
     match &expression.kind {
         // O objeto de uma indexação é um "lugar": não é uso de valor.
         HirExprKind::Index { object, index } => {
-            if index_object_binding(object).is_none() {
+            if place_root_binding(object).is_none() {
                 scan_expr(object, escaping);
             }
             scan_expr(index, escaping);
+        }
+        // O objeto de um acesso a campo também é um "lugar".
+        HirExprKind::FieldAccess { object, .. } => {
+            if place_root_binding(object).is_none() {
+                scan_expr(object, escaping);
+            }
         }
         HirExprKind::Local { id, .. } => {
             escaping.insert(*id);
@@ -1216,7 +1261,6 @@ fn scan_expr(expression: &HirExpr, escaping: &mut BTreeSet<BindingId>) {
                 scan_expr(item, escaping);
             }
         }
-        HirExprKind::FieldAccess { object, .. } => scan_expr(object, escaping),
         HirExprKind::StructLiteral { fields, .. } => {
             for field in fields {
                 scan_expr(&field.value, escaping);
@@ -1248,11 +1292,12 @@ fn scan_expr(expression: &HirExpr, escaping: &mut BTreeSet<BindingId>) {
     }
 }
 
-/// Locais de array **não-aliasados** (ADR-0028): declarados por literal e nunca
-/// usados como valor. Podem ser atualizados por `array_set` + religação.
-fn collect_mutable_arrays(function: &HirFunction) -> BTreeSet<BindingId> {
+/// Locais de array/struct **não-aliasados** (ADR-0028/0032): declarados por
+/// literal e nunca usados como valor. Podem ser atualizados por
+/// `array_set`/`field_set` + religação.
+fn collect_mutable_locals(function: &HirFunction) -> BTreeSet<BindingId> {
     let mut candidates: BTreeSet<BindingId> = BTreeSet::new();
-    collect_literal_array_locals(&function.body.statements, &mut candidates);
+    collect_literal_locals(&function.body.statements, &mut candidates);
     let mut escaping: BTreeSet<BindingId> = BTreeSet::new();
     scan_block(&function.body.statements, &mut escaping);
     candidates.retain(|id| !escaping.contains(id));
@@ -1288,7 +1333,7 @@ fn lower_function(
     let first_value = u32::try_from(function.parameters.len())
         .map_err(|_| AdapterError::Unsupported("parâmetros demais".to_string()))?;
     let mut lower = FuncLower::new(first_value);
-    lower.safe_arrays = collect_mutable_arrays(function);
+    lower.mutable_locals = collect_mutable_locals(function);
     lower.structs = structs.clone();
     let entry = lower.alloc_block();
     lower.start(entry, "entry".to_string(), Vec::new());

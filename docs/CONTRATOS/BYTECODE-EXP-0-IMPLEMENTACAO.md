@@ -115,6 +115,7 @@ terminator:
 | 45 | `coalesce` | `u32 option`, `u32 fallback` |
 | 46 | `option_eq` | `u32 lhs`, `u32 rhs` |
 | 47 | `option_ne` | `u32 lhs`, `u32 rhs` |
+| 48 | `field_set` | `u32 object`, `string field`, `u32 value` |
 
 Código desconhecido ⇒ `unknown_opcode`.
 

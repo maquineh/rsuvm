@@ -1,0 +1,21 @@
+; id: C-052
+; expect: value str:bia
+; extra: field_set sobre campo string preserva o tipo (ADR-0032)
+module c052 version 1
+entry f
+
+struct Usuario {
+  nome: string
+  ativo: bool
+}
+
+fn f() -> string {
+  entry:
+    v0 = const_str "ana"
+    v1 = const_bool true
+    v2 = struct_new Usuario v0, v1
+    v3 = const_str "bia"
+    v4 = field_set v2, nome, v3
+    v5 = field_get v4, nome
+    return v5
+}

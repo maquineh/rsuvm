@@ -479,6 +479,34 @@ fn comparacao_com_null() {
 }
 
 #[test]
+fn field_set_em_local_nao_aliasado() {
+    // Oráculo do Lift (`rsuvm-oracle14.lift`): `11`, `3`, `bia`.
+    let muda = "interface Ponto { x: int, y: int } \
+        function muda(): int { const p: Ponto = { x: 1, y: 2 }; p.x = 9; return p.x + p.y; }";
+    assert_eq!(executar(muda, "muda", &[]), Value::I64(11));
+
+    let acumula = "interface Ponto { x: int, y: int } \
+        function acumula(): int { let p: Ponto = { x: 0, y: 0 }; let i = 0; while i < 3 { p.x = p.x + i; i = i + 1; } return p.x; }";
+    assert_eq!(executar(acumula, "acumula", &[]), Value::I64(3));
+
+    let troca = "interface U { nome: string, ok: boolean } \
+        function troca(): string { let u: U = { nome: \"ana\", ok: true }; u.nome = \"bia\"; return u.nome; }";
+    assert_eq!(executar(troca, "troca", &[]), Value::Str("bia".to_string()));
+}
+
+#[test]
+fn field_set_aliasado_e_rejeitado() {
+    let source = "interface P { x: int } \
+        function id(p: P): int { return p.x; } \
+        function f(): int { let a: P = { x: 1 }; let r = id(a); a.x = 2; return a.x + r; }";
+    let error = lower_source(source, "f").expect_err("struct aliasada");
+    assert!(
+        matches!(error, AdapterError::Unsupported(_)),
+        "erro inesperado: {error:?}"
+    );
+}
+
+#[test]
 fn construto_fora_do_subconjunto_e_rejeitado() {
     // `console.log` (efeito de host) está fora do subconjunto.
     let source = "function f(): int { console.log(\"x\"); return 0; }";
