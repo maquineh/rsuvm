@@ -24,7 +24,7 @@
 
 use core::fmt;
 
-use rvm_spec::{ArrayElem, ErrorCode, OptionalElem, RvmError, StructId, Type};
+use rvm_spec::{ArrayElem, ErrorCode, OptionalElem, RvmError, ScalarKind, StructId, Type};
 
 /// Fuel padrão de uma execução quando o host não especifica outro valor.
 pub const DEFAULT_FUEL: u64 = 100_000;
@@ -125,6 +125,15 @@ pub enum Value {
         /// `None` (ausente) ou `Some` com o payload.
         value: Option<Box<Value>>,
     },
+    /// Valor de resultado com payloads `ok`/`err` escalares (ADR-0033).
+    Result {
+        /// Tipo do payload `ok`.
+        ok: ScalarKind,
+        /// Tipo do payload `err`.
+        err: ScalarKind,
+        /// Variante: `Ok` com o payload, ou `Err` com o payload.
+        value: std::result::Result<Box<Value>, Box<Value>>,
+    },
 }
 
 impl Value {
@@ -148,6 +157,7 @@ impl Value {
             },
             Value::Struct { ty, .. } => Type::Struct(*ty),
             Value::Option { elem, .. } => Type::Optional(*elem),
+            Value::Result { ok, err, .. } => Type::Result(*ok, *err),
         }
     }
 
@@ -215,6 +225,18 @@ impl Value {
         }
     }
 
+    /// Variante, se o valor for `result`.
+    #[must_use]
+    pub fn as_result(&self) -> Option<std::result::Result<&Value, &Value>> {
+        match self {
+            Value::Result { value, .. } => Some(match value {
+                Ok(inner) => Ok(inner.as_ref()),
+                Err(inner) => Err(inner.as_ref()),
+            }),
+            _ => None,
+        }
+    }
+
     /// `true` se o valor pertence ao tipo declarado (sem conversão implícita).
     #[must_use]
     pub fn matches_type(&self, ty: Type) -> bool {
@@ -228,6 +250,14 @@ impl Value {
                     && value
                         .as_deref()
                         .map_or(true, |inner| inner.matches_type(expected.ty()))
+            }
+            (Value::Result { ok, err, value }, Type::Result(expected_ok, expected_err)) => {
+                *ok == expected_ok
+                    && *err == expected_err
+                    && match value {
+                        Ok(inner) => inner.matches_type(expected_ok.ty()),
+                        Err(inner) => inner.matches_type(expected_err.ty()),
+                    }
             }
             _ => matches!(
                 (self, ty),
@@ -275,6 +305,10 @@ impl fmt::Display for Value {
             Value::Option { value, .. } => match value {
                 None => f.write_str("none"),
                 Some(inner) => write!(f, "some:{inner}"),
+            },
+            Value::Result { value, .. } => match value {
+                Ok(inner) => write!(f, "ok:{inner}"),
+                Err(inner) => write!(f, "err:{inner}"),
             },
         }
     }

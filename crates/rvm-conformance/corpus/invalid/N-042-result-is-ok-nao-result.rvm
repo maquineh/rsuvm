@@ -1,0 +1,12 @@
+; id: N-042
+; expect: error invalid_type
+; extra: result_is_ok exige operando result (ADR-0033)
+module n042 version 1
+entry f
+
+fn f() -> bool {
+  entry:
+    v0 = const_i64 1
+    v1 = result_is_ok v0
+    return v1
+}

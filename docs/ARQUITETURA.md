@@ -57,7 +57,8 @@ linguagem (ADR-0009).
 ## 3. Subset semântico (EXP-0)
 
 - Tipos: `unit`, `bool`, `i64`, `string`, `f64`, `array`, `struct` (campos
-  escalares, ADR-0029), `option` (payload escalar, ADR-0030). Sem coerção
+  escalares, ADR-0029), `option` (payload escalar, ADR-0030), `result` (payloads
+  escalares, ADR-0033). Sem coerção
   implícita.
 - Operações: `const_i64`, `const_bool`, `const_str`, `const_f64`, `add_i64_checked`,
   `sub_i64_checked`, `mul_i64_checked`, `div_i64_checked`, `rem_i64_checked`,
@@ -67,6 +68,7 @@ linguagem (ADR-0009).
   `lt_f64`, `le_f64`, `gt_f64`, `ge_f64`, `array`, `array_len`, `array_get`,
   `array_set`, `struct_new`, `field_get`, `field_set`, `option_none`, `option_some`,
   `option_is_some`, `option_unwrap`, `coalesce`, `option_eq`, `option_ne`,
+  `result_ok`, `result_err`, `result_is_ok`, `result_unwrap`, `result_unwrap_err`,
   `call_static`.
 - Terminadores: `return`, `br`, `cond_br`.
 - Merge por parâmetros de bloco (phi explícito).
@@ -77,7 +79,8 @@ linguagem (ADR-0009).
   **campos escalares** (ADR-0029), com atualização **funcional** por `field_set`
   (ADR-0032), sem mutação in-place nem aninhamento;
   `option` existe com **payload escalar** (ADR-0030), sem `option` aninhado; com
-  igualdade `option_eq`/`option_ne` (ADR-0031); `f64`
+  igualdade `option_eq`/`option_ne` (ADR-0031); `result` existe com **payloads
+  escalares** (ADR-0033), sem payload agregado; `f64`
   existe (ADR-0026) sem `%`/`pow`/conversões;
   concatenação de `string` existe (ADR-0025), sem slicing.
 

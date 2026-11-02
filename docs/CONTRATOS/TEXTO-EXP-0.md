@@ -18,7 +18,7 @@ entrada    = "entry" ident ;
 declaração_fn = "fn" ident "(" [parâmetros] ")" "->" tipo bloco+ ;
 parâmetros = parâmetro { "," parâmetro } ;
 parâmetro  = ident ":" tipo ;
-tipo       = "unit" | "bool" | "i64" | "string" | "f64" | "struct" ident | "option" tipo_escalar ;
+tipo       = "unit" | "bool" | "i64" | "string" | "f64" | "struct" ident | "option" tipo_escalar | "result" tipo_escalar tipo_escalar ;
 tipo_escalar = "bool" | "i64" | "string" | "f64" ;
 bloco      = rótulo [ "(" parâmetros ")" ] ":" instrução* terminador ;
 instrução  = ident "=" operação ;
@@ -46,6 +46,11 @@ operação   = "const_i64" inteiro
            | "coalesce" valor "," valor
            | "option_eq" valor "," valor
            | "option_ne" valor "," valor
+           | "result_ok" tipo_escalar tipo_escalar valor
+           | "result_err" tipo_escalar tipo_escalar valor
+           | "result_is_ok" valor
+           | "result_unwrap" valor
+           | "result_unwrap_err" valor
            | "call_static" ident "(" [valores] ")" ;
 op_binário = "add_i64_checked" | "sub_i64_checked" | "mul_i64_checked"
            | "div_i64_checked" | "rem_i64_checked"

@@ -324,7 +324,9 @@ Resultado: `33 passed` (diferencial) + `9 passed` (CLI) = **42 passed; 0 failed*
    núcleo RSUVM continua sem dependências externas.
 3. O teste compara com o oráculo do Lift **registrado**; não invoca o compilador do
    Lift em tempo de teste (evita dependência de rede/rustc no teste).
-4. Não há tradução reversa (RIR→Lift) nem cobertura de efeitos de host.
+4. Não há tradução reversa (RIR→Lift) nem cobertura de efeitos de host. `Result`
+   existe no núcleo (ADR-0033) mas **não** no adaptador: o subconjunto Lift só
+   inspeciona `result.is_ok`/`unwrap`/`unwrap_err`, cuja fonte é um valor de host.
 
 ## 4. Reprodução
 

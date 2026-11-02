@@ -76,6 +76,11 @@ fn collect_ops(module: &Module, ops: &mut BTreeSet<String>, terms: &mut BTreeSet
                     Op::Coalesce { .. } => "coalesce".to_string(),
                     Op::OptionEq { .. } => "option_eq".to_string(),
                     Op::OptionNe { .. } => "option_ne".to_string(),
+                    Op::ResultOk { .. } => "result_ok".to_string(),
+                    Op::ResultErr { .. } => "result_err".to_string(),
+                    Op::ResultIsOk { .. } => "result_is_ok".to_string(),
+                    Op::ResultUnwrap { .. } => "result_unwrap".to_string(),
+                    Op::ResultUnwrapErr { .. } => "result_unwrap_err".to_string(),
                     Op::Call { .. } => "call_static".to_string(),
                 };
                 ops.insert(name);
@@ -146,6 +151,11 @@ fn corpus_valido_cobre_todas_as_operacoes_do_subset() {
         "coalesce",
         "option_eq",
         "option_ne",
+        "result_ok",
+        "result_err",
+        "result_is_ok",
+        "result_unwrap",
+        "result_unwrap_err",
         "eq_i64",
         "ne_i64",
         "lt_i64",

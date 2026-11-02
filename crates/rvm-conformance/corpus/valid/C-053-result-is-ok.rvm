@@ -1,0 +1,13 @@
+; id: C-053
+; expect: value bool:true
+; extra: result_ok e result_is_ok (ADR-0033)
+module c053 version 1
+entry f
+
+fn f() -> bool {
+  entry:
+    v0 = const_i64 1
+    v1 = result_ok i64 string v0
+    v2 = result_is_ok v1
+    return v2
+}

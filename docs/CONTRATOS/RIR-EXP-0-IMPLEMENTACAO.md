@@ -21,7 +21,9 @@ Op        = const_i64 | const_bool | const_str | const_f64 | bin(op,lhs,rhs) | c
           | float(op,lhs,rhs) | array(items) | array_len(v) | array_get(v,i) | array_set(v,i,x)
           | struct_new(sid, fields) | field_get(v, field) | field_set(v, field, x)
           | option_none(elem) | option_some(v) | option_is_some(v) | option_unwrap(v)
-          | coalesce(o,f) | option_eq(lhs,rhs) | option_ne(lhs,rhs) | call(callee,args)
+          | coalesce(o,f) | option_eq(lhs,rhs) | option_ne(lhs,rhs)
+          | result_ok(ok,err,v) | result_err(ok,err,v) | result_is_ok(v)
+          | result_unwrap(v) | result_unwrap_err(v) | call(callee,args)
 Term      = return [v] | br(target,args) | cond_br(cond, target, target)
 ~~~
 
@@ -108,6 +110,9 @@ Depois de `structure::check`:
    | `option_unwrap` | `option` | payload |
    | `coalesce` | `option`, fallback (payload ou o próprio `option`) | tipo do fallback |
    | `option_eq`/`option_ne` | `option`, `option` (mesmo payload) | `bool` |
+   | `result_ok`/`result_err` | valor no tipo da variante | `result` |
+   | `result_is_ok` | `result` | `bool` |
+   | `result_unwrap`/`result_unwrap_err` | `result` | payload `ok`/`err` |
    | comparações `*_i64` | `i64`, `i64` | `bool` |
    | `call_static` | casam com `params` do alvo | `ret` do alvo |
    Qualquer divergência ⇒ `invalid_type`.
@@ -163,6 +168,9 @@ terminador por último. O primeiro erro vence.
   fluxo de controle, não pelo op.
 - `option_eq`/`option_ne` comparam dois `option` de mesmo payload por valor
   (`none == none` é `true`; `some` compara payloads; `NaN != NaN`, ADR-0031).
+- `result_ok`/`result_err` constroem um `result` (payloads escalares, ADR-0033);
+  `result_is_ok` testa; `result_unwrap`/`result_unwrap_err` extraem o payload e
+  produzem o trap `unwrap_error` sobre a variante errada.
 - `br`/`cond_br` copiam os argumentos para os slots dos parâmetros do bloco alvo
   antes de saltar (phi explícito).
 - `return` devolve `Value::Unit` quando não há valor.

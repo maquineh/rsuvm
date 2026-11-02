@@ -54,7 +54,9 @@
 use rvm_ir::{
     Block, BlockId, BranchTarget, FnId, Function, Instr, Module, Op, StructDef, Terminator, ValueId,
 };
-use rvm_spec::{ArrayElem, ErrorCode, Limits, Location, OptionalElem, RvmError, StructId, Type};
+use rvm_spec::{
+    ArrayElem, ErrorCode, Limits, Location, OptionalElem, RvmError, ScalarKind, StructId, Type,
+};
 
 /// Módulo que passou pela verificação completa.
 ///
@@ -397,6 +399,20 @@ impl<'a> FunctionFacts<'a> {
                 }
                 self.check_operand_type(*rhs, lhs_ty, location)
             }
+            Op::ResultOk { ok, value, .. } => {
+                self.check_use(block_index, instr_index, *value, location)?;
+                self.check_operand_type(*value, ok.ty(), location)
+            }
+            Op::ResultErr { err, value, .. } => {
+                self.check_use(block_index, instr_index, *value, location)?;
+                self.check_operand_type(*value, err.ty(), location)
+            }
+            Op::ResultIsOk { value }
+            | Op::ResultUnwrap { value }
+            | Op::ResultUnwrapErr { value } => {
+                self.check_use(block_index, instr_index, *value, location)?;
+                self.require_result(*value, location).map(|_| ())
+            }
             Op::Call { callee, args } => {
                 let target = self.module.function(*callee).ok_or_else(|| {
                     invalid(
@@ -657,6 +673,23 @@ impl<'a> FunctionFacts<'a> {
             other => Err(invalid(
                 ErrorCode::InvalidType,
                 format!("valor v{value} tem tipo {other}, esperado option"),
+                location.clone(),
+            )),
+        }
+    }
+
+    /// Payloads `ok`/`err` do tipo `result` de `value`, exigindo que seja um
+    /// `result`.
+    fn require_result(
+        &self,
+        value: ValueId,
+        location: &Location,
+    ) -> Result<(ScalarKind, ScalarKind), RvmError> {
+        match self.type_of_value(value, location)? {
+            Type::Result(ok, err) => Ok((ok, err)),
+            other => Err(invalid(
+                ErrorCode::InvalidType,
+                format!("valor v{value} tem tipo {other}, esperado result"),
                 location.clone(),
             )),
         }
@@ -1122,12 +1155,48 @@ fn build_values(
                         )
                     })?
                 }
+                Op::ResultOk { ok, err, .. } | Op::ResultErr { ok, err, .. } => {
+                    Type::Result(*ok, *err)
+                }
+                Op::ResultIsOk { .. } => Type::Bool,
+                Op::ResultUnwrap { value } => {
+                    let (ok, _) = result_elems(&types, *value, location)?;
+                    ok.ty()
+                }
+                Op::ResultUnwrapErr { value } => {
+                    let (_, err) = result_elems(&types, *value, location)?;
+                    err.ty()
+                }
                 other => operation_type(module, other, location)?,
             };
             record_type(&mut types, index, ty, location)?;
         }
     }
     Ok(ValueMaps { definitions, types })
+}
+
+/// Payloads `ok`/`err` do `result` definido por `value`, a partir do mapa de tipos.
+fn result_elems(
+    types: &[Option<Type>],
+    value: ValueId,
+    location: &Location,
+) -> Result<(ScalarKind, ScalarKind), RvmError> {
+    let index = value_index(value, location)?;
+    let ty = types.get(index).copied().flatten().ok_or_else(|| {
+        invalid(
+            ErrorCode::InvalidModule,
+            "tipo do result desconhecido".to_string(),
+            location.clone(),
+        )
+    })?;
+    match ty {
+        Type::Result(ok, err) => Ok((ok, err)),
+        _ => Err(invalid(
+            ErrorCode::InvalidType,
+            "result_unwrap sobre valor que não é result".to_string(),
+            location.clone(),
+        )),
+    }
 }
 
 /// Tipo do valor definido por uma operação.
@@ -1162,6 +1231,9 @@ fn operation_type(module: &Module, op: &Op, location: &Location) -> Result<Type,
         Op::OptionUnwrap { .. } => Ok(Type::I64),
         Op::Coalesce { .. } => Ok(Type::I64),
         Op::OptionEq { .. } | Op::OptionNe { .. } => Ok(Type::Bool),
+        Op::ResultOk { ok, err, .. } | Op::ResultErr { ok, err, .. } => Ok(Type::Result(*ok, *err)),
+        Op::ResultIsOk { .. } => Ok(Type::Bool),
+        Op::ResultUnwrap { .. } | Op::ResultUnwrapErr { .. } => Ok(Type::I64),
         Op::Call { callee, .. } => module
             .function(*callee)
             .map(|target| target.ret)

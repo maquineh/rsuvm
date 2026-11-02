@@ -1,0 +1,13 @@
+; id: C-054
+; expect: value str:falhou
+; extra: result_err e result_unwrap_err (ADR-0033)
+module c054 version 1
+entry f
+
+fn f() -> string {
+  entry:
+    v0 = const_str "falhou"
+    v1 = result_err i64 string v0
+    v2 = result_unwrap_err v1
+    return v2
+}

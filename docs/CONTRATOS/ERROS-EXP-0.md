@@ -40,6 +40,7 @@ humanas nunca são contrato.
 | `string_too_long` | trap | trap | concatenação acima de `max_string_bytes` (ADR-0025) | `rvm-interpreter` |
 | `index_out_of_bounds` | trap | trap | `array_get`/`array_set` com índice fora de `0..len` (ADR-0027/0028) | `rvm-interpreter` |
 | `unwrap_none` | trap | trap | `option_unwrap` sobre `none` (ADR-0030) | `rvm-interpreter` |
+| `unwrap_error` | trap | trap | `result_unwrap`/`result_unwrap_err` sobre a variante errada (ADR-0033) | `rvm-interpreter` |
 | `out_of_fuel` | resource | resource_limit | saldo de fuel insuficiente antes do despacho | `rvm-interpreter` |
 | `call_depth_exceeded` | resource | resource_limit | profundidade de chamadas excederia o limite | `rvm-interpreter` |
 | `out_of_memory` | resource | resource_limit | quota de memória modelada de frames excedida | `rvm-interpreter` |
@@ -93,6 +94,8 @@ aparecem durante a execução de um `VerifiedModule`.
 | N-038 `option_eq` de não-option | `invalid_type` | verificação |
 | N-039 `field_set` com valor de tipo errado | `invalid_type` | verificação |
 | N-040 `field_set` com campo inexistente | `invalid_type` | verificação |
+| N-041 `result_unwrap` de `err` | `unwrap_error` | execução (trap) |
+| N-042 `result_is_ok` de não-`result` | `invalid_type` | verificação |
 
 `invalid_module` também cobre limite estrutural excedido: a distinção entre
 "estrutura inválida" e "quota de execução" é feita por `class`, não pelo texto.

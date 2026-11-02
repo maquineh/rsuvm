@@ -910,6 +910,141 @@ impl<'a> Interpreter<'a> {
                     self.write_current(&mut stack, top, instr.def, Value::Bool(different), &site)?;
                     self.advance(&mut stack, top, &site)?;
                 }
+                Op::ResultOk { ok, err, value } => {
+                    let payload = {
+                        let frame = stack.get(top).ok_or_else(|| {
+                            error_at(
+                                ErrorCode::InvalidModule,
+                                "frame ausente ao construir result",
+                                &site,
+                            )
+                        })?;
+                        read_slot(frame, *value, &site)?
+                    };
+                    self.write_current(
+                        &mut stack,
+                        top,
+                        instr.def,
+                        Value::Result {
+                            ok: *ok,
+                            err: *err,
+                            value: Ok(Box::new(payload)),
+                        },
+                        &site,
+                    )?;
+                    self.advance(&mut stack, top, &site)?;
+                }
+                Op::ResultErr { ok, err, value } => {
+                    let payload = {
+                        let frame = stack.get(top).ok_or_else(|| {
+                            error_at(
+                                ErrorCode::InvalidModule,
+                                "frame ausente ao construir result",
+                                &site,
+                            )
+                        })?;
+                        read_slot(frame, *value, &site)?
+                    };
+                    self.write_current(
+                        &mut stack,
+                        top,
+                        instr.def,
+                        Value::Result {
+                            ok: *ok,
+                            err: *err,
+                            value: Err(Box::new(payload)),
+                        },
+                        &site,
+                    )?;
+                    self.advance(&mut stack, top, &site)?;
+                }
+                Op::ResultIsOk { value } => {
+                    let is_ok = {
+                        let frame = stack.get(top).ok_or_else(|| {
+                            error_at(
+                                ErrorCode::InvalidModule,
+                                "frame ausente ao testar result",
+                                &site,
+                            )
+                        })?;
+                        match read_slot(frame, *value, &site)? {
+                            Value::Result { value, .. } => value.is_ok(),
+                            _ => {
+                                return Err(error_at(
+                                    ErrorCode::InvalidModule,
+                                    format!("v{value} não é um result"),
+                                    &site,
+                                ))
+                            }
+                        }
+                    };
+                    self.write_current(&mut stack, top, instr.def, Value::Bool(is_ok), &site)?;
+                    self.advance(&mut stack, top, &site)?;
+                }
+                Op::ResultUnwrap { value } => {
+                    let payload = {
+                        let frame = stack.get(top).ok_or_else(|| {
+                            error_at(
+                                ErrorCode::InvalidModule,
+                                "frame ausente ao extrair result",
+                                &site,
+                            )
+                        })?;
+                        match read_slot(frame, *value, &site)? {
+                            Value::Result {
+                                value: Ok(inner), ..
+                            } => *inner,
+                            Value::Result { value: Err(_), .. } => {
+                                return Err(error_at(
+                                    ErrorCode::UnwrapError,
+                                    "result_unwrap sobre err".to_string(),
+                                    &site,
+                                ))
+                            }
+                            _ => {
+                                return Err(error_at(
+                                    ErrorCode::InvalidModule,
+                                    format!("v{value} não é um result"),
+                                    &site,
+                                ))
+                            }
+                        }
+                    };
+                    self.write_current(&mut stack, top, instr.def, payload, &site)?;
+                    self.advance(&mut stack, top, &site)?;
+                }
+                Op::ResultUnwrapErr { value } => {
+                    let payload = {
+                        let frame = stack.get(top).ok_or_else(|| {
+                            error_at(
+                                ErrorCode::InvalidModule,
+                                "frame ausente ao extrair result",
+                                &site,
+                            )
+                        })?;
+                        match read_slot(frame, *value, &site)? {
+                            Value::Result {
+                                value: Err(inner), ..
+                            } => *inner,
+                            Value::Result { value: Ok(_), .. } => {
+                                return Err(error_at(
+                                    ErrorCode::UnwrapError,
+                                    "result_unwrap_err sobre ok".to_string(),
+                                    &site,
+                                ))
+                            }
+                            _ => {
+                                return Err(error_at(
+                                    ErrorCode::InvalidModule,
+                                    format!("v{value} não é um result"),
+                                    &site,
+                                ))
+                            }
+                        }
+                    };
+                    self.write_current(&mut stack, top, instr.def, payload, &site)?;
+                    self.advance(&mut stack, top, &site)?;
+                }
                 Op::Call { callee, args } => {
                     let callee_function = self.callee(*callee, &site)?;
                     // O buffer de argumentos é cobrado antes de alocar (falha

@@ -411,11 +411,22 @@ inalterada), com verificação de campo/tipo e quota cumulativa `campos × 24`. 
 uma struct local não-aliasada (análise de aliasing generalizada); oráculo
 (`rsuvm-oracle14.lift`): `11 3 bia` — bate.
 
+### `Result` no núcleo (ADR-0033)
+
+Núcleo ganhou `Type::Result` (payloads escalares) e as operações `result_ok`,
+`result_err`, `result_is_ok`, `result_unwrap`, `result_unwrap_err` (trap
+`unwrap_error`); o enum escalar foi unificado em `ScalarKind` (`ArrayElem`/
+`OptionalElem` viraram aliases). Corpus `C-053`..`C-055`/`N-041`/`N-042`. O
+adaptador **não** constrói `Result` (não há fonte no subconjunto Lift: só
+`result.is_ok`/`unwrap`/`unwrap_err`, que exigem um valor de host); o **`Option`
+aninhado** fica adiado (exige payload não-escalar em `Type`, isto é, uma
+representação de tipos não-`Copy` ou uma tabela de tipos no módulo).
+
 ### Verificação (Resultado)
 
 | Comando | Resultado |
 |---|---|
-| `cargo test --workspace` | **148 passed, 0 failed**; corpus 52 válidos + 39 inválidos |
+| `cargo test --workspace` | **148 passed, 0 failed**; corpus 55 válidos + 41 inválidos |
 | `cargo test --manifest-path frontends/lift-rir/Cargo.toml` | 42 passed, 0 failed (33 diferencial + 9 CLI) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | exit 0 |
 | `cargo fmt --all -- --check` | exit 0 |

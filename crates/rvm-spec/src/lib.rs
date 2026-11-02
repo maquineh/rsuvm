@@ -33,106 +33,65 @@ use core::fmt;
 /// Módulos com outra versão são rejeitados com [`ErrorCode::UnsupportedVersion`].
 pub const IR_VERSION: u16 = 1;
 
-/// Tipo de elemento de um array (ADR-0027). Escalar; arrays aninhados ficam fora.
+/// Tipo escalar usado como elemento de array, payload de `option` e payload de
+/// `result` (mantém `Type: Copy`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum ArrayElem {
-    /// Elementos `bool`.
+pub enum ScalarKind {
+    /// Escalar `bool`.
     Bool,
-    /// Elementos `i64`.
+    /// Escalar `i64`.
     I64,
-    /// Elementos `string`.
+    /// Escalar `string`.
     Str,
-    /// Elementos `f64`.
+    /// Escalar `f64`.
     F64,
 }
 
-impl ArrayElem {
-    /// Tipo escalar do elemento.
+impl ScalarKind {
+    /// Tipo do escalar.
     #[must_use]
     pub const fn ty(self) -> Type {
         match self {
-            ArrayElem::Bool => Type::Bool,
-            ArrayElem::I64 => Type::I64,
-            ArrayElem::Str => Type::Str,
-            ArrayElem::F64 => Type::F64,
+            ScalarKind::Bool => Type::Bool,
+            ScalarKind::I64 => Type::I64,
+            ScalarKind::Str => Type::Str,
+            ScalarKind::F64 => Type::F64,
         }
     }
 
-    /// Nome estável do elemento.
+    /// Nome estável do escalar.
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
-            ArrayElem::Bool => "bool",
-            ArrayElem::I64 => "i64",
-            ArrayElem::Str => "string",
-            ArrayElem::F64 => "f64",
+            ScalarKind::Bool => "bool",
+            ScalarKind::I64 => "i64",
+            ScalarKind::Str => "string",
+            ScalarKind::F64 => "f64",
         }
     }
 
-    /// Elemento correspondente a um tipo escalar, se houver.
+    /// Escalar correspondente a um tipo escalar, se houver.
     #[must_use]
     pub const fn from_type(ty: Type) -> Option<Self> {
         match ty {
-            Type::Bool => Some(ArrayElem::Bool),
-            Type::I64 => Some(ArrayElem::I64),
-            Type::Str => Some(ArrayElem::Str),
-            Type::F64 => Some(ArrayElem::F64),
-            Type::Unit | Type::Array(_) | Type::Struct(_) | Type::Optional(_) => None,
+            Type::Bool => Some(ScalarKind::Bool),
+            Type::I64 => Some(ScalarKind::I64),
+            Type::Str => Some(ScalarKind::Str),
+            Type::F64 => Some(ScalarKind::F64),
+            Type::Unit
+            | Type::Array(_)
+            | Type::Struct(_)
+            | Type::Optional(_)
+            | Type::Result(..) => None,
         }
     }
 }
 
-/// Tipo de payload de um `option` escalar (ADR-0030).
-///
-/// Espelha [`ArrayElem`]: mantém `Type: Copy` ao limitar o payload a escalares
-/// (`bool`/`i64`/`string`/`f64`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum OptionalElem {
-    /// Payload `bool`.
-    Bool,
-    /// Payload `i64`.
-    I64,
-    /// Payload `string`.
-    Str,
-    /// Payload `f64`.
-    F64,
-}
+/// Elemento de um array (ADR-0027). Escalar; arrays aninhados ficam fora.
+pub type ArrayElem = ScalarKind;
 
-impl OptionalElem {
-    /// Tipo escalar do payload.
-    #[must_use]
-    pub const fn ty(self) -> Type {
-        match self {
-            OptionalElem::Bool => Type::Bool,
-            OptionalElem::I64 => Type::I64,
-            OptionalElem::Str => Type::Str,
-            OptionalElem::F64 => Type::F64,
-        }
-    }
-
-    /// Nome estável do payload.
-    #[must_use]
-    pub const fn name(self) -> &'static str {
-        match self {
-            OptionalElem::Bool => "bool",
-            OptionalElem::I64 => "i64",
-            OptionalElem::Str => "string",
-            OptionalElem::F64 => "f64",
-        }
-    }
-
-    /// Payload correspondente a um tipo escalar, se houver.
-    #[must_use]
-    pub const fn from_type(ty: Type) -> Option<Self> {
-        match ty {
-            Type::Bool => Some(OptionalElem::Bool),
-            Type::I64 => Some(OptionalElem::I64),
-            Type::Str => Some(OptionalElem::Str),
-            Type::F64 => Some(OptionalElem::F64),
-            Type::Unit | Type::Array(_) | Type::Struct(_) | Type::Optional(_) => None,
-        }
-    }
-}
+/// Payload de um `option` (ADR-0030). Escalar.
+pub type OptionalElem = ScalarKind;
 
 /// Identificador denso de uma struct declarada no módulo (ADR-0029).
 pub type StructId = u32;
@@ -165,6 +124,8 @@ pub enum Type {
     Struct(StructId),
     /// Valor opcional de payload escalar (`T?`, ADR-0030).
     Optional(OptionalElem),
+    /// Resultado com payloads `ok`/`err` escalares (`Result<T, E>`, ADR-0033).
+    Result(ScalarKind, ScalarKind),
 }
 
 impl Type {
@@ -180,6 +141,7 @@ impl Type {
             Type::Array(_) => "array",
             Type::Struct(_) => "struct",
             Type::Optional(_) => "option",
+            Type::Result(..) => "result",
         }
     }
 
@@ -626,6 +588,9 @@ pub enum ErrorCode {
     IndexOutOfBounds,
     /// `option_unwrap`/`option.unwrap` sobre `none` (`unwrap_none`, ADR-0030).
     UnwrapNone,
+    /// `result_unwrap`/`result_unwrap_err` sobre a variante errada
+    /// (`unwrap_error`, ADR-0033).
+    UnwrapError,
     /// Fuel esgotado antes do despacho.
     OutOfFuel,
     /// Profundidade máxima de chamadas excedida.
@@ -658,6 +623,7 @@ impl ErrorCode {
             ErrorCode::StringTooLong => "string_too_long",
             ErrorCode::IndexOutOfBounds => "index_out_of_bounds",
             ErrorCode::UnwrapNone => "unwrap_none",
+            ErrorCode::UnwrapError => "unwrap_error",
             ErrorCode::OutOfFuel => "out_of_fuel",
             ErrorCode::CallDepthExceeded => "call_depth_exceeded",
             ErrorCode::OutOfMemory => "out_of_memory",
@@ -688,6 +654,7 @@ impl ErrorCode {
             "string_too_long" => Some(ErrorCode::StringTooLong),
             "index_out_of_bounds" => Some(ErrorCode::IndexOutOfBounds),
             "unwrap_none" => Some(ErrorCode::UnwrapNone),
+            "unwrap_error" => Some(ErrorCode::UnwrapError),
             "out_of_fuel" => Some(ErrorCode::OutOfFuel),
             "call_depth_exceeded" => Some(ErrorCode::CallDepthExceeded),
             "out_of_memory" => Some(ErrorCode::OutOfMemory),
@@ -716,7 +683,8 @@ impl ErrorCode {
             | ErrorCode::InvalidShift
             | ErrorCode::StringTooLong
             | ErrorCode::IndexOutOfBounds
-            | ErrorCode::UnwrapNone => ErrorCategory::Trap,
+            | ErrorCode::UnwrapNone
+            | ErrorCode::UnwrapError => ErrorCategory::Trap,
             ErrorCode::OutOfFuel | ErrorCode::CallDepthExceeded | ErrorCode::OutOfMemory => {
                 ErrorCategory::Resource
             }

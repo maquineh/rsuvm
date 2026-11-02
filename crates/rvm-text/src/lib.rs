@@ -58,8 +58,8 @@ use rvm_ir::{
     StructDef, Terminator, ValueId,
 };
 use rvm_spec::{
-    BinOp, CmpOp, ErrorCode, FloatOp, Limits, Location, OptionalElem, RvmError, StructId, Type,
-    IR_VERSION,
+    BinOp, CmpOp, ErrorCode, FloatOp, Limits, Location, OptionalElem, RvmError, ScalarKind,
+    StructId, Type, IR_VERSION,
 };
 
 /// Converte o texto experimental em um módulo RIR estruturalmente válido.
@@ -248,6 +248,12 @@ fn print_type(module: &Module, ty: Type, out: &mut String) {
             out.push_str("option ");
             out.push_str(elem.name());
         }
+        Type::Result(ok, err) => {
+            out.push_str("result ");
+            out.push_str(ok.name());
+            out.push(' ');
+            out.push_str(err.name());
+        }
         other => out.push_str(other.name()),
     }
 }
@@ -393,6 +399,34 @@ fn print_op(module: &Module, function: &Function, op: &Op, out: &mut String) {
             print_value(function, *lhs, out);
             out.push_str(", ");
             print_value(function, *rhs, out);
+        }
+        Op::ResultOk { ok, err, value } => {
+            out.push_str("result_ok ");
+            out.push_str(ok.name());
+            out.push(' ');
+            out.push_str(err.name());
+            out.push(' ');
+            print_value(function, *value, out);
+        }
+        Op::ResultErr { ok, err, value } => {
+            out.push_str("result_err ");
+            out.push_str(ok.name());
+            out.push(' ');
+            out.push_str(err.name());
+            out.push(' ');
+            print_value(function, *value, out);
+        }
+        Op::ResultIsOk { value } => {
+            out.push_str("result_is_ok ");
+            print_value(function, *value, out);
+        }
+        Op::ResultUnwrap { value } => {
+            out.push_str("result_unwrap ");
+            print_value(function, *value, out);
+        }
+        Op::ResultUnwrapErr { value } => {
+            out.push_str("result_unwrap_err ");
+            print_value(function, *value, out);
         }
         Op::Bin { op, lhs, rhs } => {
             out.push_str(op.name());
@@ -791,6 +825,11 @@ enum RawOp {
     Coalesce(String, String),
     OptionEq(String, String),
     OptionNe(String, String),
+    ResultOk(ScalarKind, ScalarKind, String),
+    ResultErr(ScalarKind, ScalarKind, String),
+    ResultIsOk(String),
+    ResultUnwrap(String),
+    ResultUnwrapErr(String),
     Call(String, Vec<String>),
 }
 
@@ -947,6 +986,25 @@ impl Parser {
                 .at(Location::Module)
             })?;
             return Ok(Type::Optional(elem));
+        }
+        if name == "result" {
+            let ok = self.expect_ident("payload ok após `result`")?;
+            let err = self.expect_ident("payload err após `result`")?;
+            let ok = optional_elem_from_name(&ok).ok_or_else(|| {
+                RvmError::new(
+                    ErrorCode::UnknownType,
+                    format!("payload ok de result desconhecido `{ok}`"),
+                )
+                .at(Location::Module)
+            })?;
+            let err = optional_elem_from_name(&err).ok_or_else(|| {
+                RvmError::new(
+                    ErrorCode::UnknownType,
+                    format!("payload err de result desconhecido `{err}`"),
+                )
+                .at(Location::Module)
+            })?;
+            return Ok(Type::Result(ok, err));
         }
         Type::from_name(&name).ok_or_else(|| {
             RvmError::new(
@@ -1324,6 +1382,25 @@ impl Parser {
                 let rhs = self.expect_ident("operando direito")?;
                 RawOp::OptionNe(lhs, rhs)
             }
+            "result_ok" | "result_err" => {
+                let kind = self.expect_ident("payload ok do result")?;
+                let ok = optional_elem_from_name(&kind).ok_or_else(|| {
+                    self.syntax(format!("payload ok de result desconhecido `{kind}`"))
+                })?;
+                let kind = self.expect_ident("payload err do result")?;
+                let err = optional_elem_from_name(&kind).ok_or_else(|| {
+                    self.syntax(format!("payload err de result desconhecido `{kind}`"))
+                })?;
+                let value = self.expect_ident("valor do result")?;
+                if op_name == "result_ok" {
+                    RawOp::ResultOk(ok, err, value)
+                } else {
+                    RawOp::ResultErr(ok, err, value)
+                }
+            }
+            "result_is_ok" => RawOp::ResultIsOk(self.expect_ident("operando result")?),
+            "result_unwrap" => RawOp::ResultUnwrap(self.expect_ident("operando result")?),
+            "result_unwrap_err" => RawOp::ResultUnwrapErr(self.expect_ident("operando result")?),
             "call_static" => {
                 let callee = self.expect_ident("nome da função chamada")?;
                 self.expect_token(Token::LParen, "`(` na chamada")?;
@@ -1775,6 +1852,25 @@ fn lower_op(
         RawOp::OptionNe(lhs, rhs) => Op::OptionNe {
             lhs: value(lhs)?,
             rhs: value(rhs)?,
+        },
+        RawOp::ResultOk(ok, err, operand) => Op::ResultOk {
+            ok: *ok,
+            err: *err,
+            value: value(operand)?,
+        },
+        RawOp::ResultErr(ok, err, operand) => Op::ResultErr {
+            ok: *ok,
+            err: *err,
+            value: value(operand)?,
+        },
+        RawOp::ResultIsOk(operand) => Op::ResultIsOk {
+            value: value(operand)?,
+        },
+        RawOp::ResultUnwrap(operand) => Op::ResultUnwrap {
+            value: value(operand)?,
+        },
+        RawOp::ResultUnwrapErr(operand) => Op::ResultUnwrapErr {
+            value: value(operand)?,
         },
         RawOp::Bin(op, lhs, rhs) => Op::Bin {
             op: *op,

@@ -1,0 +1,13 @@
+; id: N-041
+; expect: trap unwrap_error
+; extra: result_unwrap sobre err produz o trap unwrap_error (ADR-0033)
+module n041 version 1
+entry f
+
+fn f() -> i64 {
+  entry:
+    v0 = const_str "e"
+    v1 = result_err i64 string v0
+    v2 = result_unwrap v1
+    return v2
+}

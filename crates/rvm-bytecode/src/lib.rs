@@ -54,6 +54,7 @@ const TAG_F64: u8 = 4;
 const TAG_ARRAY: u8 = 5;
 const TAG_STRUCT: u8 = 6;
 const TAG_OPTIONAL: u8 = 7;
+const TAG_RESULT: u8 = 8;
 
 // Opcodes de instrução (tabela de `BYTECODE-EXP-0-IMPLEMENTACAO.md` §1).
 const OP_CONST_I64: u8 = 0;
@@ -105,6 +106,11 @@ const OP_COALESCE: u8 = 45;
 const OP_OPTION_EQ: u8 = 46;
 const OP_OPTION_NE: u8 = 47;
 const OP_FIELD_SET: u8 = 48;
+const OP_RESULT_OK: u8 = 49;
+const OP_RESULT_ERR: u8 = 50;
+const OP_RESULT_IS_OK: u8 = 51;
+const OP_RESULT_UNWRAP: u8 = 52;
+const OP_RESULT_UNWRAP_ERR: u8 = 53;
 
 // Tipos de terminador (tabela de `BYTECODE-EXP-0-IMPLEMENTACAO.md` §1).
 const TERM_RETURN: u8 = 0;
@@ -403,6 +409,30 @@ fn encode_instr(out: &mut Vec<u8>, instr: &Instr) {
             push_u32(out, *lhs);
             push_u32(out, *rhs);
         }
+        Op::ResultOk { ok, err, value } => {
+            push_u8(out, OP_RESULT_OK);
+            push_u8(out, optional_elem_tag(*ok));
+            push_u8(out, optional_elem_tag(*err));
+            push_u32(out, *value);
+        }
+        Op::ResultErr { ok, err, value } => {
+            push_u8(out, OP_RESULT_ERR);
+            push_u8(out, optional_elem_tag(*ok));
+            push_u8(out, optional_elem_tag(*err));
+            push_u32(out, *value);
+        }
+        Op::ResultIsOk { value } => {
+            push_u8(out, OP_RESULT_IS_OK);
+            push_u32(out, *value);
+        }
+        Op::ResultUnwrap { value } => {
+            push_u8(out, OP_RESULT_UNWRAP);
+            push_u32(out, *value);
+        }
+        Op::ResultUnwrapErr { value } => {
+            push_u8(out, OP_RESULT_UNWRAP_ERR);
+            push_u32(out, *value);
+        }
         Op::Bin { op, lhs, rhs } => {
             push_u8(out, bin_opcode(*op));
             push_u32(out, *lhs);
@@ -653,6 +683,25 @@ fn read_instr(reader: &mut Reader<'_>, limits: &Limits) -> Result<Instr, RvmErro
             lhs: reader.read_u32("operando esquerdo de option_ne")?,
             rhs: reader.read_u32("operando direito de option_ne")?,
         },
+        OP_RESULT_OK | OP_RESULT_ERR => {
+            let ok = read_optional_elem(reader, "payload ok de result")?;
+            let err = read_optional_elem(reader, "payload err de result")?;
+            let value = reader.read_u32("valor de result")?;
+            if opcode == OP_RESULT_OK {
+                Op::ResultOk { ok, err, value }
+            } else {
+                Op::ResultErr { ok, err, value }
+            }
+        }
+        OP_RESULT_IS_OK => Op::ResultIsOk {
+            value: reader.read_u32("operando result_is_ok")?,
+        },
+        OP_RESULT_UNWRAP => Op::ResultUnwrap {
+            value: reader.read_u32("operando result_unwrap")?,
+        },
+        OP_RESULT_UNWRAP_ERR => Op::ResultUnwrapErr {
+            value: reader.read_u32("operando result_unwrap_err")?,
+        },
         OP_ADD_I64_CHECKED => read_bin_operands(reader, BinOp::AddI64Checked)?,
         OP_SUB_I64_CHECKED => read_bin_operands(reader, BinOp::SubI64Checked)?,
         OP_MUL_I64_CHECKED => read_bin_operands(reader, BinOp::MulI64Checked)?,
@@ -758,6 +807,11 @@ fn read_type(reader: &mut Reader<'_>, what: &'static str) -> Result<Type, RvmErr
             reader,
             "elemento do tipo option",
         )?)),
+        TAG_RESULT => {
+            let ok = read_optional_elem(reader, "payload ok do tipo result")?;
+            let err = read_optional_elem(reader, "payload err do tipo result")?;
+            Ok(Type::Result(ok, err))
+        }
         tag => Err(decode_error(
             ErrorCode::UnknownType,
             format!("{what}: tag de tipo {tag} desconhecida"),
@@ -776,17 +830,22 @@ const fn type_tag(ty: Type) -> u8 {
         Type::Array(_) => TAG_ARRAY,
         Type::Struct(_) => TAG_STRUCT,
         Type::Optional(_) => TAG_OPTIONAL,
+        Type::Result(..) => TAG_RESULT,
     }
 }
 
-/// Escreve um [`Type`]; arrays escrevem a tag do elemento, structs o id e
-/// optionals a tag do payload.
+/// Escreve um [`Type`]; arrays escrevem a tag do elemento, structs o id,
+/// optionals a tag do payload e results as duas tags de payload.
 fn push_type(out: &mut Vec<u8>, ty: Type) {
     push_u8(out, type_tag(ty));
     match ty {
         Type::Array(element) => push_u8(out, type_tag(element.ty())),
         Type::Struct(id) => push_u32(out, id),
         Type::Optional(elem) => push_u8(out, optional_elem_tag(elem)),
+        Type::Result(ok, err) => {
+            push_u8(out, optional_elem_tag(ok));
+            push_u8(out, optional_elem_tag(err));
+        }
         _ => {}
     }
 }

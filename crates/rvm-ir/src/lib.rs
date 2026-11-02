@@ -32,7 +32,7 @@
     )
 )]
 
-use rvm_spec::{ArrayElem, BinOp, CmpOp, FloatOp, OptionalElem, StructId, Type};
+use rvm_spec::{ArrayElem, BinOp, CmpOp, FloatOp, OptionalElem, ScalarKind, StructId, Type};
 
 pub mod structure;
 #[cfg(any(test, feature = "test-helpers"))]
@@ -328,6 +328,41 @@ pub enum Op {
         /// Operando direito.
         rhs: ValueId,
     },
+    /// Constrói um `result` com a variante `ok` (`result_ok`), ADR-0033.
+    ResultOk {
+        /// Tipo do payload `ok`.
+        ok: ScalarKind,
+        /// Tipo do payload `err`.
+        err: ScalarKind,
+        /// Valor `ok` (no tipo `ok`).
+        value: ValueId,
+    },
+    /// Constrói um `result` com a variante `err` (`result_err`), ADR-0033.
+    ResultErr {
+        /// Tipo do payload `ok`.
+        ok: ScalarKind,
+        /// Tipo do payload `err`.
+        err: ScalarKind,
+        /// Valor `err` (no tipo `err`).
+        value: ValueId,
+    },
+    /// Testa se um `result` é `ok` (`result_is_ok`), ADR-0033.
+    ResultIsOk {
+        /// Operando `result`.
+        value: ValueId,
+    },
+    /// Extrai o payload `ok` (`result_unwrap`); `err` produz o trap
+    /// `unwrap_error`, ADR-0033.
+    ResultUnwrap {
+        /// Operando `result`.
+        value: ValueId,
+    },
+    /// Extrai o payload `err` (`result_unwrap_err`); `ok` produz o trap
+    /// `unwrap_error`, ADR-0033.
+    ResultUnwrapErr {
+        /// Operando `result`.
+        value: ValueId,
+    },
     /// Chama estaticamente uma função do mesmo módulo (`call_static`).
     Call {
         /// Função chamada; resolvida estaticamente pelo verificador.
@@ -372,6 +407,10 @@ impl Op {
             Op::OptionUnwrap { .. } => Type::I64,
             Op::Coalesce { .. } => Type::I64,
             Op::OptionEq { .. } | Op::OptionNe { .. } => Type::Bool,
+            Op::ResultOk { ok, err, .. } | Op::ResultErr { ok, err, .. } => Type::Result(*ok, *err),
+            Op::ResultIsOk { .. } => Type::Bool,
+            // Resolvidos pelo verificador a partir do `result`.
+            Op::ResultUnwrap { .. } | Op::ResultUnwrapErr { .. } => Type::I64,
             Op::Call { .. } => Type::I64, // substituído pelo tipo de retorno no verificador
         }
     }
@@ -408,6 +447,10 @@ impl Op {
             }
             Op::Coalesce { option, fallback } => vec![*option, *fallback],
             Op::OptionEq { lhs, rhs } | Op::OptionNe { lhs, rhs } => vec![*lhs, *rhs],
+            Op::ResultOk { value, .. } | Op::ResultErr { value, .. } => vec![*value],
+            Op::ResultIsOk { value }
+            | Op::ResultUnwrap { value }
+            | Op::ResultUnwrapErr { value } => vec![*value],
             Op::Call { args, .. } => args.clone(),
         }
     }
@@ -542,7 +585,9 @@ impl Function {
                         | Op::FieldSet { .. }
                         | Op::OptionSome { .. }
                         | Op::OptionUnwrap { .. }
-                        | Op::Coalesce { .. } => None,
+                        | Op::Coalesce { .. }
+                        | Op::ResultUnwrap { .. }
+                        | Op::ResultUnwrapErr { .. } => None,
                         op => Some(op.result_type()),
                     };
                 }
