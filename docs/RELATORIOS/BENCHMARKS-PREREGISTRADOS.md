@@ -133,3 +133,14 @@ resultados (dev e runner) estão registrados acima.
    confirmar a estabilidade de H06.
 2. Se o caso de uso for carga única, medir o custo total de ligação + execução.
 3. Manter os limiares da seção 3 sem ajuste pós-hoc.
+
+## 8. Reexecução pós ADR-0034/0035 (2026-11-02)
+
+O benchmark foi reexecutado no commit `89c21dc` (tabela de tipos + quota retida),
+com o mesmo método e limiares. Nesta máquina de desenvolvimento, duas execuções
+deram dispersão de 57,8% e 31,8% no ponto classificador e **H06 ficou
+inconclusiva**; o custo de ligação ficou em ≈24–26 µs. Números completos e
+limitações em
+[`BENCHMARK-REEXECUCAO-2026-11-02.md`](./BENCHMARK-REEXECUCAO-2026-11-02.md).
+A confirmação anterior no runner dedicado (`bench.yml`, run `41429076866`) não é
+substituída por uma medição não isolada; para reclassificar, rode o workflow.

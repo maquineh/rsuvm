@@ -110,8 +110,10 @@ cargo run -p rvm-cli -- check examples/soma.rvm
   isolamento de processo/OS; uso multi-tenant hostil exigiria isolamento externo
   revisado.
 - "Zero panic no corpus" descreve a rodada de testes, não ausência de
-  vulnerabilidade. Fuzzing de campanha, benchmark e auditoria independente **não**
-  foram executados.
+  vulnerabilidade. Fuzzing de campanha e auditoria independente **não** foram
+  executados. O benchmark pré-registrado tem medições registradas (runner dedicado
+  e reexecução local pós ADR-0034/0035); ver
+  [BENCHMARKS-PREREGISTRADOS](./docs/RELATORIOS/BENCHMARKS-PREREGISTRADOS.md).
 - Integração Lift/Rio **não** foi feita: bloqueios técnicos registrados em
   [BASELINE-RIO](./docs/RELATORIOS/BASELINE-RIO.md) e
   [BASELINE-LIFT](./docs/RELATORIOS/BASELINE-LIFT.md). As licenças de Rio e Lift

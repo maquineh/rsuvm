@@ -211,6 +211,10 @@ executados.
    slot e a liberá-los ao sobrescrever/retornar; buffers transitórios continuam
    contados (ADR-0016).
 2. **Sem benchmark**: H06 e qualquer alegação de desempenho continuam sem medição.
+   **Atualização:** o benchmark pré-registrado foi executado depois (runner
+   dedicado e reexecução local); ver `BENCHMARKS-PREREGISTRADOS.md` §5/§8 e
+   `BENCHMARK-REEXECUCAO-2026-11-02.md`. A reexecução local pós ADR-0034/0035
+   ficou inconclusiva por dispersão; a confirmação de H06 é a do runner.
 3. **Fuzzing limitado e determinístico**: 10 módulos × 200 mutações (bytecode) e
    10 × 200 (texto); não é campanha e não prova ausência de bugs.
 4. **Sem revisão independente ou auditoria** de segurança.

@@ -461,6 +461,16 @@ passam a ser limitados pela memória viva. Corpus `C-061` (100 iterações, 8 by
 por iteração, `memory: 700`); `N-028` continua trapando. `memory_peak` passa a ser
 pico de memória viva.
 
+### Benchmark pré-registrado — reexecução (item 2)
+
+O benchmark de chamada (`cargo bench -p rvm-interpreter --bench chamada`) foi
+reexecutado no commit `89c21dc` (ADR-0034/0035), com o método e limiares
+inalterados. Nesta máquina (Windows, i7-9700, rustc 1.94.1), duas execuções deram
+dispersão de 57,8% e 31,8% no ponto classificador: **H06 inconclusiva**; custo de
+ligação ≈24–26 µs. A confirmação anterior em runner dedicado (`bench.yml`, run
+`41429076866`, dispersão 1,33%) permanece como referência. Relatório:
+`docs/RELATORIOS/BENCHMARK-REEXECUCAO-2026-11-02.md`.
+
 ### Verificação (Resultado)
 
 | Comando | Resultado |
