@@ -33,11 +33,9 @@
 | Documentação extensa: `README.md` 94.870 B, `DESIGN.md` 65.093 B, `VALIDATION.md` 123.268 B, `CHANGELOG.md` 34.410 B | raiz |
 | Nenhum `unsafe` em `src/*.rs` (0 ocorrências) | contagem por `Select-String -Pattern '\bunsafe\b'` |
 
-**Licença:** declarada pelo mantenedor em 2026-11-02 (`MIT OR Apache-2.0`,
-commit `fb1a310` na branch `chore/licenca-mit-apache`). O push para o remoto
-interno (`git.prodam.am.gov.br`) ficou pendente — a rede não resolve fora da
-Prodam. Na auditoria original a licença era desconhecida; o bloqueio de licença
-foi **resolvido** pelo titular dos direitos.
+**Licença:** declarada pelo mantenedor em 2026-11-02 (`MIT OR Apache-2.0`) e
+**publicada** em `main` (commit `fb1a310`). Na auditoria original a licença era
+desconhecida; o bloqueio de licença foi **resolvido** pelo titular dos direitos.
 
 ## 2. Estrutura e dependências
 
@@ -132,9 +130,9 @@ clone local.
    tipos de `ast.rs` são `pub(super)` (`lib.rs:7-25`, `ast.rs:1-6`). A única
    entrada pública é `compile()` → `String` (Rust). Um adaptador dentro do crate
    `rsuvm` não consegue consumir a AST sem alterar o Rio ou duplicar lexer/parser.
-2. **Licença — resolvida.** Declarada `MIT OR Apache-2.0` pelo mantenedor
-   (commit `fb1a310`); o reuso passa a ser permitido sob esses termos. Resta
-   apenas publicar a branch no remoto interno.
+2. **Licença — resolvida e publicada.** Declarada `MIT OR Apache-2.0` pelo
+   mantenedor (commit `fb1a310` em `main`); o reuso passa a ser permitido sob
+   esses termos.
 3. **Modelo de execução é compilação nativa + processo.** `run` compila com
    `rustc` e executa o binário (`main.rs:115-125, 226-271`). Isso não é sandbox, não
    é trap de VM e não permite impostar fuel/profundidade: um adaptador não pode
