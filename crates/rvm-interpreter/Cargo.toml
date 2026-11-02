@@ -15,6 +15,7 @@ rvm-verify.workspace = true
 
 [dev-dependencies]
 rvm-ir = { workspace = true, features = ["test-helpers"] }
+rvm-link.workspace = true
 
 # Micro-benchmark pré-registrado de custo de chamada (docs/RELATORIOS/
 # BENCHMARKS-PREREGISTRADOS.md). Não roda em CI; sem dependências externas.

@@ -19,20 +19,22 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use rvm_ir::{testing, BranchTarget, Instr, Module, Op, Terminator};
+use rvm_ir::{testing, Block, BranchTarget, Function, Instr, Module, Op, Param, Terminator};
 use rvm_runtime::{CallDepthLimit, ExecConfig};
 use rvm_spec::{BinOp, CmpOp, Limits, Type};
 
 /// Sementes fixas do xorshift; a campanha é reprodutível e sem relógio.
-const SEEDS: [u64; 4] = [
+const SEEDS: [u64; 6] = [
     0x2545_F491_4F6C_DD1D,
     0x9E37_79B9_7F4A_7C15,
     0xD1B5_4A32_D192_ED03,
     0x0123_4567_89AB_CDEF,
+    0xA076_1D64_78BD_642F,
+    0xE703_7ED1_A0B4_28DB,
 ];
 
 /// Mutações por base e por semente.
-const MUTACOES: u64 = 100;
+const MUTACOES: u64 = 200;
 
 fn next(state: &mut u64) -> u64 {
     let mut value = *state;
@@ -336,6 +338,140 @@ fn campanha_verificador_nao_causa_panico() {
     eprintln!(
         "campanha_verificador: total={total} aceitos_pelo_verificador={aceitos} \
          seeds={} bases={} mutacoes={MUTACOES}",
+        SEEDS.len(),
+        bases.len()
+    );
+}
+
+/// Módulo provedor com uma função concreta `alvo(a, b) = a + b`.
+fn modulo_provedor() -> Module {
+    Module {
+        name: "prov".to_string(),
+        version: rvm_spec::IR_VERSION,
+        entry: 0,
+        functions: vec![Function {
+            id: 0,
+            name: "alvo".to_string(),
+            params: vec![
+                Param {
+                    name: "a".to_string(),
+                    ty: Type::I64,
+                },
+                Param {
+                    name: "b".to_string(),
+                    ty: Type::I64,
+                },
+            ],
+            ret: Type::I64,
+            entry: 0,
+            blocks: vec![Block {
+                id: 0,
+                label: "entry".to_string(),
+                params: Vec::new(),
+                instrs: vec![Instr {
+                    def: 2,
+                    op: Op::Bin {
+                        op: BinOp::AddI64Checked,
+                        lhs: 0,
+                        rhs: 1,
+                    },
+                }],
+                term: Terminator::Return(Some(2)),
+            }],
+        }],
+    }
+}
+
+/// Módulo com `main` chamando a externa `alvo` (id 1, sem corpo).
+fn modulo_com_import() -> Module {
+    Module {
+        name: "app".to_string(),
+        version: rvm_spec::IR_VERSION,
+        entry: 0,
+        functions: vec![
+            Function {
+                id: 0,
+                name: "main".to_string(),
+                params: Vec::new(),
+                ret: Type::I64,
+                entry: 0,
+                blocks: vec![Block {
+                    id: 0,
+                    label: "entry".to_string(),
+                    params: Vec::new(),
+                    instrs: vec![
+                        Instr {
+                            def: 0,
+                            op: Op::ConstI64(1),
+                        },
+                        Instr {
+                            def: 1,
+                            op: Op::ConstI64(2),
+                        },
+                        Instr {
+                            def: 2,
+                            op: Op::Call {
+                                callee: 1,
+                                args: vec![0, 1],
+                            },
+                        },
+                    ],
+                    term: Terminator::Return(Some(2)),
+                }],
+            },
+            Function {
+                id: 1,
+                name: "alvo".to_string(),
+                params: Vec::new(),
+                ret: Type::Unit,
+                entry: 0,
+                blocks: Vec::new(),
+            },
+        ],
+    }
+}
+
+#[test]
+fn campanha_linker_nao_causa_panico() {
+    let limits = Limits::default();
+    let mut bases = modulos_base();
+    bases.push(modulo_com_import());
+    let config = ExecConfig::new(300, CallDepthLimit::new(16).expect("limite válido"));
+
+    let mut total = 0_u64;
+    let mut ligados = 0_u64;
+    for seed in SEEDS {
+        let mut state = seed;
+        for base in &bases {
+            for _ in 0..MUTACOES {
+                let mut app = base.clone();
+                mutar(&mut app, &mut state);
+                let mut prov = modulo_provedor();
+                mutar(&mut prov, &mut state);
+                if app.name == prov.name {
+                    app.name = format!("{}_a", app.name);
+                }
+                if let Ok(linked) = rvm_link::link(&[app, prov], 0, 0, &limits) {
+                    if let Ok(verified) = rvm_verify::VerifiedModule::verify(linked, &limits) {
+                        ligados += 1;
+                        let _ = rvm_interpreter::execute(&verified, verified.entry(), &[], &config);
+                    }
+                }
+                total += 1;
+            }
+        }
+    }
+    assert_eq!(
+        total,
+        SEEDS.len() as u64 * bases.len() as u64 * MUTACOES,
+        "orçamento do linker não cumprido"
+    );
+    assert!(
+        ligados > 0,
+        "nenhuma ligação foi aceita; campanha do linker degenerada"
+    );
+    eprintln!(
+        "campanha_linker: total={total} ligados={ligados} seeds={} bases={} mutacoes={MUTACOES}",
         SEEDS.len(),
         bases.len()
     );

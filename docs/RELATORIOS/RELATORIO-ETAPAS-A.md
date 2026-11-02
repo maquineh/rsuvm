@@ -203,5 +203,37 @@ executar o benchmark (B2).
 
 ## B2 — Fuzzing e benchmark ampliados
 
-A preencher na etapa B2 (fuzzing guiado por cobertura com ADR de dependência de
-desenvolvimento; execução do benchmark inter-módulo pré-registrado).
+Lacunas remanescentes de §9: fuzzing limitado (3, 8) e H06/H03 sem medição (2).
+Decisão de fuzzing em `docs/ADRs/ADR-0019-ESTRATEGIA-DE-FUZZING.md`.
+
+### Entregue
+
+- **Fuzzing ampliado** (`crates/rvm-conformance/tests/fuzzing.rs`): 6 sementes
+  (antes 4) × 200 mutações (antes 100) em **quatro** alvos — parser textual,
+  decoder binário, verificador e **linker** (`rvm-link`).
+- **Benchmark inter-módulo** (`crates/rvm-interpreter/benches/chamada.rs`): mede a
+  variante inter (via `rvm-link`) contra a intra, com 7 amostras × 5 000 execuções,
+  mediana e dispersão, e aplica o limiar pré-registrado.
+- Registros atualizados: `docs/RELATORIOS/FUZZING-EXP-0.md` e
+  `docs/RELATORIOS/BENCHMARKS-PREREGISTRADOS.md`.
+
+### Verificação (Resultado)
+
+| Comando | Resultado |
+|---|---|
+| `cargo test -p rvm-conformance --test fuzzing` | 4 passed; texto 22 800, bytecode 33 600, verificador 33 600 (8 599 aceitos), linker 34 800 (5 160 ligados), **0 pânico** |
+| `cargo bench -p rvm-interpreter --bench chamada` | executou; H06 **inconclusiva** (dispersão 38,8% > 10%); custo de ligação ≈ 46 420 ns |
+| `cargo test --workspace` | **144 passed, 0 failed** |
+| `cargo clippy --workspace --all-targets -- -D warnings` | exit 0 |
+| `cargo fmt --all -- --check` | exit 0 |
+
+### Resultado por hipótese
+
+- **H03 — confirmada estruturalmente**: a ligação estática resolve `call_static`
+  para índice global; não há serialização por chamada (ADR-0018).
+- **H06 — inconclusiva**: a dispersão da medição nesta máquina excedeu o limiar
+  pré-registrado de 10%; nenhum limiar foi ajustado. Classificação exige runner
+  isolado ou mais amostras.
+
+Limites: fuzzing **não** guiado por cobertura (ADR-0019); H06 pendente de medição
+estável.

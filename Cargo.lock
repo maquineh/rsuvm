@@ -42,6 +42,7 @@ name = "rvm-interpreter"
 version = "0.1.0"
 dependencies = [
  "rvm-ir",
+ "rvm-link",
  "rvm-runtime",
  "rvm-spec",
  "rvm-verify",

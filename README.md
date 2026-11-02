@@ -96,7 +96,7 @@ cargo run -p rvm-cli -- check examples/soma.rvm
   rodam `fmt --check`, `clippy -D warnings`, `test` e `test --release`; Windows é
   opcional por regra.
 - Resultados atuais e log bruto: [RELATORIO-IMPLEMENTACAO](./docs/RELATORIOS/RELATORIO-IMPLEMENTACAO.md)
-  e [EVIDENCIAS-EXECUCAO](./docs/RELATORIOS/EVIDENCIAS-EXECUCAO.md): 143 testes
+  e [EVIDENCIAS-EXECUCAO](./docs/RELATORIOS/EVIDENCIAS-EXECUCAO.md): 144 testes
   verdes, 19 casos válidos + 23 inválidos no corpus.
 
 ## Segurança (limites declarados)

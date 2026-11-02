@@ -8,26 +8,21 @@
 
 ## 1. Hipóteses
 
-| ID | Hipótese (relatório §7) | Estado atual |
+| ID | Hipótese (relatório §7) | Estado após B2 |
 |---|---|---|
-| H03 | chamada inter-módulo sem serialização geral | **não testada** |
-| H06 | custo de chamada inter-módulo ≤ 25% | **não medida** |
+| H03 | chamada inter-módulo sem serialização geral | **confirmada estruturalmente** (ADR-0018) |
+| H06 | custo de chamada inter-módulo ≤ 25% | **inconclusiva** (dispersão > 10%; ver §5) |
 
-## 2. Bloqueio comum
+## 2. Bloqueio original e resolução
 
-O EXP-0 **não tem ligação inter-módulo**: `call_static` só alcança funções do
-próprio módulo (`docs/ARQUITETURA.md` §3; contrato RIR). Medir H03/H06 exige
-decidir antes a **ligação estática entre módulos** — decisão que ainda não existe
-em ADR. Sem isso, um benchmark inter-módulo mediria um caminho que o protótipo não
-tem.
+O EXP-0 **não tinha** ligação inter-módulo: `call_static` só alcançava funções do
+próprio módulo. Medir H03/H06 exigia decidir antes a **ligação estática entre
+módulos**. O **ADR-0018** (etapa B1) fez essa decisão e implementou o crate
+`rvm-link`; a etapa B2 executa este benchmark pré-registrado.
 
-O item 6 reconhece essa dependência ("chamada inter-módulo exige decidir linking
-estático antes"). Portanto, nesta rodada:
-
-- H03 e H06 permanecem **não medidas**;
-- o método abaixo fica pré-registrado para quando a ligação existir;
-- mede-se, como **substituto exploratório**, o custo de `call_static`
-  **intra-módulo** (não classifica H03/H06).
+- A ligação é **estática e pré-verificação**: as chamadas inter-módulo viram
+  chamadas diretas por índice, sem serialização (H03, evidência estrutural).
+- O benchmark mede o overhead de execução entre as variantes intra e inter (§5).
 
 ## 3. Método pré-registrado (H06)
 
@@ -59,39 +54,54 @@ estático antes"). Portanto, nesta rodada:
   relativo de H06 for ≤ 0,25; **refutada** se houver passo de serialização por
   chamada; **inconclusiva** caso contrário.
 
-## 5. Substituto exploratório medido nesta rodada
+## 5. Medição executada (B2)
 
-Workload: `k` chamadas encadeadas a `inc(a) = a + 1`, `k ∈ {1, 4, 16, 64}`.
-Comando: `cargo bench -p rvm-interpreter --bench chamada`.
+A ligação estática (B1, ADR-0018) tornou a variante inter-módulo mensurável.
+Workload: `k` chamadas encadeadas a `inc(a) = a + 1`; **intra** = módulo único;
+**inter** = módulo `app` (com `import inc`) ligado ao provedor `prov` por
+`rvm_link`. Comando: `cargo bench -p rvm-interpreter --bench chamada`.
 
-| k | ns/execução | fuel | ns/fuel |
-|---:|---:|---:|---:|
-| 1 | 296,6 | 6 | 49,433 |
-| 4 | 911,1 | 18 | 50,618 |
-| 16 | 3 086,3 | 66 | 46,763 |
-| 64 | 10 941,6 | 258 | 42,409 |
+Medianas de 7 amostras × 5 000 execuções por ponto:
 
-Custo marginal observado: **≈ 205 ns** (k 1→4), **≈ 181 ns** (4→16),
-**≈ 164 ns** (16→64) por chamada **intra-módulo**.
+| k | fuel | intra ns | inter ns | H06 rel | dispersão |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 6 | 301,4 | 300,3 | — | 0,1460 |
+| 4 | 18 | 799,2 | 806,0 | 0,0159 | 0,0487 |
+| 16 | 66 | 2 967,8 | 2 775,3 | −0,0919 | 0,1834 |
+| 64 | 258 | 10 966,8 | 10 983,9 | 0,0262 | 0,3884 |
 
-- Ambiente: Windows 10.0.26300, rustc 1.94.1, cargo 1.94.1, Intel Core i7-9700
-  @ 3.00GHz.
-- `fuel_used` é determinístico e cresce linearmente (`4k + 2`), como esperado.
-- Estes números **não** classificam H03 nem H06: medem o custo de uma chamada
-  dentro do mesmo módulo. Servem de baseline para o benchmark inter-módulo.
+- `fuel` idêntico entre variantes (controle satisfeito: `4k + 2`).
+- Dispersão máxima observada: **0,3884 (38,8%)**.
+- Custo de ligação (k = 64): **≈ 46 420 ns por ligação**, pago uma vez, fora da
+  execução.
+
+Classificação pela regra pré-registrada (§3):
+
+- **H06 — inconclusiva.** A dispersão excede 10% do valor mediano, então a regra
+  pré-registrada declara inconclusiva, e **não** confirmada nem refutada. O
+  overhead relativo oscila dentro do ruído; como a ligação estática torna o código
+  executado idêntico ao intra-módulo, a diferença esperada é ~0, mas a medição
+  nesta máquina não é estável o bastante para decidir dentro de 10%.
+- **H03 — confirmada estruturalmente.** A ligação resolve `call_static` para um
+  índice global antes da verificação; não há passo de serialização por chamada
+  (ADR-0018). A evidência de medição de H03 fica subordinada à estabilidade de
+  H06.
 
 ## 6. Riscos e limitações
 
-1. Medição de tempo depende da máquina e do SO; só vale no ambiente registrado.
-2. O benchmark é de microcusto: não mede carga real, concorrência nem cache.
-3. H03 é parcialmente estrutural (presença/ausência de serialização); a parte
-   estrutural depende do ADR de ligação ainda inexistente.
+1. Medição de tempo depende da máquina e do SO; a dispersão observada (até 38%)
+   impediu classificar H06 nesta rodada.
+2. Como a ligação estática elimina a fronteira de módulo em tempo de execução, o
+   "custo inter-módulo" medido é apenas a diferença de indireção/renomeação, que
+   tende a zero por construção; o custo real do desenho é a ligação (uma vez),
+   medida separadamente.
+3. O benchmark é de microcusto: não mede carga real, concorrência nem cache.
 4. Nenhuma conclusão de desempenho de produção é feita; o protótipo não é
    sandbox nem promessa de performance.
 
 ## 7. Próximos passos
 
-1. Decidir a ligação estática entre módulos em ADR (com requisitos e limites).
-2. Implementar a chamada inter-módulo sob essa decisão.
-3. Executar este benchmark pré-registrado e classificar H03 e H06 com os limiares
-   fixados na seção 3, sem ajuste pós-hoc.
+1. Repetir em runner dedicado/isolado, com mais amostras e mediana, para reduzir
+   a dispersão e classificar H06.
+2. Se o caso de uso for carga única, medir o custo total de ligação + execução.
+3. Manter os limiares da seção 3 sem ajuste pós-hoc.
