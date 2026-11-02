@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "Se você usar a RSUVM em pesquisa, cite este repositório."
+title: "RSUVM: Rust Universal Virtual Machine (EXP-0)"
+abstract: >-
+  Protótipo experimental de máquina virtual em Rust com RIR verificada,
+  interpretador determinístico, quotas de execução, formato textual/bytecode
+  experimentais e ABI mínima de host com capabilities. Não é sandbox validado
+  nem runtime multi-tenant.
+authors:
+  - name: "RSUVM contributors"
+version: "0.1.0-alpha.1"
+license: "MIT OR Apache-2.0"
+repository-code: "https://github.com/maquineh/rsuvm"
+url: "https://github.com/maquineh/rsuvm"
+keywords:
+  - virtual machine
+  - intermediate representation
+  - Rust
+  - runtime
+  - research prototype
+type: software

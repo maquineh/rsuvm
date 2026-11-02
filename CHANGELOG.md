@@ -5,7 +5,7 @@ O projeto usa versionamento semântico `0.x`: mudanças incompatíveis podem oco
 em minor releases. Formatos IR/texto/bytecode são **experimentais** e não têm
 compatibilidade entre versões.
 
-## [Não lançado] — alvo `0.1.0-alpha.1`
+## [0.1.0-alpha.1] - 2026-11-02
 
 ### Adicionado
 

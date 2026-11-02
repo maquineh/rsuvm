@@ -5,6 +5,9 @@ name: release
 on:
   push:
     tags: ["v*"]
+  # Disparo manual = dry-run: build, testes e artefatos, sem publicar release.
+  # A publicação só acontece em push de tag (job `publish` abaixo).
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -25,6 +28,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - name: Dry-run notice
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          echo "Dry-run manual: build/testes/artefatos apenas; nenhum release será publicado."
       - name: Toolchain
         shell: bash
         run: |
@@ -72,6 +79,7 @@ jobs:
   publish:
     name: publish release
     needs: build
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

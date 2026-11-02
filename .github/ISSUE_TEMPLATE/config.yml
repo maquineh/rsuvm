@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Vulnerabilidade de segurança
+    url: https://github.com/maquineh/rsuvm/security/advisories/new
+    about: Reporte em privado; não abra issue pública.
+  - name: Guia do usuário
+    url: https://github.com/maquineh/rsuvm/blob/main/docs/GUIA-USUARIO.md
+    about: Instalação, comandos, opções e limitações.
+  - name: Política de segurança
+    url: https://github.com/maquineh/rsuvm/blob/main/SECURITY.md
+    about: Escopo, versões suportadas e limitações conhecidas.

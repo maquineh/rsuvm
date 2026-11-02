@@ -4,7 +4,7 @@ version = 3
 
 [[package]]
 name = "rvm-bytecode"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "rvm-ir",
  "rvm-spec",
@@ -12,7 +12,7 @@ dependencies = [
 
 [[package]]
 name = "rvm-cli"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "rvm-bytecode",
  "rvm-interpreter",
@@ -25,7 +25,7 @@ dependencies = [
 
 [[package]]
 name = "rvm-conformance"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "rvm-bytecode",
  "rvm-interpreter",
@@ -39,7 +39,7 @@ dependencies = [
 
 [[package]]
 name = "rvm-interpreter"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "rvm-ir",
  "rvm-link",
@@ -50,14 +50,14 @@ dependencies = [
 
 [[package]]
 name = "rvm-ir"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "rvm-spec",
 ]
 
 [[package]]
 name = "rvm-link"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "rvm-ir",
  "rvm-spec",
@@ -65,18 +65,18 @@ dependencies = [
 
 [[package]]
 name = "rvm-runtime"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "rvm-spec",
 ]
 
 [[package]]
 name = "rvm-spec"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 
 [[package]]
 name = "rvm-text"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "rvm-ir",
  "rvm-spec",
@@ -84,7 +84,7 @@ dependencies = [
 
 [[package]]
 name = "rvm-verify"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "rvm-ir",
  "rvm-spec",

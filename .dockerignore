@@ -1,0 +1,10 @@
+target
+fuzz/target
+frontends
+.git
+.github
+docs
+examples
+scripts
+*.rsvmbc
+*.out

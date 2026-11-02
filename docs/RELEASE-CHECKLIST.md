@@ -48,6 +48,7 @@ público; itens marcados “bloqueante” impedem a tag.
 ## 5. Artefatos
 
 - [ ] `cargo build --release --locked -p rvm-cli`.
+- [ ] `docker build -t rsuvm:alpha .` e `docker run --rm rsuvm:alpha --version`.
 - [ ] Smoke test em container/VM limpo:
       `rsuvm --version` e `rsuvm run examples/soma.rvm ...`.
 - [ ] Pacotes Linux e Windows com README, licenças e CHANGELOG.

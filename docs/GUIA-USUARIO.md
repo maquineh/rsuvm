@@ -30,6 +30,19 @@ Os artefatos oficiais (quando publicados) ficam em
 executar. Plataformas testadas: Linux x86_64 e Windows x86_64; macOS não é
 distribuído sem teste.
 
+### Docker
+
+```bash
+docker build -t rsuvm:alpha .
+docker run --rm rsuvm:alpha --version
+docker run --rm -v "$PWD/examples:/work:ro" rsuvm:alpha \
+  run /work/soma.rvm --arg i64:10 --arg i64:20
+```
+
+A imagem roda como UID `10001` e monta exemplos somente leitura. O container
+**não** é um sandbox por si só; para código não confiável, aplique isolamento
+externo (seccomp, usuário sem privilégio, filesystem somente leitura).
+
 ## 2. Início rápido
 
 ```bash

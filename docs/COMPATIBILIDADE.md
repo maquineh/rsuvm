@@ -2,8 +2,7 @@
 
 ## Versão do projeto
 
-O workspace usa `0.1.0` e o primeiro release público planejado é
-`0.1.0-alpha.1`. Enquanto estiver em `0.x`:
+O workspace usa `0.1.0-alpha.1` (primeiro alpha público). Enquanto estiver em `0.x`:
 
 - **minor** pode conter mudanças incompatíveis;
 - **patch** deve conter correções compatíveis;
