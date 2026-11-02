@@ -23,7 +23,7 @@ compatibilidade entre versões.
   `NoHost` e `execute_with_host`.
 - CLI `rsuvm` com `run`, `run-bc`, `check`, `fmt`, `encode` e `--allow-fs-read`.
 - Corpus de conformidade com 62 casos válidos e 42 inválidos.
-- 174 testes no workspace, CI Linux/Windows, MSRV e benchmark pré-registrado.
+- 176 testes no workspace, CI Linux/Windows, MSRV e benchmark pré-registrado.
 
 ### Segurança
 
