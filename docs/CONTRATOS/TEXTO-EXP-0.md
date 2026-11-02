@@ -16,12 +16,16 @@ entrada    = "entry" ident ;
 declaração_fn = "fn" ident "(" [parâmetros] ")" "->" tipo bloco+ ;
 parâmetros = parâmetro { "," parâmetro } ;
 parâmetro  = ident ":" tipo ;
-tipo       = "unit" | "bool" | "i64" ;
+tipo       = "unit" | "bool" | "i64" | "string" ;
 bloco      = rótulo [ "(" parâmetros ")" ] ":" instrução* terminador ;
 instrução  = ident "=" operação ;
 operação   = "const_i64" inteiro
            | "const_bool" ( "true" | "false" )
+           | "const_str" string
            | op_binário valor "," valor
+           | "str_eq" valor "," valor
+           | "str_ne" valor "," valor
+           | "str_len" valor
            | "call_static" ident "(" [valores] ")" ;
 op_binário = "add_i64_checked" | "sub_i64_checked" | "mul_i64_checked"
            | "div_i64_checked" | "rem_i64_checked"
@@ -35,6 +39,8 @@ terminador = "return" [ valor ]
            | "cond_br" valor "," alvo "," alvo ;
 alvo       = ident [ "(" [valores] ")" ] ;
 inteiro    = [ "-" ] dígito+ ;
+string     = '"' { caractere | escape } '"' ;
+escape     = "\\" ( '"' | "\\" | "n" | "r" | "t" ) ;
 ident      = ( letra | "_" ) { letra | dígito | "_" } ;
 comentário = ";" { qualquer caractere exceto quebra de linha } quebra_de_linha ;
 ~~~
@@ -134,10 +140,14 @@ fn soma(a: i64, b: i64) -> i64 {
   limites antes de alocar e ausência de pânico são testados em
   `crates/rvm-text/tests`.
 
+Literal `string` usa `"..."` com escapes `\"`, `\\`, `\n`, `\r` e `\t`; quebra de
+linha dentro do literal é `syntax_error`; literal maior que
+`Limits::max_string_bytes` é `invalid_module` (ADR-0024).
+
 ## 7. Fora do EXP-0
 
-Literais de string, caracteres de escape, arrays, registros, tipos genéricos,
-comentários de bloco, anotações, módulos múltiplos por arquivo, ligação dinâmica,
-imports qualificados por módulo (`modulo.funcao`) e qualquer forma de açúcar
-sintático. A ligação inter-módulo é **estática** e feita pelo crate `rvm-link`
-(ADR-0018), fora do formato textual.
+Literais de string com interpolação, caracteres de escape não listados, arrays,
+registros, tipos genéricos, comentários de bloco, anotações, módulos múltiplos por
+arquivo, ligação dinâmica, imports qualificados por módulo (`modulo.funcao`) e
+qualquer forma de açúcar sintático. A ligação inter-módulo é **estática** e feita
+pelo crate `rvm-link` (ADR-0018), fora do formato textual.

@@ -1,0 +1,13 @@
+; id: C-029
+; expect: value bool:true
+; extra: desigualdade de strings por conteúdo (ADR-0024)
+module c029 version 1
+entry diferente
+
+fn diferente() -> bool {
+  entry:
+    v0 = const_str "a"
+    v1 = const_str "b"
+    v2 = str_ne v0, v1
+    return v2
+}

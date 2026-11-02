@@ -324,6 +324,37 @@ Oráculo do Lift: `cargo run -p lift_cli -- run examples/rsuvm-oracle.lift` →
 | oráculo do Lift (`rsuvm-oracle*.lift`) | `30 5 7 9 3 true false 25 12 55 0` / `15 0 7 0 1 2 10 3 6 0` / `3 -3 2 -2` / `-1 0 1 true false false true false true false true true true` |
 | `cargo test --workspace` (núcleo) | verde; **não** compila `frontends/` |
 
-Limites: subconjunto estreito (sem `while`, divisão, strings, arrays, objetos,
-closures, `console.log`/`import`); dependência git fixada do Lift no adaptador;
-sem codegen reverso.
+Limites: o subconjunto do adaptador ainda **não** cobre strings/arrays/objetos,
+closures, `console.log`/`import` nem `coalesce`; dependência git fixada do Lift no
+adaptador; sem codegen reverso.
+
+## Ampliações pós-adaptador (ADRs 0022–0024)
+
+### `else if`, lógica e curto-circuito (ADR-0021)
+
+Adaptador refatorado para um construtor **CFG/SSA stateful**: `if`/`else if`/`else`,
+`&&`/`||` (curto-circuito) e `!`. Oráculo do Lift (`rsuvm-oracle4.lift`):
+`-1 0 1 true false false true false true false true true true` — bate com a RSUVM
+(inclui curto-circuito sobre divisão).
+
+### Divisão, resto e bit a bit (ADRs 0022–0023)
+
+Núcleo ganhou `div/rem_i64_checked` (+ trap `division_by_zero`),
+`shl/shr_i64_checked` (+ trap `invalid_shift`) e `and/or/xor_i64`; corpus
+`C-020..C-026` e `N-025..N-027`. O adaptador mapeia `/` e `%`; oráculo
+(`rsuvm-oracle3.lift`): `3 -3 2 -2`.
+
+### Tipo `string` (ADR-0024)
+
+Núcleo ganhou `string` (literais `"..."` com escapes), `const_str`, `str_eq`,
+`str_ne`, `str_len`, limite `max_string_bytes` (4096) e corpus `C-027..C-030`.
+`Value` deixou de ser `Copy`; **sem** concatenação nem alocação em execução.
+
+### Verificação (Resultado)
+
+| Comando | Resultado |
+|---|---|
+| `cargo test --workspace` | **146 passed, 0 failed**; corpus 30 válidos + 26 inválidos |
+| `cargo test --manifest-path frontends/lift-rir/Cargo.toml` | 26 passed, 0 failed |
+| `cargo clippy --workspace --all-targets -- -D warnings` | exit 0 |
+| `cargo fmt --all -- --check` | exit 0 |

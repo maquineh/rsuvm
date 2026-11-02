@@ -16,6 +16,7 @@ com valor esperado, e cada terminador em pelo menos um caso v√°lido. A verifica√
 |---|---|
 | `const_i64` | C-001, C-017, C-018, C-019 (todos os casos com literais) |
 | `const_bool` | C-003 |
+| `const_str` | C-027, C-028, C-029, C-030 |
 | `add_i64_checked` | C-001, C-004, C-005, C-017, C-018, C-019 |
 | `sub_i64_checked` | C-010 |
 | `mul_i64_checked` | C-011 |
@@ -26,6 +27,9 @@ com valor esperado, e cada terminador em pelo menos um caso v√°lido. A verifica√
 | `and_i64` | C-024 |
 | `or_i64` | C-025 |
 | `xor_i64` | C-026 |
+| `str_eq` | C-027 |
+| `str_ne` | C-029 |
+| `str_len` | C-028 |
 | `eq_i64` | C-002 |
 | `ne_i64` | C-012 |
 | `lt_i64` | C-008 |

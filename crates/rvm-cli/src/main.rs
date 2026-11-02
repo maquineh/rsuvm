@@ -196,8 +196,9 @@ fn parse_argument(raw: &str) -> Result<Value, Failure> {
             "false" => Ok(Value::Bool(false)),
             other => Err(Failure::Usage(format!("bool inválido `{other}`"))),
         },
+        "str" => Ok(Value::Str(value.to_string())),
         other => Err(Failure::Usage(format!(
-            "tipo de argumento não suportado `{other}` (use i64, bool ou unit)"
+            "tipo de argumento não suportado `{other}` (use i64, bool, str ou unit)"
         ))),
     }
 }

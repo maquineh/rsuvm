@@ -136,15 +136,17 @@ pub struct Instr {
 
 /// Operação experimental do EXP-0.
 ///
-/// Não existe divisão, resto, deslocamento, conversão numérica, ponto flutuante
-/// ou operação sobre `bool`/`unit`: qualquer outra operação é rejeitada na
-/// fronteira (código `unknown_opcode` ou `unsupported_feature`).
+/// Não existe conversão numérica, ponto flutuante, concatenação de `string` nem
+/// operação sobre `bool`/`unit`: qualquer outra operação é rejeitada na fronteira
+/// (código `unknown_opcode` ou `unsupported_feature`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Op {
     /// Define uma constante `i64` (`const_i64`).
     ConstI64(i64),
     /// Define uma constante `bool` (`const_bool`).
     ConstBool(bool),
+    /// Define uma constante `string` (`const_str`). O literal vive no módulo.
+    ConstStr(String),
     /// Aplica [`BinOp`] a dois `i64`; transbordo produz `integer_overflow`.
     Bin {
         /// Operação aritmética verificada.
@@ -163,6 +165,25 @@ pub enum Op {
         /// Operando direito.
         rhs: ValueId,
     },
+    /// Compara dois `string` por conteúdo (`str_eq`), produzindo `bool`.
+    StrEq {
+        /// Operando esquerdo.
+        lhs: ValueId,
+        /// Operando direito.
+        rhs: ValueId,
+    },
+    /// Desigualdade de `string` (`str_ne`), produzindo `bool`.
+    StrNe {
+        /// Operando esquerdo.
+        lhs: ValueId,
+        /// Operando direito.
+        rhs: ValueId,
+    },
+    /// Comprimento em bytes de um `string` (`str_len`), produzindo `i64`.
+    StrLen {
+        /// Operando `string`.
+        operand: ValueId,
+    },
     /// Chama estaticamente uma função do mesmo módulo (`call_static`).
     Call {
         /// Função chamada; resolvida estaticamente pelo verificador.
@@ -179,8 +200,11 @@ impl Op {
         match self {
             Op::ConstI64(_) => Type::I64,
             Op::ConstBool(_) => Type::Bool,
+            Op::ConstStr(_) => Type::Str,
             Op::Bin { op, .. } => op.result_type(),
             Op::Cmp { op, .. } => op.result_type(),
+            Op::StrEq { .. } | Op::StrNe { .. } => Type::Bool,
+            Op::StrLen { .. } => Type::I64,
             Op::Call { .. } => Type::I64, // substituído pelo tipo de retorno no verificador
         }
     }
@@ -192,8 +216,12 @@ impl Op {
     #[must_use]
     pub fn operand_ids(&self) -> Vec<ValueId> {
         match self {
-            Op::ConstI64(_) | Op::ConstBool(_) => Vec::new(),
-            Op::Bin { lhs, rhs, .. } | Op::Cmp { lhs, rhs, .. } => vec![*lhs, *rhs],
+            Op::ConstI64(_) | Op::ConstBool(_) | Op::ConstStr(_) => Vec::new(),
+            Op::Bin { lhs, rhs, .. }
+            | Op::Cmp { lhs, rhs, .. }
+            | Op::StrEq { lhs, rhs }
+            | Op::StrNe { lhs, rhs } => vec![*lhs, *rhs],
+            Op::StrLen { operand } => vec![*operand],
             Op::Call { args, .. } => args.clone(),
         }
     }

@@ -1,0 +1,11 @@
+; id: C-030
+; expect: value str:ola mundo
+; extra: literal string como retorno e impressão canônica (ADR-0024)
+module c030 version 1
+entry saudacao
+
+fn saudacao() -> string {
+  entry:
+    v0 = const_str "ola mundo"
+    return v0
+}

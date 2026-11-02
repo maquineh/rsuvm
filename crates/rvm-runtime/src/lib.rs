@@ -90,8 +90,8 @@ impl Default for MemoryLimit {
 /// Valor de runtime do subset EXP-0.
 ///
 /// Um `Value` sempre conhece seu [`Type`] e nunca carrega ponteiro, referência ou
-/// handle do processo hospedeiro.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// handle do processo hospedeiro. `Str` carrega o texto UTF-8 por valor (ADR-0024).
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Value {
     /// Valor do tipo `unit`.
     Unit,
@@ -99,54 +99,71 @@ pub enum Value {
     Bool(bool),
     /// Valor do tipo `i64`.
     I64(i64),
+    /// Valor do tipo `string` (texto UTF-8 imutável).
+    Str(String),
 }
 
 impl Value {
     /// Tipo do valor.
     #[must_use]
-    pub const fn ty(self) -> Type {
+    pub const fn ty(&self) -> Type {
         match self {
             Value::Unit => Type::Unit,
             Value::Bool(_) => Type::Bool,
             Value::I64(_) => Type::I64,
+            Value::Str(_) => Type::Str,
         }
     }
 
     /// Conteúdo booleano, se o valor for `bool`.
     #[must_use]
-    pub const fn as_bool(self) -> Option<bool> {
+    pub const fn as_bool(&self) -> Option<bool> {
         match self {
-            Value::Bool(value) => Some(value),
+            Value::Bool(value) => Some(*value),
             _ => None,
         }
     }
 
     /// Conteúdo inteiro, se o valor for `i64`.
     #[must_use]
-    pub const fn as_i64(self) -> Option<i64> {
+    pub const fn as_i64(&self) -> Option<i64> {
         match self {
-            Value::I64(value) => Some(value),
+            Value::I64(value) => Some(*value),
+            _ => None,
+        }
+    }
+
+    /// Texto, se o valor for `string`.
+    #[must_use]
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            Value::Str(value) => Some(value.as_str()),
             _ => None,
         }
     }
 
     /// `true` se o valor pertence ao tipo declarado (sem conversão implícita).
     #[must_use]
-    pub const fn matches_type(self, ty: Type) -> bool {
+    pub fn matches_type(&self, ty: Type) -> bool {
         matches!(
             (self, ty),
-            (Value::Unit, Type::Unit) | (Value::Bool(_), Type::Bool) | (Value::I64(_), Type::I64)
+            (Value::Unit, Type::Unit)
+                | (Value::Bool(_), Type::Bool)
+                | (Value::I64(_), Type::I64)
+                | (Value::Str(_), Type::Str)
         )
     }
 }
 
 impl fmt::Display for Value {
-    /// Formato estável usado pelo CLI e pelo corpus: `unit`, `bool:true`, `i64:30`.
+    /// Formato estável usado pelo CLI e pelo corpus: `unit`, `bool:true`,
+    /// `i64:30`, `str:<texto>`.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Value::Unit => f.write_str("unit"),
             Value::Bool(value) => write!(f, "bool:{value}"),
             Value::I64(value) => write!(f, "i64:{value}"),
+            Value::Str(value) => write!(f, "str:{value}"),
         }
     }
 }

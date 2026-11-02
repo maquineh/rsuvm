@@ -14,7 +14,8 @@ Param     { name, ty }                       // ValueId implícito = índice
 Block     { id = índice, label, params: Vec<BlockParam>, instrs, term }
 BlockParam{ value: ValueId, name, ty }
 Instr     { def: ValueId, op: Op }
-Op        = const_i64 | const_bool | bin(op,lhs,rhs) | cmp(op,lhs,rhs) | call(callee,args)
+Op        = const_i64 | const_bool | const_str | bin(op,lhs,rhs) | cmp(op,lhs,rhs)
+          | str_eq(lhs,rhs) | str_ne(lhs,rhs) | str_len(operand) | call(callee,args)
 Term      = return [v] | br(target,args) | cond_br(cond, target, target)
 ~~~
 
@@ -57,7 +58,8 @@ proporcional ao módulo:
 
 Limites padrão: 64 funções, 256 blocos/função, 16 parâmetros, 8 parâmetros por
 bloco, 1024 instruções/bloco, 4096 valores/função, 16 argumentos por
-chamada/desvio, 64 bytes de nome, 1 MiB de entrada.
+chamada/desvio, 64 bytes de nome, 4096 bytes por literal `string` (ADR-0024),
+1 MiB de entrada.
 
 ## 3. Verificação de tipos e fluxo (`rvm-verify::VerifiedModule::verify`)
 
@@ -80,6 +82,9 @@ Depois de `structure::check`:
    | `const_i64` | — | `i64` |
    | `const_bool` | — | `bool` |
    | `add/sub/mul/div/rem_i64_checked` e `shl/shr_i64_checked`, `and/or/xor_i64` | `i64`, `i64` | `i64` |
+   | `const_str` | — | `string` |
+   | `str_eq`, `str_ne` | `string`, `string` | `bool` |
+   | `str_len` | `string` | `i64` |
    | comparações `*_i64` | `i64`, `i64` | `bool` |
    | `call_static` | casam com `params` do alvo | `ret` do alvo |
    Qualquer divergência ⇒ `invalid_type`.
@@ -164,5 +169,6 @@ pilha nativa com 256 frames; ADR-0012 registra o resultado e a decisão.
 ## 6. Fora do EXP-0
 
 Formato wire estável, imports, heap de objetos, GC, exceções recuperáveis,
-closures, concorrência, async, `f64`, strings, arrays, registros, referências,
-`unsafe`, FFI e capabilidades concedidas.
+closures, concorrência, async, `f64`, arrays, registros, referências,
+concatenação/slicing de `string` (ADR-0024), `unsafe`, FFI e capabilidades
+concedidas.

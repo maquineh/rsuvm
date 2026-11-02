@@ -48,6 +48,7 @@ pub const FORMAT_VERSION: u16 = 1;
 const TAG_UNIT: u8 = 0;
 const TAG_BOOL: u8 = 1;
 const TAG_I64: u8 = 2;
+const TAG_STR: u8 = 3;
 
 // Opcodes de instrução (tabela de `BYTECODE-EXP-0-IMPLEMENTACAO.md` §1).
 const OP_CONST_I64: u8 = 0;
@@ -69,6 +70,10 @@ const OP_SHR_I64_CHECKED: u8 = 15;
 const OP_AND_I64: u8 = 16;
 const OP_OR_I64: u8 = 17;
 const OP_XOR_I64: u8 = 18;
+const OP_CONST_STR: u8 = 19;
+const OP_STR_EQ: u8 = 20;
+const OP_STR_NE: u8 = 21;
+const OP_STR_LEN: u8 = 22;
 
 // Tipos de terminador (tabela de `BYTECODE-EXP-0-IMPLEMENTACAO.md` §1).
 const TERM_RETURN: u8 = 0;
@@ -233,6 +238,24 @@ fn encode_instr(out: &mut Vec<u8>, instr: &Instr) {
             push_u8(out, OP_CONST_BOOL);
             push_u8(out, u8::from(*value));
         }
+        Op::ConstStr(text) => {
+            push_u8(out, OP_CONST_STR);
+            push_string(out, text);
+        }
+        Op::StrEq { lhs, rhs } => {
+            push_u8(out, OP_STR_EQ);
+            push_u32(out, *lhs);
+            push_u32(out, *rhs);
+        }
+        Op::StrNe { lhs, rhs } => {
+            push_u8(out, OP_STR_NE);
+            push_u32(out, *lhs);
+            push_u32(out, *rhs);
+        }
+        Op::StrLen { operand } => {
+            push_u8(out, OP_STR_LEN);
+            push_u32(out, *operand);
+        }
         Op::Bin { op, lhs, rhs } => {
             push_u8(out, bin_opcode(*op));
             push_u32(out, *lhs);
@@ -378,6 +401,18 @@ fn read_instr(reader: &mut Reader<'_>, limits: &Limits) -> Result<Instr, RvmErro
                 }
             }
         }
+        OP_CONST_STR => Op::ConstStr(reader.read_string(limits, "literal string")?),
+        OP_STR_EQ => Op::StrEq {
+            lhs: reader.read_u32("operando str_eq")?,
+            rhs: reader.read_u32("operando str_eq")?,
+        },
+        OP_STR_NE => Op::StrNe {
+            lhs: reader.read_u32("operando str_ne")?,
+            rhs: reader.read_u32("operando str_ne")?,
+        },
+        OP_STR_LEN => Op::StrLen {
+            operand: reader.read_u32("operando str_len")?,
+        },
         OP_ADD_I64_CHECKED => read_bin_operands(reader, BinOp::AddI64Checked)?,
         OP_SUB_I64_CHECKED => read_bin_operands(reader, BinOp::SubI64Checked)?,
         OP_MUL_I64_CHECKED => read_bin_operands(reader, BinOp::MulI64Checked)?,
@@ -468,6 +503,7 @@ fn read_type(reader: &mut Reader<'_>, what: &'static str) -> Result<Type, RvmErr
         TAG_UNIT => Ok(Type::Unit),
         TAG_BOOL => Ok(Type::Bool),
         TAG_I64 => Ok(Type::I64),
+        TAG_STR => Ok(Type::Str),
         tag => Err(decode_error(
             ErrorCode::UnknownType,
             format!("{what}: tag de tipo {tag} desconhecida"),
@@ -481,6 +517,7 @@ const fn type_tag(ty: Type) -> u8 {
         Type::Unit => TAG_UNIT,
         Type::Bool => TAG_BOOL,
         Type::I64 => TAG_I64,
+        Type::Str => TAG_STR,
     }
 }
 
@@ -628,6 +665,37 @@ impl<'a> Reader<'a> {
         }
         // ...e no limite estrutural de nomes/rótulos.
         let max = to_usize(limits.max_name_len);
+        if len > max {
+            return Err(decode_error(
+                ErrorCode::InvalidModule,
+                format!("{what}: {len} bytes excedem o limite de {max}"),
+            ));
+        }
+        let slice = self.take(len, what)?;
+        let text = std::str::from_utf8(slice).map_err(|_| {
+            decode_error(
+                ErrorCode::InvalidModule,
+                format!("{what}: conteúdo não é UTF-8 válido"),
+            )
+        })?;
+        Ok(text.to_string())
+    }
+
+    /// Lê uma string com comprimento `u16`, checando bytes restantes e o limite de
+    /// literais `string` **antes** de alocar (ADR-0024).
+    fn read_string(&mut self, limits: &Limits, what: &'static str) -> Result<String, RvmError> {
+        let raw_len = self.read_u16(what)?;
+        let len = usize::from(raw_len);
+        if len > self.remaining() {
+            return Err(decode_error(
+                ErrorCode::TruncatedInput,
+                format!(
+                    "{what}: {len} bytes declarados, restam {} bytes",
+                    self.remaining()
+                ),
+            ));
+        }
+        let max = to_usize(limits.max_string_bytes);
         if len > max {
             return Err(decode_error(
                 ErrorCode::InvalidModule,

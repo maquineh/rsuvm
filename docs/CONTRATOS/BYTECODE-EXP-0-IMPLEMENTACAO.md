@@ -74,6 +74,10 @@ terminator:
 | 16 | `and_i64` | `u32 lhs`, `u32 rhs` |
 | 17 | `or_i64` | `u32 lhs`, `u32 rhs` |
 | 18 | `xor_i64` | `u32 lhs`, `u32 rhs` |
+| 19 | `const_str` | `u16 len`, `u8[len]` (UTF-8) |
+| 20 | `str_eq` | `u32 lhs`, `u32 rhs` |
+| 21 | `str_ne` | `u32 lhs`, `u32 rhs` |
+| 22 | `str_len` | `u32 operand` |
 
 Código desconhecido ⇒ `unknown_opcode`.
 
@@ -101,7 +105,8 @@ Código desconhecido ⇒ `unknown_opcode`.
    comparada com o limite estrutural correspondente **e** com os bytes restantes
    antes de reservar memória. Contagem maior que os bytes restantes ⇒
    `truncated_input` (cada item consome ao menos 1 byte).
-6. Tag de tipo fora de `0..=2` ⇒ `unknown_type`; `const_bool` fora de `0|1` ⇒
+6. Tag de tipo fora de `0..=3` (`unit`, `bool`, `i64`, `string`) ⇒ `unknown_type`;
+   `const_bool` fora de `0|1` ⇒
    `invalid_number`.
 7. Ao final, bytes excedentes ⇒ `invalid_module`.
 8. O módulo decodificado passa por `rvm_ir::structure::check` antes de ser

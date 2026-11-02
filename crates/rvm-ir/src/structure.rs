@@ -287,6 +287,19 @@ fn check_function<'a>(
                 index: u32::try_from(instr_index).unwrap_or(u32::MAX),
             };
             mark_value(&mut seen, instr.def, &instr_location)?;
+            if let Op::ConstStr(text) = &instr.op {
+                if text.len() > limit(limits.max_string_bytes) {
+                    return Err(invalid(
+                        ErrorCode::InvalidModule,
+                        format!(
+                            "literal string com {} bytes excede o limite de {}",
+                            text.len(),
+                            limits.max_string_bytes
+                        ),
+                        instr_location.clone(),
+                    ));
+                }
+            }
             for operand in instr.op.operand_ids() {
                 check_value_ref(&seen, operand, &instr_location)?;
             }
@@ -858,5 +871,19 @@ mod tests {
         let error = check(&module, &Limits::default()).unwrap_err();
         assert_eq!(error.code(), ErrorCode::InvalidModule);
         assert!(error.detail().contains("externa"));
+    }
+
+    #[test]
+    fn rejeita_string_acima_do_limite() {
+        let mut module = testing::constante(0);
+        module.functions[0].ret = Type::Str;
+        module.functions[0].blocks[0].instrs[0].op = Op::ConstStr("x".repeat(10));
+        let limits = Limits {
+            max_string_bytes: 5,
+            ..Limits::default()
+        };
+        let error = check(&module, &limits).unwrap_err();
+        assert_eq!(error.code(), ErrorCode::InvalidModule);
+        assert!(error.detail().contains("string"));
     }
 }

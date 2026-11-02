@@ -209,7 +209,7 @@ impl<'a> FunctionFacts<'a> {
         location: &Location,
     ) -> Result<(), RvmError> {
         match &instr.op {
-            Op::ConstI64(_) | Op::ConstBool(_) => Ok(()),
+            Op::ConstI64(_) | Op::ConstBool(_) | Op::ConstStr(_) => Ok(()),
             Op::Bin { op, lhs, rhs } => {
                 self.check_use(block_index, instr_index, *lhs, location)?;
                 self.check_use(block_index, instr_index, *rhs, location)?;
@@ -223,6 +223,16 @@ impl<'a> FunctionFacts<'a> {
                 let operand_type = op.operand_type();
                 self.check_operand_type(*lhs, operand_type, location)?;
                 self.check_operand_type(*rhs, operand_type, location)
+            }
+            Op::StrEq { lhs, rhs } | Op::StrNe { lhs, rhs } => {
+                self.check_use(block_index, instr_index, *lhs, location)?;
+                self.check_use(block_index, instr_index, *rhs, location)?;
+                self.check_operand_type(*lhs, Type::Str, location)?;
+                self.check_operand_type(*rhs, Type::Str, location)
+            }
+            Op::StrLen { operand } => {
+                self.check_use(block_index, instr_index, *operand, location)?;
+                self.check_operand_type(*operand, Type::Str, location)
             }
             Op::Call { callee, args } => {
                 let target = self.module.function(*callee).ok_or_else(|| {
@@ -704,8 +714,11 @@ fn operation_type(module: &Module, op: &Op, location: &Location) -> Result<Type,
     match op {
         Op::ConstI64(_) => Ok(Type::I64),
         Op::ConstBool(_) => Ok(Type::Bool),
+        Op::ConstStr(_) => Ok(Type::Str),
         Op::Bin { op, .. } => Ok(op.result_type()),
         Op::Cmp { op, .. } => Ok(op.result_type()),
+        Op::StrEq { .. } | Op::StrNe { .. } => Ok(Type::Bool),
+        Op::StrLen { .. } => Ok(Type::I64),
         Op::Call { callee, .. } => module
             .function(*callee)
             .map(|target| target.ret)

@@ -193,6 +193,20 @@ pub fn print(module: &Module) -> String {
     out
 }
 
+/// Escreve `text` com os escapes do formato textual (`\"`, `\\`, `\n`, `\r`, `\t`).
+fn print_escaped(text: &str, out: &mut String) {
+    for character in text.chars() {
+        match character {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            other => out.push(other),
+        }
+    }
+}
+
 fn print_op(module: &Module, function: &Function, op: &Op, out: &mut String) {
     match op {
         Op::ConstI64(value) => {
@@ -202,6 +216,27 @@ fn print_op(module: &Module, function: &Function, op: &Op, out: &mut String) {
         Op::ConstBool(value) => {
             out.push_str("const_bool ");
             out.push_str(if *value { "true" } else { "false" });
+        }
+        Op::ConstStr(text) => {
+            out.push_str("const_str \"");
+            print_escaped(text, out);
+            out.push('"');
+        }
+        Op::StrEq { lhs, rhs } => {
+            out.push_str("str_eq ");
+            print_value(function, *lhs, out);
+            out.push_str(", ");
+            print_value(function, *rhs, out);
+        }
+        Op::StrNe { lhs, rhs } => {
+            out.push_str("str_ne ");
+            print_value(function, *lhs, out);
+            out.push_str(", ");
+            print_value(function, *rhs, out);
+        }
+        Op::StrLen { operand } => {
+            out.push_str("str_len ");
+            print_value(function, *operand, out);
         }
         Op::Bin { op, lhs, rhs } => {
             out.push_str(op.name());
@@ -285,6 +320,7 @@ fn print_value(function: &Function, value: ValueId, out: &mut String) {
 enum Token {
     Ident(String),
     Int(i64),
+    Str(String),
     LBrace,
     RBrace,
     LParen,
@@ -367,6 +403,11 @@ fn tokenize(input: &str) -> Result<Vec<Token>, RvmError> {
                 tokens.push(token);
                 index = next;
             }
+            b'"' => {
+                let (token, next) = lex_string(input, bytes, index)?;
+                tokens.push(token);
+                index = next;
+            }
             _ => {
                 return Err(syntax_error(format!(
                     "caractere inesperado no byte {index}"
@@ -412,6 +453,63 @@ fn lex_ident(input: &str, bytes: &[u8], start: usize) -> Result<(Token, usize), 
         .get(start..end)
         .ok_or_else(|| syntax_error(format!("identificador inválido no byte {start}")))?;
     Ok((Token::Ident(slice.to_string()), end))
+}
+
+/// Lexa um literal `"..."` com escapes `\"`, `\\`, `\n`, `\r` e `\t`.
+fn lex_string(input: &str, bytes: &[u8], start: usize) -> Result<(Token, usize), RvmError> {
+    let mut end = start.saturating_add(1);
+    let mut text = String::new();
+    loop {
+        let byte = bytes.get(end).copied().ok_or_else(|| {
+            syntax_error(format!(
+                "literal string não terminado a partir do byte {start}"
+            ))
+        })?;
+        match byte {
+            b'"' => {
+                end += 1;
+                break;
+            }
+            b'\\' => {
+                let escape = bytes
+                    .get(end + 1)
+                    .copied()
+                    .ok_or_else(|| syntax_error(format!("escape incompleto no byte {end}")))?;
+                let character = match escape {
+                    b'"' => '"',
+                    b'\\' => '\\',
+                    b'n' => '\n',
+                    b'r' => '\r',
+                    b't' => '\t',
+                    other => {
+                        return Err(syntax_error(format!(
+                            "escape inválido `\\{}` no byte {end}",
+                            other as char
+                        )))
+                    }
+                };
+                text.push(character);
+                end += 2;
+            }
+            b'\n' | b'\r' => {
+                return Err(syntax_error(format!(
+                    "quebra de linha dentro de string no byte {end}"
+                )))
+            }
+            _ => {
+                let rest = input
+                    .get(end..)
+                    .ok_or_else(|| syntax_error(format!("string inválida no byte {end}")))?;
+                let character = rest
+                    .chars()
+                    .next()
+                    .ok_or_else(|| syntax_error(format!("string inválida no byte {end}")))?;
+                text.push(character);
+                end += character.len_utf8();
+            }
+        }
+    }
+    Ok((Token::Str(text), end))
 }
 
 fn syntax_error(detail: impl Into<String>) -> RvmError {
@@ -462,8 +560,12 @@ struct RawInstr {
 enum RawOp {
     ConstI64(i64),
     ConstBool(bool),
+    ConstStr(String),
     Bin(BinOp, String, String),
     Cmp(CmpOp, String, String),
+    StrEq(String, String),
+    StrNe(String, String),
+    StrLen(String),
     Call(String, Vec<String>),
 }
 
@@ -538,6 +640,17 @@ impl Parser {
                 let name = name.clone();
                 self.bump();
                 Ok(name)
+            }
+            _ => Err(self.syntax(format!("esperado {what}"))),
+        }
+    }
+
+    fn expect_string(&mut self, what: &str) -> Result<String, RvmError> {
+        match self.peek() {
+            Token::Str(text) => {
+                let text = text.clone();
+                self.bump();
+                Ok(text)
             }
             _ => Err(self.syntax(format!("esperado {what}"))),
         }
@@ -801,6 +914,20 @@ impl Parser {
                     return Err(self.syntax("esperado `true` ou `false`"));
                 }
             }
+            "const_str" => RawOp::ConstStr(self.expect_string("literal string")?),
+            "str_eq" => {
+                let lhs = self.expect_ident("operando esquerdo")?;
+                self.expect_token(Token::Comma, "`,` entre operandos")?;
+                let rhs = self.expect_ident("operando direito")?;
+                RawOp::StrEq(lhs, rhs)
+            }
+            "str_ne" => {
+                let lhs = self.expect_ident("operando esquerdo")?;
+                self.expect_token(Token::Comma, "`,` entre operandos")?;
+                let rhs = self.expect_ident("operando direito")?;
+                RawOp::StrNe(lhs, rhs)
+            }
+            "str_len" => RawOp::StrLen(self.expect_ident("operando string")?),
             "call_static" => {
                 let callee = self.expect_ident("nome da função chamada")?;
                 self.expect_token(Token::LParen, "`(` na chamada")?;
@@ -1124,6 +1251,18 @@ fn lower_op(
     Ok(match raw {
         RawOp::ConstI64(value) => Op::ConstI64(*value),
         RawOp::ConstBool(value) => Op::ConstBool(*value),
+        RawOp::ConstStr(text) => Op::ConstStr(text.clone()),
+        RawOp::StrEq(lhs, rhs) => Op::StrEq {
+            lhs: value(lhs)?,
+            rhs: value(rhs)?,
+        },
+        RawOp::StrNe(lhs, rhs) => Op::StrNe {
+            lhs: value(lhs)?,
+            rhs: value(rhs)?,
+        },
+        RawOp::StrLen(operand) => Op::StrLen {
+            operand: value(operand)?,
+        },
         RawOp::Bin(op, lhs, rhs) => Op::Bin {
             op: *op,
             lhs: value(lhs)?,
@@ -1354,6 +1493,19 @@ fn escolhe(c: bool) -> i64 {
         assert!(printed.contains("import soma"), "{printed}");
         let reparsed = parse_ok(&printed);
         assert_eq!(module, reparsed, "import sobrevive ao round-trip");
+    }
+
+    #[test]
+    fn string_literal_round_trip() {
+        let texto = "module m version 1\nentry f\n\nfn f() -> string {\n  entry:\n    v0 = const_str \"ola\\nmundo \\\"x\\\"\"\n    return v0\n}\n";
+        let module = parse_ok(texto);
+        match &module.functions[0].blocks[0].instrs[0].op {
+            Op::ConstStr(text) => assert_eq!(text, "ola\nmundo \"x\""),
+            other => panic!("esperado const_str, veio {other:?}"),
+        }
+        let printed = print(&module);
+        let reparsed = parse_ok(&printed);
+        assert_eq!(module, reparsed, "string sobrevive ao round-trip");
     }
 
     #[test]

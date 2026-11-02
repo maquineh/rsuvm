@@ -1,0 +1,13 @@
+; id: C-027
+; expect: value bool:true
+; extra: igualdade de strings por conteúdo (ADR-0024)
+module c027 version 1
+entry igual
+
+fn igual() -> bool {
+  entry:
+    v0 = const_str "ola"
+    v1 = const_str "ola"
+    v2 = str_eq v0, v1
+    return v2
+}

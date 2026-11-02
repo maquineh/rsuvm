@@ -48,6 +48,9 @@ pub enum Type {
     /// Inteiro assinado de 64 bits. Overflow em soma/subtração/multiplicação
     /// produz o trap `integer_overflow`.
     I64,
+    /// Texto UTF-8 imutável (ADR-0024). Literais vivem no módulo; não há
+    /// concatenação nem alocação em execução no EXP-0.
+    Str,
 }
 
 impl Type {
@@ -58,6 +61,7 @@ impl Type {
             Type::Unit => "unit",
             Type::Bool => "bool",
             Type::I64 => "i64",
+            Type::Str => "string",
         }
     }
 
@@ -71,6 +75,7 @@ impl Type {
             "unit" => Some(Type::Unit),
             "bool" => Some(Type::Bool),
             "i64" => Some(Type::I64),
+            "string" => Some(Type::Str),
             _ => None,
         }
     }
@@ -647,6 +652,8 @@ pub struct Limits {
     pub max_call_args: u32,
     /// Tamanho máximo, em bytes, de nomes e rótulos.
     pub max_name_len: u32,
+    /// Tamanho máximo, em bytes, de um literal `string` (ADR-0024).
+    pub max_string_bytes: u32,
     /// Tamanho máximo, em bytes, da entrada textual ou binária de um módulo.
     pub max_input_bytes: u32,
 }
@@ -662,6 +669,7 @@ impl Default for Limits {
             max_values_per_function: 4096,
             max_call_args: 16,
             max_name_len: 64,
+            max_string_bytes: 4096,
             max_input_bytes: 1_048_576,
         }
     }

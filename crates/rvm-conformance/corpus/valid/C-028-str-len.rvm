@@ -1,0 +1,12 @@
+; id: C-028
+; expect: value i64:5
+; extra: comprimento em bytes de string (ADR-0024)
+module c028 version 1
+entry tamanho
+
+fn tamanho() -> i64 {
+  entry:
+    v0 = const_str "hello"
+    v1 = str_len v0
+    return v1
+}

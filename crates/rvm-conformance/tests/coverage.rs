@@ -53,8 +53,12 @@ fn collect_ops(module: &Module, ops: &mut BTreeSet<String>, terms: &mut BTreeSet
                 let name = match &instr.op {
                     Op::ConstI64(_) => "const_i64".to_string(),
                     Op::ConstBool(_) => "const_bool".to_string(),
+                    Op::ConstStr(_) => "const_str".to_string(),
                     Op::Bin { op, .. } => op.name().to_string(),
                     Op::Cmp { op, .. } => op.name().to_string(),
+                    Op::StrEq { .. } => "str_eq".to_string(),
+                    Op::StrNe { .. } => "str_ne".to_string(),
+                    Op::StrLen { .. } => "str_len".to_string(),
                     Op::Call { .. } => "call_static".to_string(),
                 };
                 ops.insert(name);
@@ -95,6 +99,10 @@ fn corpus_valido_cobre_todas_as_operacoes_do_subset() {
         "and_i64",
         "or_i64",
         "xor_i64",
+        "const_str",
+        "str_eq",
+        "str_ne",
+        "str_len",
         "eq_i64",
         "ne_i64",
         "lt_i64",

@@ -61,7 +61,7 @@ use rvm_spec::{BinOp, ErrorCode, Location, RvmError};
 use rvm_verify::VerifiedModule;
 
 /// Resultado de uma execução bem-sucedida.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RunOutcome {
     /// Valor devolvido pela função de entrada.
     pub value: Value,
@@ -348,6 +348,46 @@ impl<'a> Interpreter<'a> {
                     )?;
                     self.advance(&mut stack, top, &site)?;
                 }
+                Op::ConstStr(text) => {
+                    self.write_current(
+                        &mut stack,
+                        top,
+                        instr.def,
+                        Value::Str(text.clone()),
+                        &site,
+                    )?;
+                    self.advance(&mut stack, top, &site)?;
+                }
+                Op::StrEq { lhs, rhs } => {
+                    let left = self.read_str(&stack, top, *lhs, &site)?;
+                    let right = self.read_str(&stack, top, *rhs, &site)?;
+                    self.write_current(
+                        &mut stack,
+                        top,
+                        instr.def,
+                        Value::Bool(left == right),
+                        &site,
+                    )?;
+                    self.advance(&mut stack, top, &site)?;
+                }
+                Op::StrNe { lhs, rhs } => {
+                    let left = self.read_str(&stack, top, *lhs, &site)?;
+                    let right = self.read_str(&stack, top, *rhs, &site)?;
+                    self.write_current(
+                        &mut stack,
+                        top,
+                        instr.def,
+                        Value::Bool(left != right),
+                        &site,
+                    )?;
+                    self.advance(&mut stack, top, &site)?;
+                }
+                Op::StrLen { operand } => {
+                    let text = self.read_str(&stack, top, *operand, &site)?;
+                    let len = i64::try_from(text.len()).unwrap_or(i64::MAX);
+                    self.write_current(&mut stack, top, instr.def, Value::I64(len), &site)?;
+                    self.advance(&mut stack, top, &site)?;
+                }
                 Op::Call { callee, args } => {
                     let callee_function = self.callee(*callee, &site)?;
                     // O buffer de argumentos é cobrado antes de alocar (falha
@@ -445,7 +485,7 @@ impl<'a> Interpreter<'a> {
                     &function_site,
                 )
             })?;
-            *slot = Some(*value);
+            *slot = Some(value.clone());
         }
 
         Ok(Frame {
@@ -551,7 +591,7 @@ impl<'a> Interpreter<'a> {
                     site,
                 ));
             }
-            write_slot(frame, param.value, *value, site)?;
+            write_slot(frame, param.value, value.clone(), site)?;
         }
         frame.block = target;
         frame.instr_index = 0;
@@ -622,6 +662,24 @@ impl<'a> Interpreter<'a> {
             )
         })?;
         read_bool(frame, value, site)
+    }
+
+    /// Lê um `string` do frame `top`.
+    fn read_str(
+        &self,
+        stack: &[Frame<'a>],
+        top: usize,
+        value: ValueId,
+        site: &Site<'_>,
+    ) -> Result<String, RvmError> {
+        let frame = stack.get(top).ok_or_else(|| {
+            error_at(
+                ErrorCode::InvalidModule,
+                "frame ausente ao ler string",
+                site,
+            )
+        })?;
+        read_str(frame, value, site)
     }
 
     /// Resolve uma função do módulo (o verificador garante a existência).
@@ -738,7 +796,7 @@ fn write_slot(
 /// Lê um valor já inicializado do slot de `value`.
 fn read_slot(frame: &Frame<'_>, value: ValueId, site: &Site<'_>) -> Result<Value, RvmError> {
     let index = slot_index(value, site)?;
-    match frame.slots.get(index).copied().flatten() {
+    match frame.slots.get(index).cloned().flatten() {
         Some(value) => Ok(value),
         None => Err(error_at(
             ErrorCode::InvalidModule,
@@ -776,6 +834,19 @@ fn read_bool(frame: &Frame<'_>, value: ValueId, site: &Site<'_>) -> Result<bool,
             site,
         )
     })
+}
+
+/// Lê um slot exigindo `string`.
+fn read_str(frame: &Frame<'_>, value: ValueId, site: &Site<'_>) -> Result<String, RvmError> {
+    let slot = read_slot(frame, value, site)?;
+    match slot.as_str() {
+        Some(text) => Ok(text.to_string()),
+        None => Err(error_at(
+            ErrorCode::InvalidModule,
+            format!("slot v{value} contém `{}`, esperado `string`", slot.ty()),
+            site,
+        )),
+    }
 }
 
 /// Avalia os argumentos de uma chamada em um vetor novo.
