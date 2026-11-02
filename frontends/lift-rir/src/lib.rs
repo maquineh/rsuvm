@@ -8,21 +8,23 @@
 //!
 //! - funções com parâmetros/retorno em `int` (`i64`), `boolean` (`bool`),
 //!   `string` (`string`), `number` (`f64`), arrays desses tipos (`array`), structs
-//!   (`interface`) com campos escalares ou `void` (`unit`);
+//!   (`interface`) com campos escalares, opcionais (`T?`) ou `void` (`unit`);
 //! - `let`/`const`, **atribuição** a binding mutável e a **elemento de array**
 //!   (`xs[i] = v`), `return`, `if`/`else if`/`else` (com merge) e `while`;
 //! - expressões: literais `int`/`boolean`/`string`/`number`, **literais de array**
 //!   `[...]`, **indexação** `xs[i]`, **literais de struct** `{ campo: valor }`,
-//!   **acesso a campo** `obj.campo`, variáveis locais, `+ - * / %`, comparações
+//!   **acesso a campo** `obj.campo`, `null`, `option.some`/`is_some`/`unwrap`, `??`,
+//!   variáveis locais, `+ - * / %`, comparações
 //!   (`== != < <= > >=`; `==`/`!=` de `string` por conteúdo), negação `-x`, lógica
 //!   `!`/`&&`/`||` (**curto-circuito**) e chamadas a outras funções do programa.
 //!
-//! Fora do subconjunto (`coalesce`, closures, `console.log`, `import`, statements
-//! de topo): devolve [`AdapterError::Unsupported`].
+//! Fora do subconjunto (closures, `console.log`, `import`, statements de topo,
+//! `x == null`): devolve [`AdapterError::Unsupported`].
 //! Divisão/resto por zero e `i64::MIN / -1` produzem os traps
 //! `division_by_zero`/`integer_overflow` (ADR-0022). `xs[i] = v` só é baixado
 //! quando `xs` é um array local **não-aliasado** (ADR-0028); structs aceitam
-//! apenas campos escalares (ADR-0029).
+//! apenas campos escalares (ADR-0029); `??` preserva o fallback preguiçoso via
+//! fluxo de controle (ADR-0030).
 //!
 //! # Semântica (construção CFG/SSA)
 //!
@@ -40,13 +42,13 @@ use std::fmt;
 use lift_ast::{BinaryOperator, UnaryOperator};
 use lift_sema::{
     BindingId, HirDeclaration, HirElseBranch, HirExpr, HirExprKind, HirFunction, HirIf, HirProgram,
-    HirStatement, HirWhile, ResolvedType,
+    HirStatement, HirWhile, ResolvedType, OPTION_IS_SOME_BUILTIN, OPTION_UNWRAP_BUILTIN,
 };
 use rvm_ir::{
     Block, BlockId, BlockParam, BranchTarget, FieldDef, FnId, Function, Instr, Module, Op, Param,
     StructDef, Terminator, ValueId,
 };
-use rvm_spec::{ArrayElem, BinOp, CmpOp, FloatOp, StructId, Type, IR_VERSION};
+use rvm_spec::{ArrayElem, BinOp, CmpOp, FloatOp, OptionalElem, StructId, Type, IR_VERSION};
 
 /// Erro do adaptador.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -204,6 +206,12 @@ fn map_type(
                 AdapterError::Unsupported(format!("struct `{name}` não declarada"))
             })?;
             Ok(Type::Struct(id))
+        }
+        ResolvedType::Optional(inner) => {
+            let inner = map_type(inner, structs)?;
+            let elem = OptionalElem::from_type(inner)
+                .ok_or_else(|| AdapterError::Unsupported(format!("option de `{inner}`")))?;
+            Ok(Type::Optional(elem))
         }
         ResolvedType::Array(inner) => {
             let element = match inner.as_ref() {
@@ -730,6 +738,75 @@ impl FuncLower {
         Ok(result)
     }
 
+    /// Loweriza `option ?? fallback` com **fallback preguiçoso**: o fallback só é
+    /// avaliado quando o `option` é `none` (ADR-0030).
+    fn lower_coalesce(
+        &mut self,
+        names: &BTreeMap<String, FnId>,
+        option_expr: &HirExpr,
+        fallback_expr: &HirExpr,
+        env: &Env,
+    ) -> Result<ValueId, AdapterError> {
+        let ResolvedType::Optional(payload) = &option_expr.ty else {
+            return Err(AdapterError::Unsupported(
+                "`??` exige `T?` à esquerda".to_string(),
+            ));
+        };
+        let payload_ty = self.map_type(payload)?;
+        let result_ty = self.map_type(&fallback_expr.ty)?;
+        let option = self.lower_expr(names, option_expr, env)?;
+        let is_some = self.emit(Op::OptionIsSome { value: option })?;
+
+        let some_id = self.alloc_block();
+        let none_id = self.alloc_block();
+        let merge_id = self.alloc_block();
+        self.terminate(Terminator::CondBr {
+            cond: is_some,
+            then_target: BranchTarget {
+                target: some_id,
+                args: Vec::new(),
+            },
+            else_target: BranchTarget {
+                target: none_id,
+                args: Vec::new(),
+            },
+        })?;
+
+        let some_label = self.next_label("some");
+        self.start(some_id, some_label, Vec::new());
+        // Modo `Value`: extrai o payload. Modo `Optional`: repassa o próprio option.
+        let some_value = if result_ty == payload_ty {
+            self.emit(Op::OptionUnwrap { value: option })?
+        } else {
+            option
+        };
+        self.terminate(Terminator::Br(BranchTarget {
+            target: merge_id,
+            args: vec![some_value],
+        }))?;
+
+        let none_label = self.next_label("none");
+        self.start(none_id, none_label, Vec::new());
+        let fallback_value = self.lower_expr(names, fallback_expr, env)?;
+        self.terminate(Terminator::Br(BranchTarget {
+            target: merge_id,
+            args: vec![fallback_value],
+        }))?;
+
+        let merge_label = self.next_label("coalesce");
+        let result = self.new_value()?;
+        self.start(
+            merge_id,
+            merge_label,
+            vec![BlockParam {
+                value: result,
+                name: format!("coalesce{merge_id}"),
+                ty: result_ty,
+            }],
+        );
+        Ok(result)
+    }
+
     /// Loweriza uma expressão no bloco corrente (pode criar blocos).
     fn lower_expr(
         &mut self,
@@ -791,6 +868,21 @@ impl FuncLower {
                     field: field.clone(),
                 })
             }
+            HirExprKind::OptionNone => {
+                let Type::Optional(elem) = self.map_type(&expression.ty)? else {
+                    return Err(AdapterError::Unsupported(
+                        "`null` sem tipo option".to_string(),
+                    ));
+                };
+                self.emit(Op::OptionNone(elem))
+            }
+            HirExprKind::OptionSome(payload) => {
+                let value = self.lower_expr(names, payload, env)?;
+                self.emit(Op::OptionSome { value })
+            }
+            HirExprKind::Coalesce {
+                option, fallback, ..
+            } => self.lower_coalesce(names, option, fallback, env),
             HirExprKind::Local { id, name } => env
                 .get(id)
                 .map(|(value, _)| *value)
@@ -834,6 +926,13 @@ impl FuncLower {
                     } else {
                         self.lower_or(names, lhs, right, env)
                     };
+                }
+                if matches!(left.ty, ResolvedType::Optional(_))
+                    || matches!(right.ty, ResolvedType::Optional(_))
+                {
+                    return Err(AdapterError::Unsupported(
+                        "comparação de option (`== null`)".to_string(),
+                    ));
                 }
                 let lhs = self.lower_expr(names, left, env)?;
                 let rhs = self.lower_expr(names, right, env)?;
@@ -959,6 +1058,23 @@ impl FuncLower {
                 function,
                 arguments,
             } => {
+                if function == OPTION_IS_SOME_BUILTIN || function == OPTION_UNWRAP_BUILTIN {
+                    let argument = arguments.first().ok_or_else(|| {
+                        AdapterError::Unsupported(format!("`{function}` sem argumento"))
+                    })?;
+                    if arguments.len() != 1 {
+                        return Err(AdapterError::Unsupported(format!(
+                            "`{function}` espera exatamente um argumento"
+                        )));
+                    }
+                    let value = self.lower_expr(names, &argument.expression, env)?;
+                    let op = if function == OPTION_IS_SOME_BUILTIN {
+                        Op::OptionIsSome { value }
+                    } else {
+                        Op::OptionUnwrap { value }
+                    };
+                    return self.emit(op);
+                }
                 let callee = names.get(function).copied().ok_or_else(|| {
                     AdapterError::Unsupported(format!("chamada a função externa `{function}`"))
                 })?;

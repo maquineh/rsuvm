@@ -37,7 +37,7 @@ use rvm_ir::{
     Block, BlockParam, BranchTarget, FieldDef, Function, Instr, Module, Op, Param, StructDef,
     Terminator, ValueId,
 };
-use rvm_spec::{ArrayElem, BinOp, CmpOp, ErrorCode, FloatOp, Limits, RvmError, Type};
+use rvm_spec::{ArrayElem, BinOp, CmpOp, ErrorCode, FloatOp, Limits, OptionalElem, RvmError, Type};
 
 /// Magic bytes no início de todo arquivo codificado: `RSVMB1`.
 pub const MAGIC: [u8; 6] = *b"RSVMB1";
@@ -53,6 +53,7 @@ const TAG_STR: u8 = 3;
 const TAG_F64: u8 = 4;
 const TAG_ARRAY: u8 = 5;
 const TAG_STRUCT: u8 = 6;
+const TAG_OPTIONAL: u8 = 7;
 
 // Opcodes de instrução (tabela de `BYTECODE-EXP-0-IMPLEMENTACAO.md` §1).
 const OP_CONST_I64: u8 = 0;
@@ -96,6 +97,11 @@ const OP_ARRAY_GET: u8 = 37;
 const OP_ARRAY_SET: u8 = 38;
 const OP_STRUCT_NEW: u8 = 39;
 const OP_FIELD_GET: u8 = 40;
+const OP_OPTION_NONE: u8 = 41;
+const OP_OPTION_SOME: u8 = 42;
+const OP_OPTION_IS_SOME: u8 = 43;
+const OP_OPTION_UNWRAP: u8 = 44;
+const OP_COALESCE: u8 = 45;
 
 // Tipos de terminador (tabela de `BYTECODE-EXP-0-IMPLEMENTACAO.md` §1).
 const TERM_RETURN: u8 = 0;
@@ -353,6 +359,27 @@ fn encode_instr(out: &mut Vec<u8>, instr: &Instr) {
             push_u32(out, *object);
             push_string(out, field);
         }
+        Op::OptionNone(elem) => {
+            push_u8(out, OP_OPTION_NONE);
+            push_u8(out, optional_elem_tag(*elem));
+        }
+        Op::OptionSome { value } => {
+            push_u8(out, OP_OPTION_SOME);
+            push_u32(out, *value);
+        }
+        Op::OptionIsSome { value } => {
+            push_u8(out, OP_OPTION_IS_SOME);
+            push_u32(out, *value);
+        }
+        Op::OptionUnwrap { value } => {
+            push_u8(out, OP_OPTION_UNWRAP);
+            push_u32(out, *value);
+        }
+        Op::Coalesce { option, fallback } => {
+            push_u8(out, OP_COALESCE);
+            push_u32(out, *option);
+            push_u32(out, *fallback);
+        }
         Op::Bin { op, lhs, rhs } => {
             push_u8(out, bin_opcode(*op));
             push_u32(out, *lhs);
@@ -576,6 +603,20 @@ fn read_instr(reader: &mut Reader<'_>, limits: &Limits) -> Result<Instr, RvmErro
             object: reader.read_u32("operando field_get")?,
             field: reader.read_name(limits, "campo de field_get")?,
         },
+        OP_OPTION_NONE => Op::OptionNone(read_optional_elem(reader, "elemento de option_none")?),
+        OP_OPTION_SOME => Op::OptionSome {
+            value: reader.read_u32("payload de option_some")?,
+        },
+        OP_OPTION_IS_SOME => Op::OptionIsSome {
+            value: reader.read_u32("operando option_is_some")?,
+        },
+        OP_OPTION_UNWRAP => Op::OptionUnwrap {
+            value: reader.read_u32("operando option_unwrap")?,
+        },
+        OP_COALESCE => Op::Coalesce {
+            option: reader.read_u32("operando option de coalesce")?,
+            fallback: reader.read_u32("fallback de coalesce")?,
+        },
         OP_ADD_I64_CHECKED => read_bin_operands(reader, BinOp::AddI64Checked)?,
         OP_SUB_I64_CHECKED => read_bin_operands(reader, BinOp::SubI64Checked)?,
         OP_MUL_I64_CHECKED => read_bin_operands(reader, BinOp::MulI64Checked)?,
@@ -677,6 +718,10 @@ fn read_type(reader: &mut Reader<'_>, what: &'static str) -> Result<Type, RvmErr
         TAG_F64 => Ok(Type::F64),
         TAG_ARRAY => Ok(Type::Array(read_elem(reader, what)?)),
         TAG_STRUCT => Ok(Type::Struct(reader.read_u32("id de struct do tipo")?)),
+        TAG_OPTIONAL => Ok(Type::Optional(read_optional_elem(
+            reader,
+            "elemento do tipo option",
+        )?)),
         tag => Err(decode_error(
             ErrorCode::UnknownType,
             format!("{what}: tag de tipo {tag} desconhecida"),
@@ -694,16 +739,46 @@ const fn type_tag(ty: Type) -> u8 {
         Type::F64 => TAG_F64,
         Type::Array(_) => TAG_ARRAY,
         Type::Struct(_) => TAG_STRUCT,
+        Type::Optional(_) => TAG_OPTIONAL,
     }
 }
 
-/// Escreve um [`Type`]; arrays escrevem também a tag do elemento e structs o id.
+/// Escreve um [`Type`]; arrays escrevem a tag do elemento, structs o id e
+/// optionals a tag do payload.
 fn push_type(out: &mut Vec<u8>, ty: Type) {
     push_u8(out, type_tag(ty));
     match ty {
         Type::Array(element) => push_u8(out, type_tag(element.ty())),
         Type::Struct(id) => push_u32(out, id),
+        Type::Optional(elem) => push_u8(out, optional_elem_tag(elem)),
         _ => {}
+    }
+}
+
+/// Mapeia [`OptionalElem`] para a tag `u8` do layout.
+const fn optional_elem_tag(elem: OptionalElem) -> u8 {
+    match elem {
+        OptionalElem::Bool => TAG_BOOL,
+        OptionalElem::I64 => TAG_I64,
+        OptionalElem::Str => TAG_STR,
+        OptionalElem::F64 => TAG_F64,
+    }
+}
+
+/// Lê a tag do payload de um `option`.
+fn read_optional_elem(
+    reader: &mut Reader<'_>,
+    what: &'static str,
+) -> Result<OptionalElem, RvmError> {
+    match reader.read_u8(what)? {
+        TAG_BOOL => Ok(OptionalElem::Bool),
+        TAG_I64 => Ok(OptionalElem::I64),
+        TAG_STR => Ok(OptionalElem::Str),
+        TAG_F64 => Ok(OptionalElem::F64),
+        tag => Err(decode_error(
+            ErrorCode::UnknownType,
+            format!("{what}: tag de payload {tag} desconhecida"),
+        )),
     }
 }
 

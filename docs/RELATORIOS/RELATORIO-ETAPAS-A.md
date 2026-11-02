@@ -321,7 +321,7 @@ Oráculo do Lift: `cargo run -p lift_cli -- run examples/rsuvm-oracle.lift` →
 |---|---|
 | `cargo test --manifest-path frontends/lift-rir/Cargo.toml` | 31 passed, 0 failed (22 diferencial + 9 CLI) |
 | `cargo run --bin lift-run -- fib.lift fib --arg i64:10` | `i64:55` (exit 0) |
-| oráculo do Lift (`rsuvm-oracle*.lift`) | `30 5 7 9 3 true false 25 12 55 0` / `15 0 7 0 1 2 10 3 6 0` / `3 -3 2 -2` / `-1 0 1 true false false true false true false true true true` / `ola true false true` / `ola mundo` / `1.5 true false` / `20` / `9 14 6` / `7 ana 42` |
+| oráculo do Lift (`rsuvm-oracle*.lift`) | `30 5 7 9 3 true false 25 12 55 0` / `15 0 7 0 1 2 10 3 6 0` / `3 -3 2 -2` / `-1 0 1 true false false true false true false true true true` / `ola true false true` / `ola mundo` / `1.5 true false` / `20` / `9 14 6` / `7 ana 42` / `hi missing 7 9 5 true false` / `5` |
 | `cargo test --workspace` (núcleo) | verde; **não** compila `frontends/` |
 
 Limites: o subconjunto do adaptador ainda **não** cobre strings/arrays/objetos,
@@ -387,11 +387,20 @@ aninhamento); quota cumulativa `campos × 24`. Corpus
 Lift, o literal `{ campo: valor }` e `obj.campo`; oráculo (`rsuvm-oracle10.lift`):
 `7 ana 42` — bate.
 
+### `Option`/`coalesce` (ADR-0030)
+
+Núcleo ganhou `Type::Optional` (payload escalar) e as operações `option_none`,
+`option_some`, `option_is_some`, `option_unwrap` (trap `unwrap_none`) e
+`coalesce`. Corpus `C-042`..`C-046`/`N-035`..`N-037`. O adaptador mapeia `null`,
+`option.some`/`is_some`/`unwrap` e baixa `??` com **fallback preguiçoso** via fluxo
+de controle; oráculos (`rsuvm-oracle11.lift` = `hi missing 7 9 5 true false`,
+`rsuvm-oracle12.lift` = `5`) — batem.
+
 ### Verificação (Resultado)
 
 | Comando | Resultado |
 |---|---|
-| `cargo test --workspace` | **148 passed, 0 failed**; corpus 41 válidos + 33 inválidos |
-| `cargo test --manifest-path frontends/lift-rir/Cargo.toml` | 36 passed, 0 failed (27 diferencial + 9 CLI) |
+| `cargo test --workspace` | **148 passed, 0 failed**; corpus 46 válidos + 36 inválidos |
+| `cargo test --manifest-path frontends/lift-rir/Cargo.toml` | 40 passed, 0 failed (31 diferencial + 9 CLI) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | exit 0 |
 | `cargo fmt --all -- --check` | exit 0 |

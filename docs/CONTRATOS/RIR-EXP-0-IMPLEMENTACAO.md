@@ -19,7 +19,9 @@ Instr     { def: ValueId, op: Op }
 Op        = const_i64 | const_bool | const_str | const_f64 | bin(op,lhs,rhs) | cmp(op,lhs,rhs)
           | str_eq(lhs,rhs) | str_ne(lhs,rhs) | str_len(operand) | concat_str(lhs,rhs)
           | float(op,lhs,rhs) | array(items) | array_len(v) | array_get(v,i) | array_set(v,i,x)
-          | struct_new(sid, fields) | field_get(v, field) | call(callee,args)
+          | struct_new(sid, fields) | field_get(v, field)
+          | option_none(elem) | option_some(v) | option_is_some(v) | option_unwrap(v)
+          | coalesce(o,f) | call(callee,args)
 Term      = return [v] | br(target,args) | cond_br(cond, target, target)
 ~~~
 
@@ -99,6 +101,11 @@ Depois de `structure::check`:
    | `array_set` | `array`, `i64`, elemento do array | `array` |
    | `struct_new` | um valor por campo, no tipo do campo | `struct` |
    | `field_get` | `struct`, nome de campo existente | tipo do campo |
+   | `option_none` | — | `option` |
+   | `option_some` | um escalar | `option` |
+   | `option_is_some` | `option` | `bool` |
+   | `option_unwrap` | `option` | payload |
+   | `coalesce` | `option`, fallback (payload ou o próprio `option`) | tipo do fallback |
    | comparações `*_i64` | `i64`, `i64` | `bool` |
    | `call_static` | casam com `params` do alvo | `ret` do alvo |
    Qualquer divergência ⇒ `invalid_type`.
@@ -145,6 +152,11 @@ terminador por último. O primeiro erro vence.
 - `struct_new` cria um valor de struct (campos escalares, ADR-0029) e cobra
   `campos × 24` bytes cumulativos; `field_get` lê um campo pelo nome (o campo
   precisa existir e o objeto ser struct). Não há `field_set` nesta rodada.
+- `option_none`/`option_some` criam `none`/`some` (payload escalar, ADR-0030);
+  `option_is_some` testa; `option_unwrap` extrai o payload e produz o trap
+  `unwrap_none` sobre `none`; `coalesce` devolve o payload se `some`, senão o
+  fallback. O fallback **preguiçoso** do `??` do Lift é obtido pelo adaptador via
+  fluxo de controle, não pelo op.
 - `br`/`cond_br` copiam os argumentos para os slots dos parâmetros do bloco alvo
   antes de saltar (phi explícito).
 - `return` devolve `Value::Unit` quando não há valor.

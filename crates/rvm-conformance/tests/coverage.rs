@@ -68,6 +68,11 @@ fn collect_ops(module: &Module, ops: &mut BTreeSet<String>, terms: &mut BTreeSet
                     Op::ArraySet { .. } => "array_set".to_string(),
                     Op::StructNew { .. } => "struct_new".to_string(),
                     Op::FieldGet { .. } => "field_get".to_string(),
+                    Op::OptionNone(_) => "option_none".to_string(),
+                    Op::OptionSome { .. } => "option_some".to_string(),
+                    Op::OptionIsSome { .. } => "option_is_some".to_string(),
+                    Op::OptionUnwrap { .. } => "option_unwrap".to_string(),
+                    Op::Coalesce { .. } => "coalesce".to_string(),
                     Op::Call { .. } => "call_static".to_string(),
                 };
                 ops.insert(name);
@@ -130,6 +135,11 @@ fn corpus_valido_cobre_todas_as_operacoes_do_subset() {
         "array_set",
         "struct_new",
         "field_get",
+        "option_none",
+        "option_some",
+        "option_is_some",
+        "option_unwrap",
+        "coalesce",
         "eq_i64",
         "ne_i64",
         "lt_i64",

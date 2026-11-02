@@ -1,0 +1,13 @@
+; id: C-045
+; expect: value str:ola
+; extra: option_unwrap extrai o payload de some (ADR-0030)
+module c045 version 1
+entry pega
+
+fn pega() -> string {
+  entry:
+    v0 = const_str "ola"
+    v1 = option_some v0
+    v2 = option_unwrap v1
+    return v2
+}

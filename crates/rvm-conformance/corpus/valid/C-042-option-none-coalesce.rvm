@@ -1,0 +1,13 @@
+; id: C-042
+; expect: value i64:42
+; extra: option_none e coalesce devolvem o fallback (ADR-0030)
+module c042 version 1
+entry resolve
+
+fn resolve() -> i64 {
+  entry:
+    v0 = option_none i64
+    v1 = const_i64 42
+    v2 = coalesce v0, v1
+    return v2
+}

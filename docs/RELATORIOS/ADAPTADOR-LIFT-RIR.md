@@ -5,10 +5,10 @@
 - **Lift de origem:** commit `5e59af55baba7af53f8763140d35c972399d2851`
   (`https://github.com/maquineh/lift`, licença `MIT OR Apache-2.0`)
 - **Escopo:** subconjunto de funções `int`/`boolean`/`string`/`number`/`void`,
-  arrays de escalares e structs (`interface`) com campos escalares, com
-  `let`/`const`, **atribuição** (a binding e a elemento de array), `return`,
-  `if`/`else if`/`else` (com merge), **`while`** e lógica `!`/`&&`/`||` com
-  curto-circuito (ver ADR-0021)
+  arrays de escalares, structs (`interface`) com campos escalares e opcionais
+  (`T?`), com `let`/`const`, **atribuição** (a binding e a elemento de array),
+  `return`, `if`/`else if`/`else` (com merge), **`while`** e lógica `!`/`&&`/`||`
+  com curto-circuito (ver ADR-0021)
 
 ## 1. Pipeline
 
@@ -243,14 +243,43 @@ O adaptador mapeia `interface Nome { … }` para a tabela de structs, o literal
 
 Resultado: `27 passed` (diferencial) + `9 passed` (CLI) = **36 passed; 0 failed**.
 
+### 2.9 `Option`/`??`
+
+Décimo e décimo-primeiro programas de referência (`rsuvm-oracle11.lift` e
+`rsuvm-oracle12.lift`):
+
+```bash
+cargo run -p lift_cli -- run examples/rsuvm-oracle11.lift
+cargo run -p lift_cli -- run examples/rsuvm-oracle12.lift
+```
+
+Saídas do Lift (oráculo): `hi missing 7 9 5 true false` e `5`.
+
+| Caso (Lift) | Chamada | Oráculo Lift | RSUVM (RIR) | Igual? |
+|---|---|---|---|---|
+| `resolve` (`??` com fallback) | `("hi")` | hi | `str:hi` | sim |
+| `resolve` | `(null)` | missing | `str:missing` | sim |
+| `teste` (`??` sobre função) | `(true)` / `(false)` | 7 / 9 | `i64:7` / `i64:9` | sim |
+| `some_val` (`option.unwrap`) | `some_val()` | 5 | `i64:5` | sim |
+| `is_some_val`/`is_none_val` | — | true / false | `bool:true` / `bool:false` | sim |
+| `seguro` (**fallback preguiçoso**) | `seguro()` | 5 | `i64:5` | sim |
+
+`??` é baixado com **fluxo de controle** (`option_is_some` + ramos), preservando o
+fallback preguiçoso: `option.some(5) ?? (1 / 0)` devolve `5` sem trap; já
+`null ?? (1 / 0)` trap `division_by_zero` (ADR-0030). `x == null`/`x != null` ficam
+fora (`Unsupported`).
+
+Resultado: `31 passed` (diferencial) + `9 passed` (CLI) = **40 passed; 0 failed**.
+
 ## 3. Limitações
 
-1. Subconjunto ainda estreito: **sem** `coalesce`, closures,
-   `console.log`/`import`. Fora disso, `AdapterError::Unsupported`. Divisão/resto,
-   `string` (com concatenação), `f64` (`number`), arrays (literal, índice e
-   `xs[i] = v`) e structs (`interface`, literal e `obj.campo`) são suportados; a
-   atribuição a elemento exige que o array seja um local não-aliasado (ADR-0028) e
-   structs só aceitam campos escalares (ADR-0029).
+1. Subconjunto ainda estreito: **sem** closures, `console.log`/`import`. Fora
+   disso, `AdapterError::Unsupported`. Divisão/resto, `string` (com concatenação),
+   `f64` (`number`), arrays (literal, índice e `xs[i] = v`), structs (`interface`,
+   literal e `obj.campo`) e opcionais (`null`, `option.some`/`is_some`/`unwrap`,
+   `??`) são suportados; a atribuição a elemento exige que o array seja um local
+   não-aliasado (ADR-0028); structs só aceitam campos escalares (ADR-0029) e
+   `x == null`/`x != null` ficam fora (ADR-0030).
 2. O adaptador é um **workspace separado** e depende do Lift por git fixado; o
    núcleo RSUVM continua sem dependências externas.
 3. O teste compara com o oráculo do Lift **registrado**; não invoca o compilador do

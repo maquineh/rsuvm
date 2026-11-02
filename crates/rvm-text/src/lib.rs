@@ -58,7 +58,8 @@ use rvm_ir::{
     StructDef, Terminator, ValueId,
 };
 use rvm_spec::{
-    BinOp, CmpOp, ErrorCode, FloatOp, Limits, Location, RvmError, StructId, Type, IR_VERSION,
+    BinOp, CmpOp, ErrorCode, FloatOp, Limits, Location, OptionalElem, RvmError, StructId, Type,
+    IR_VERSION,
 };
 
 /// Converte o texto experimental em um módulo RIR estruturalmente válido.
@@ -243,6 +244,10 @@ fn print_type(module: &Module, ty: Type, out: &mut String) {
                 None => out.push_str(&id.to_string()),
             }
         }
+        Type::Optional(elem) => {
+            out.push_str("option ");
+            out.push_str(elem.name());
+        }
         other => out.push_str(other.name()),
     }
 }
@@ -342,6 +347,28 @@ fn print_op(module: &Module, function: &Function, op: &Op, out: &mut String) {
             print_value(function, *object, out);
             out.push_str(", ");
             out.push_str(field);
+        }
+        Op::OptionNone(elem) => {
+            out.push_str("option_none ");
+            out.push_str(elem.name());
+        }
+        Op::OptionSome { value } => {
+            out.push_str("option_some ");
+            print_value(function, *value, out);
+        }
+        Op::OptionIsSome { value } => {
+            out.push_str("option_is_some ");
+            print_value(function, *value, out);
+        }
+        Op::OptionUnwrap { value } => {
+            out.push_str("option_unwrap ");
+            print_value(function, *value, out);
+        }
+        Op::Coalesce { option, fallback } => {
+            out.push_str("coalesce ");
+            print_value(function, *option, out);
+            out.push_str(", ");
+            print_value(function, *fallback, out);
         }
         Op::Bin { op, lhs, rhs } => {
             out.push_str(op.name());
@@ -658,6 +685,17 @@ fn limit(value: u32) -> usize {
     usize::try_from(value).unwrap_or(usize::MAX)
 }
 
+/// Converte o nome estável de um payload de `option` em [`OptionalElem`].
+fn optional_elem_from_name(name: &str) -> Option<OptionalElem> {
+    match name {
+        "bool" => Some(OptionalElem::Bool),
+        "i64" => Some(OptionalElem::I64),
+        "string" => Some(OptionalElem::Str),
+        "f64" => Some(OptionalElem::F64),
+        _ => None,
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Estruturas intermediárias (nomes antes da resolução)
 // ---------------------------------------------------------------------------
@@ -721,6 +759,11 @@ enum RawOp {
     ArraySet(String, String, String),
     StructNew(String, Vec<String>),
     FieldGet(String, String),
+    OptionNone(OptionalElem),
+    OptionSome(String),
+    OptionIsSome(String),
+    OptionUnwrap(String),
+    Coalesce(String, String),
     Call(String, Vec<String>),
 }
 
@@ -853,8 +896,9 @@ impl Parser {
     }
 
     fn parse_type(&mut self) -> Result<Type, RvmError> {
-        let name =
-            self.expect_ident("tipo (`unit`, `bool`, `i64`, `string`, `f64` ou `struct Nome`)")?;
+        let name = self.expect_ident(
+            "tipo (`unit`, `bool`, `i64`, `string`, `f64`, `struct Nome` ou `option Elem`)",
+        )?;
         if name == "struct" {
             let struct_name = self.expect_ident("nome de struct após `struct`")?;
             let id = self.structs.get(&struct_name).copied().ok_or_else(|| {
@@ -865,6 +909,17 @@ impl Parser {
                 .at(Location::Module)
             })?;
             return Ok(Type::Struct(id));
+        }
+        if name == "option" {
+            let elem = self.expect_ident("elemento após `option`")?;
+            let elem = optional_elem_from_name(&elem).ok_or_else(|| {
+                RvmError::new(
+                    ErrorCode::UnknownType,
+                    format!("elemento de option desconhecido `{elem}`"),
+                )
+                .at(Location::Module)
+            })?;
+            return Ok(Type::Optional(elem));
         }
         Type::from_name(&name).ok_or_else(|| {
             RvmError::new(
@@ -1205,6 +1260,22 @@ impl Parser {
                 self.expect_token(Token::Comma, "`,` entre operandos")?;
                 let field = self.expect_ident("nome do campo")?;
                 RawOp::FieldGet(object, field)
+            }
+            "option_none" => {
+                let elem = self.expect_ident("elemento do option")?;
+                let elem = optional_elem_from_name(&elem).ok_or_else(|| {
+                    self.syntax(format!("elemento de option desconhecido `{elem}`"))
+                })?;
+                RawOp::OptionNone(elem)
+            }
+            "option_some" => RawOp::OptionSome(self.expect_ident("payload do option")?),
+            "option_is_some" => RawOp::OptionIsSome(self.expect_ident("operando option")?),
+            "option_unwrap" => RawOp::OptionUnwrap(self.expect_ident("operando option")?),
+            "coalesce" => {
+                let option = self.expect_ident("operando option")?;
+                self.expect_token(Token::Comma, "`,` entre operandos")?;
+                let fallback = self.expect_ident("fallback")?;
+                RawOp::Coalesce(option, fallback)
             }
             "call_static" => {
                 let callee = self.expect_ident("nome da função chamada")?;
@@ -1630,6 +1701,20 @@ fn lower_op(
         RawOp::FieldGet(object, field) => Op::FieldGet {
             object: value(object)?,
             field: field.clone(),
+        },
+        RawOp::OptionNone(elem) => Op::OptionNone(*elem),
+        RawOp::OptionSome(payload) => Op::OptionSome {
+            value: value(payload)?,
+        },
+        RawOp::OptionIsSome(option) => Op::OptionIsSome {
+            value: value(option)?,
+        },
+        RawOp::OptionUnwrap(option) => Op::OptionUnwrap {
+            value: value(option)?,
+        },
+        RawOp::Coalesce(option, fallback) => Op::Coalesce {
+            option: value(option)?,
+            fallback: value(fallback)?,
         },
         RawOp::Bin(op, lhs, rhs) => Op::Bin {
             op: *op,

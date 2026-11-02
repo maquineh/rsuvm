@@ -10,11 +10,11 @@ crate toca sistema operacional. Depende apenas de `rvm-spec`.
 ## Interface
 
 - `Value` — `Unit`, `Bool(bool)`, `I64(i64)`, `Str(String)`, `F64(f64)`,
-  `Array(Vec<Value>)`, `Struct { ty, fields }` (Clone, não `Copy` nem `Eq`);
-  `ty`, `as_bool`, `as_i64`, `as_str`, `as_f64`, `as_array`, `as_struct`,
-  `matches_type`, `Display` estável (`i64:30`, `bool:true`, `unit`,
-  `str:<texto>`, `f64:1.5`, `array:[i64:1, i64:2]`, `struct:0[i64:1]`)
-  (`lib.rs:Value`).
+  `Array(Vec<Value>)`, `Struct { ty, fields }`, `Option { elem, value }` (Clone,
+  não `Copy` nem `Eq`); `ty`, `as_bool`, `as_i64`, `as_str`, `as_f64`, `as_array`,
+  `as_struct`, `as_option`, `matches_type`, `Display` estável (`i64:30`,
+  `bool:true`, `unit`, `str:<texto>`, `f64:1.5`, `array:[i64:1, i64:2]`,
+  `struct:0[i64:1]`, `none`, `some:i64:1`) (`lib.rs:Value`).
 - `DEFAULT_FUEL` — saldo padrão de execução (`100_000`).
 - `DEFAULT_MEMORY_LIMIT_BYTES` (16 MiB), `FRAME_BASE_BYTES` (256), `SLOT_BYTES`
   (24), `frame_cost(slots) -> u64` e `arg_buffer_cost(args) -> u64` — modelo

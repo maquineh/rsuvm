@@ -384,6 +384,80 @@ fn struct_com_campo_nao_escalar_e_rejeitado() {
 }
 
 #[test]
+fn option_some_none_coalesce_e_builtins() {
+    // Oráculo do Lift (`rsuvm-oracle11.lift`): `hi missing 7 9 5 true false`.
+    let source = "function resolve(value: string?): string { return value ?? \"missing\"; } \
+        function maybe(present: boolean): int? { if present { return option.some(7); } return null; } \
+        function teste(present: boolean): int { return maybe(present) ?? 9; } \
+        function some_val(): int { const x: int? = option.some(5); return option.unwrap(x); } \
+        function is_some_val(): boolean { const x: int? = option.some(5); return option.is_some(x); } \
+        function is_none_val(): boolean { const x: int? = null; return option.is_some(x); }";
+    assert_eq!(
+        executar(
+            source,
+            "resolve",
+            &[Value::Option {
+                elem: rvm_spec::OptionalElem::Str,
+                value: Some(Box::new(Value::Str("hi".to_string()))),
+            }]
+        ),
+        Value::Str("hi".to_string())
+    );
+    assert_eq!(
+        executar(
+            source,
+            "resolve",
+            &[Value::Option {
+                elem: rvm_spec::OptionalElem::Str,
+                value: None,
+            }]
+        ),
+        Value::Str("missing".to_string())
+    );
+    assert_eq!(
+        executar(source, "teste", &[Value::Bool(true)]),
+        Value::I64(7)
+    );
+    assert_eq!(
+        executar(source, "teste", &[Value::Bool(false)]),
+        Value::I64(9)
+    );
+    assert_eq!(executar(source, "some_val", &[]), Value::I64(5));
+    assert_eq!(executar(source, "is_some_val", &[]), Value::Bool(true));
+    assert_eq!(executar(source, "is_none_val", &[]), Value::Bool(false));
+}
+
+#[test]
+fn option_fallback_preguicoso() {
+    // Oráculo do Lift (`rsuvm-oracle12.lift`): `5` — `1 / 0` não é avaliado
+    // porque o `option` é `some`.
+    let source = "function seguro(): int { return option.some(5) ?? (1 / 0); }";
+    assert_eq!(executar(source, "seguro", &[]), Value::I64(5));
+}
+
+#[test]
+fn option_fallback_avaliado_quando_none_trapa() {
+    let source = "function f(): int { const x: int? = null; return x ?? (1 / 0); }";
+    let module = lower_source(source, "f").expect("lowering Lift→RIR");
+    let verified = rvm_verify::VerifiedModule::verify(module, &Limits::default())
+        .expect("módulo gerado deveria verificar");
+    let config = ExecConfig::new(1_000_000, CallDepthLimit::new(64).expect("limite válido"));
+    let error = rvm_interpreter::execute(&verified, verified.entry(), &[], &config)
+        .expect_err("fallback avaliado deveria trapar");
+    assert_eq!(error.code(), rvm_spec::ErrorCode::DivisionByZero);
+}
+
+#[test]
+fn comparacao_com_null_e_rejeitada() {
+    let source = "function f(): boolean { const x: int? = null; return x == null; }";
+    let error = lower_source(source, "f").expect_err("== null está fora do subconjunto");
+    assert!(
+        matches!(error, AdapterError::Unsupported(_)),
+        "erro inesperado: {error:?}"
+    );
+}
+
+#[test]
 fn construto_fora_do_subconjunto_e_rejeitado() {
     // `console.log` (efeito de host) está fora do subconjunto.
     let source = "function f(): int { console.log(\"x\"); return 0; }";

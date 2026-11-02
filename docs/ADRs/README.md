@@ -31,6 +31,7 @@ memória/transferência, integração Lift e integração Rio).
 | [0027](ADR-0027-ARRAYS-IMUTAVEIS.md) | Arrays imutáveis no núcleo | Aceito experimentalmente |
 | [0028](ADR-0028-ARRAY-SET-FUNCIONAL.md) | Mutação de array por atualização funcional (`array_set`) | Aceito experimentalmente |
 | [0029](ADR-0029-OBJETOS-STRUCTS.md) | Objetos/structs no núcleo | Aceito experimentalmente |
+| [0030](ADR-0030-OPTION-COALESCE.md) | `Option`/`coalesce` no núcleo | Aceito experimentalmente |
 
 Estados usados: `Proposto`, `Aceito experimentalmente`, `Validado no escopo`,
 `Rejeitado`, `Substituído`. "Validado no escopo" exige critério e evidência

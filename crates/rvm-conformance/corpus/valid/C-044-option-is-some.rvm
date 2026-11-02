@@ -1,0 +1,13 @@
+; id: C-044
+; expect: value bool:true
+; extra: option_is_some sobre some é true (ADR-0030)
+module c044 version 1
+entry teste
+
+fn teste() -> bool {
+  entry:
+    v0 = const_str "x"
+    v1 = option_some v0
+    v2 = option_is_some v1
+    return v2
+}

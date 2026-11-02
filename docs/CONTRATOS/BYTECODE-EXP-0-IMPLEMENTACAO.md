@@ -31,8 +31,8 @@ struct:
   fields[]         field_count vezes { name: string, ty: type }
 
 type:
-  tag              u8  (0=unit, 1=bool, 2=i64, 3=string, 4=f64, 5=array, 6=struct)
-  payload          array: u8 elem_tag; struct: u32 struct_id; senão: —
+  tag              u8  (0=unit, 1=bool, 2=i64, 3=string, 4=f64, 5=array, 6=struct, 7=option)
+  payload          array: u8 elem_tag; struct: u32 struct_id; option: u8 payload_tag; senão: —
 
 function:
   id               u32
@@ -108,6 +108,11 @@ terminator:
 | 38 | `array_set` | `u32 array`, `u32 index`, `u32 value` |
 | 39 | `struct_new` | `u32 struct_id`, `u16 count`, `u32 fields[count]` |
 | 40 | `field_get` | `u32 object`, `string field` |
+| 41 | `option_none` | `u8 payload_tag` |
+| 42 | `option_some` | `u32 value` |
+| 43 | `option_is_some` | `u32 value` |
+| 44 | `option_unwrap` | `u32 value` |
+| 45 | `coalesce` | `u32 option`, `u32 fallback` |
 
 Código desconhecido ⇒ `unknown_opcode`.
 
@@ -135,8 +140,8 @@ Código desconhecido ⇒ `unknown_opcode`.
    comparada com o limite estrutural correspondente **e** com os bytes restantes
    antes de reservar memória. Contagem maior que os bytes restantes ⇒
    `truncated_input` (cada item consome ao menos 1 byte).
-6. Tag de tipo fora de `0..=6` (`unit`, `bool`, `i64`, `string`, `f64`, `array`,
-   `struct`) ⇒
+6. Tag de tipo fora de `0..=7` (`unit`, `bool`, `i64`, `string`, `f64`, `array`,
+   `struct`, `option`) ⇒
    `unknown_type`; `const_bool` fora de `0|1` ⇒
    `invalid_number`.
 7. Ao final, bytes excedentes ⇒ `invalid_module`.

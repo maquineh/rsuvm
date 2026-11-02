@@ -57,14 +57,16 @@ linguagem (ADR-0009).
 ## 3. Subset semântico (EXP-0)
 
 - Tipos: `unit`, `bool`, `i64`, `string`, `f64`, `array`, `struct` (campos
-  escalares, ADR-0029). Sem coerção implícita.
+  escalares, ADR-0029), `option` (payload escalar, ADR-0030). Sem coerção
+  implícita.
 - Operações: `const_i64`, `const_bool`, `const_str`, `const_f64`, `add_i64_checked`,
   `sub_i64_checked`, `mul_i64_checked`, `div_i64_checked`, `rem_i64_checked`,
   `shl_i64_checked`, `shr_i64_checked`, `and_i64`, `or_i64`, `xor_i64`, `eq_i64`,
   `ne_i64`, `lt_i64`, `le_i64`, `gt_i64`, `ge_i64`, `str_eq`, `str_ne`, `str_len`,
   `concat_str`, `add_f64`, `sub_f64`, `mul_f64`, `div_f64`, `eq_f64`, `ne_f64`,
   `lt_f64`, `le_f64`, `gt_f64`, `ge_f64`, `array`, `array_len`, `array_get`,
-  `array_set`, `struct_new`, `field_get`,
+  `array_set`, `struct_new`, `field_get`, `option_none`, `option_some`,
+  `option_is_some`, `option_unwrap`, `coalesce`,
   `call_static`.
 - Terminadores: `return`, `br`, `cond_br`.
 - Merge por parâmetros de bloco (phi explícito).
@@ -72,7 +74,9 @@ linguagem (ADR-0009).
   exceções recuperáveis, threads, async. Arrays existem **imutáveis** (ADR-0027),
   com atualização **funcional** por `array_set` (ADR-0028, sem referências), sem
   mutação in-place, sem slicing e sem arrays aninhados; structs existem com
-  **campos escalares** (ADR-0029), sem mutação de campo nem aninhamento; `f64`
+  **campos escalares** (ADR-0029), sem mutação de campo nem aninhamento;
+  `option` existe com **payload escalar** (ADR-0030), sem `option` aninhado nem
+  `==`/`!=` de opcionais; `f64`
   existe (ADR-0026) sem `%`/`pow`/conversões;
   concatenação de `string` existe (ADR-0025), sem slicing.
 

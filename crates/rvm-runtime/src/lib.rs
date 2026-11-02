@@ -24,7 +24,7 @@
 
 use core::fmt;
 
-use rvm_spec::{ArrayElem, ErrorCode, RvmError, StructId, Type};
+use rvm_spec::{ArrayElem, ErrorCode, OptionalElem, RvmError, StructId, Type};
 
 /// Fuel padrão de uma execução quando o host não especifica outro valor.
 pub const DEFAULT_FUEL: u64 = 100_000;
@@ -118,6 +118,13 @@ pub enum Value {
         /// Valores dos campos, na ordem de declaração.
         fields: Vec<Value>,
     },
+    /// Valor opcional de payload escalar (ADR-0030).
+    Option {
+        /// Tipo do payload.
+        elem: OptionalElem,
+        /// `None` (ausente) ou `Some` com o payload.
+        value: Option<Box<Value>>,
+    },
 }
 
 impl Value {
@@ -140,6 +147,7 @@ impl Value {
                 None => Type::Unit,
             },
             Value::Struct { ty, .. } => Type::Struct(*ty),
+            Value::Option { elem, .. } => Type::Optional(*elem),
         }
     }
 
@@ -197,6 +205,16 @@ impl Value {
         }
     }
 
+    /// Payload de `some`, se o valor for `option` com payload; `None` para `none`
+    /// e para valores que não são `option`.
+    #[must_use]
+    pub fn as_option(&self) -> Option<Option<&Value>> {
+        match self {
+            Value::Option { value, .. } => Some(value.as_deref()),
+            _ => None,
+        }
+    }
+
     /// `true` se o valor pertence ao tipo declarado (sem conversão implícita).
     #[must_use]
     pub fn matches_type(&self, ty: Type) -> bool {
@@ -205,6 +223,12 @@ impl Value {
                 items.iter().all(|item| item.matches_type(elem.ty()))
             }
             (Value::Struct { ty: id, .. }, Type::Struct(expected)) => *id == expected,
+            (Value::Option { elem, value }, Type::Optional(expected)) => {
+                *elem == expected
+                    && value
+                        .as_deref()
+                        .map_or(true, |inner| inner.matches_type(expected.ty()))
+            }
             _ => matches!(
                 (self, ty),
                 (Value::Unit, Type::Unit)
@@ -248,6 +272,10 @@ impl fmt::Display for Value {
                 }
                 f.write_str("]")
             }
+            Value::Option { value, .. } => match value {
+                None => f.write_str("none"),
+                Some(inner) => write!(f, "some:{inner}"),
+            },
         }
     }
 }

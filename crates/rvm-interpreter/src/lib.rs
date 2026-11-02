@@ -56,7 +56,7 @@
 
 use rvm_ir::{BlockId, FnId, Function, Module, Op, Terminator, ValueId};
 use rvm_runtime::{arg_buffer_cost, frame_cost, ExecConfig, Value, SLOT_BYTES};
-use rvm_spec::{BinOp, ErrorCode, Location, RvmError, Type};
+use rvm_spec::{BinOp, ErrorCode, Location, OptionalElem, RvmError, Type};
 
 use rvm_verify::VerifiedModule;
 
@@ -671,6 +671,142 @@ impl<'a> Interpreter<'a> {
                         }
                     };
                     self.write_current(&mut stack, top, instr.def, value, &site)?;
+                    self.advance(&mut stack, top, &site)?;
+                }
+                Op::OptionNone(elem) => {
+                    self.write_current(
+                        &mut stack,
+                        top,
+                        instr.def,
+                        Value::Option {
+                            elem: *elem,
+                            value: None,
+                        },
+                        &site,
+                    )?;
+                    self.advance(&mut stack, top, &site)?;
+                }
+                Op::OptionSome { value } => {
+                    let payload = {
+                        let frame = stack.get(top).ok_or_else(|| {
+                            error_at(
+                                ErrorCode::InvalidModule,
+                                "frame ausente ao envolver option",
+                                &site,
+                            )
+                        })?;
+                        read_slot(frame, *value, &site)?
+                    };
+                    let elem = OptionalElem::from_type(payload.ty()).ok_or_else(|| {
+                        error_at(
+                            ErrorCode::InvalidModule,
+                            "option_some com payload não escalar",
+                            &site,
+                        )
+                    })?;
+                    self.write_current(
+                        &mut stack,
+                        top,
+                        instr.def,
+                        Value::Option {
+                            elem,
+                            value: Some(Box::new(payload)),
+                        },
+                        &site,
+                    )?;
+                    self.advance(&mut stack, top, &site)?;
+                }
+                Op::OptionIsSome { value } => {
+                    let is_some = {
+                        let frame = stack.get(top).ok_or_else(|| {
+                            error_at(
+                                ErrorCode::InvalidModule,
+                                "frame ausente ao testar option",
+                                &site,
+                            )
+                        })?;
+                        match read_slot(frame, *value, &site)? {
+                            Value::Option { value, .. } => value.is_some(),
+                            _ => {
+                                return Err(error_at(
+                                    ErrorCode::InvalidModule,
+                                    format!("v{value} não é um option"),
+                                    &site,
+                                ))
+                            }
+                        }
+                    };
+                    self.write_current(&mut stack, top, instr.def, Value::Bool(is_some), &site)?;
+                    self.advance(&mut stack, top, &site)?;
+                }
+                Op::OptionUnwrap { value } => {
+                    let payload = {
+                        let frame = stack.get(top).ok_or_else(|| {
+                            error_at(
+                                ErrorCode::InvalidModule,
+                                "frame ausente ao extrair option",
+                                &site,
+                            )
+                        })?;
+                        match read_slot(frame, *value, &site)? {
+                            Value::Option {
+                                value: Some(inner), ..
+                            } => *inner,
+                            Value::Option { value: None, .. } => {
+                                return Err(error_at(
+                                    ErrorCode::UnwrapNone,
+                                    "option_unwrap sobre none".to_string(),
+                                    &site,
+                                ))
+                            }
+                            _ => {
+                                return Err(error_at(
+                                    ErrorCode::InvalidModule,
+                                    format!("v{value} não é um option"),
+                                    &site,
+                                ))
+                            }
+                        }
+                    };
+                    self.write_current(&mut stack, top, instr.def, payload, &site)?;
+                    self.advance(&mut stack, top, &site)?;
+                }
+                Op::Coalesce { option, fallback } => {
+                    let result = {
+                        let frame = stack.get(top).ok_or_else(|| {
+                            error_at(
+                                ErrorCode::InvalidModule,
+                                "frame ausente ao coalescer option",
+                                &site,
+                            )
+                        })?;
+                        let option_value = read_slot(frame, *option, &site)?;
+                        let fallback_value = read_slot(frame, *fallback, &site)?;
+                        match option_value {
+                            Value::Option {
+                                elem,
+                                value: Some(inner),
+                            } => {
+                                if matches!(fallback_value, Value::Option { .. }) {
+                                    Value::Option {
+                                        elem,
+                                        value: Some(inner),
+                                    }
+                                } else {
+                                    *inner
+                                }
+                            }
+                            Value::Option { value: None, .. } => fallback_value,
+                            _ => {
+                                return Err(error_at(
+                                    ErrorCode::InvalidModule,
+                                    format!("v{option} não é um option"),
+                                    &site,
+                                ))
+                            }
+                        }
+                    };
+                    self.write_current(&mut stack, top, instr.def, result, &site)?;
                     self.advance(&mut stack, top, &site)?;
                 }
                 Op::Call { callee, args } => {

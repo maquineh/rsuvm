@@ -32,7 +32,7 @@
     )
 )]
 
-use rvm_spec::{ArrayElem, BinOp, CmpOp, FloatOp, StructId, Type};
+use rvm_spec::{ArrayElem, BinOp, CmpOp, FloatOp, OptionalElem, StructId, Type};
 
 pub mod structure;
 #[cfg(any(test, feature = "test-helpers"))]
@@ -278,6 +278,32 @@ pub enum Op {
         /// Nome do campo; o tipo é resolvido pelo verificador.
         field: String,
     },
+    /// Define `none` de um `option` escalar (`option_none`), ADR-0030.
+    OptionNone(OptionalElem),
+    /// Envolve um escalar em `some` (`option_some`), ADR-0030.
+    OptionSome {
+        /// Payload escalar.
+        value: ValueId,
+    },
+    /// Testa se um `option` é `some` (`option_is_some`), produzindo `bool`, ADR-0030.
+    OptionIsSome {
+        /// Operando `option`.
+        value: ValueId,
+    },
+    /// Extrai o payload de um `option` (`option_unwrap`); `none` produz o trap
+    /// `unwrap_none`, ADR-0030.
+    OptionUnwrap {
+        /// Operando `option`.
+        value: ValueId,
+    },
+    /// Coalesce (`coalesce`): devolve o payload do `option` se `some`, senão o
+    /// fallback (ADR-0030). O resultado é o tipo do fallback.
+    Coalesce {
+        /// Operando `option`.
+        option: ValueId,
+        /// Fallback (mesmo payload, ou o próprio `option`).
+        fallback: ValueId,
+    },
     /// Chama estaticamente uma função do mesmo módulo (`call_static`).
     Call {
         /// Função chamada; resolvida estaticamente pelo verificador.
@@ -312,6 +338,13 @@ impl Op {
             Op::StructNew { struct_id, .. } => Type::Struct(*struct_id),
             // O tipo é resolvido pelo verificador a partir da struct do objeto.
             Op::FieldGet { .. } => Type::Unit,
+            Op::OptionNone(elem) => Type::Optional(*elem),
+            // Resolvido pelo verificador a partir do payload.
+            Op::OptionSome { .. } => Type::Optional(OptionalElem::I64),
+            Op::OptionIsSome { .. } => Type::Bool,
+            // Resolvidos pelo verificador a partir do `option`.
+            Op::OptionUnwrap { .. } => Type::I64,
+            Op::Coalesce { .. } => Type::I64,
             Op::Call { .. } => Type::I64, // substituído pelo tipo de retorno no verificador
         }
     }
@@ -341,6 +374,11 @@ impl Op {
             } => vec![*array, *index, *value],
             Op::StructNew { fields, .. } => fields.clone(),
             Op::FieldGet { object, .. } => vec![*object],
+            Op::OptionNone(_) => Vec::new(),
+            Op::OptionSome { value } | Op::OptionIsSome { value } | Op::OptionUnwrap { value } => {
+                vec![*value]
+            }
+            Op::Coalesce { option, fallback } => vec![*option, *fallback],
             Op::Call { args, .. } => args.clone(),
         }
     }
@@ -470,7 +508,11 @@ impl Function {
             for instr in &block.instrs {
                 if instr.def == id {
                     return match &instr.op {
-                        Op::Call { .. } | Op::FieldGet { .. } => None,
+                        Op::Call { .. }
+                        | Op::FieldGet { .. }
+                        | Op::OptionSome { .. }
+                        | Op::OptionUnwrap { .. }
+                        | Op::Coalesce { .. } => None,
                         op => Some(op.result_type()),
                     };
                 }

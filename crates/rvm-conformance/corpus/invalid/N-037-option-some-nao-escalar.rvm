@@ -1,0 +1,14 @@
+; id: N-037
+; expect: error invalid_type
+; extra: option_some exige payload escalar (ADR-0030)
+module n037 version 1
+entry f
+
+fn f() -> i64 {
+  entry:
+    v0 = const_i64 1
+    v1 = array v0
+    v2 = option_some v1
+    v3 = const_i64 0
+    return v3
+}

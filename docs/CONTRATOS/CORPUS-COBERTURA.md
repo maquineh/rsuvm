@@ -48,6 +48,11 @@ com valor esperado, e cada terminador em pelo menos um caso válido. A verifica�
 | `array_set` | C-036, C-037, C-038 |
 | `struct_new` | C-039, C-040, C-041 |
 | `field_get` | C-039, C-040, C-041 |
+| `option_none` | C-042 |
+| `option_some` | C-043, C-044, C-045, C-046 |
+| `option_is_some` | C-044 |
+| `option_unwrap` | C-045, C-046 |
+| `coalesce` | C-042, C-043 |
 | `eq_i64` | C-002 |
 | `ne_i64` | C-012 |
 | `lt_i64` | C-008 |
@@ -70,7 +75,7 @@ com a expectativa declarada. A verificação é executada por
 
 | Código | Caso(s) inválido(s) |
 |---|---|
-| `invalid_type` | N-001, N-002, N-007, N-015, N-017, N-031, N-032, N-033, N-034 |
+| `invalid_type` | N-001, N-002, N-007, N-015, N-017, N-031, N-032, N-033, N-034, N-036, N-037 |
 | `invalid_module` | N-003, N-004, N-022, N-023 |
 | `invalid_control_flow` | N-005, N-006, N-013, N-016, N-018 |
 | `unknown_opcode` | N-008 |
@@ -79,6 +84,7 @@ com a expectativa declarada. A verificação é executada por
 | `division_by_zero` | N-025 |
 | `invalid_shift` | N-027 |
 | `index_out_of_bounds` | N-029, N-030 |
+| `unwrap_none` | N-035 |
 | `out_of_fuel` | N-010 |
 | `call_depth_exceeded` | N-011 |
 | `out_of_memory` | N-021, N-024, N-028 |

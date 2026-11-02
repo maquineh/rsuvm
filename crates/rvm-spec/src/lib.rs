@@ -77,7 +77,59 @@ impl ArrayElem {
             Type::I64 => Some(ArrayElem::I64),
             Type::Str => Some(ArrayElem::Str),
             Type::F64 => Some(ArrayElem::F64),
-            Type::Unit | Type::Array(_) | Type::Struct(_) => None,
+            Type::Unit | Type::Array(_) | Type::Struct(_) | Type::Optional(_) => None,
+        }
+    }
+}
+
+/// Tipo de payload de um `option` escalar (ADR-0030).
+///
+/// Espelha [`ArrayElem`]: mantém `Type: Copy` ao limitar o payload a escalares
+/// (`bool`/`i64`/`string`/`f64`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum OptionalElem {
+    /// Payload `bool`.
+    Bool,
+    /// Payload `i64`.
+    I64,
+    /// Payload `string`.
+    Str,
+    /// Payload `f64`.
+    F64,
+}
+
+impl OptionalElem {
+    /// Tipo escalar do payload.
+    #[must_use]
+    pub const fn ty(self) -> Type {
+        match self {
+            OptionalElem::Bool => Type::Bool,
+            OptionalElem::I64 => Type::I64,
+            OptionalElem::Str => Type::Str,
+            OptionalElem::F64 => Type::F64,
+        }
+    }
+
+    /// Nome estável do payload.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            OptionalElem::Bool => "bool",
+            OptionalElem::I64 => "i64",
+            OptionalElem::Str => "string",
+            OptionalElem::F64 => "f64",
+        }
+    }
+
+    /// Payload correspondente a um tipo escalar, se houver.
+    #[must_use]
+    pub const fn from_type(ty: Type) -> Option<Self> {
+        match ty {
+            Type::Bool => Some(OptionalElem::Bool),
+            Type::I64 => Some(OptionalElem::I64),
+            Type::Str => Some(OptionalElem::Str),
+            Type::F64 => Some(OptionalElem::F64),
+            Type::Unit | Type::Array(_) | Type::Struct(_) | Type::Optional(_) => None,
         }
     }
 }
@@ -111,6 +163,8 @@ pub enum Type {
     /// structs do módulo ([`crate`] não tem acesso a ela: o layout é resolvido por
     /// `rvm-verify`).
     Struct(StructId),
+    /// Valor opcional de payload escalar (`T?`, ADR-0030).
+    Optional(OptionalElem),
 }
 
 impl Type {
@@ -125,6 +179,7 @@ impl Type {
             Type::F64 => "f64",
             Type::Array(_) => "array",
             Type::Struct(_) => "struct",
+            Type::Optional(_) => "option",
         }
     }
 
@@ -569,6 +624,8 @@ pub enum ErrorCode {
     StringTooLong,
     /// Índice de array fora de `0..len` (`index_out_of_bounds`, ADR-0027).
     IndexOutOfBounds,
+    /// `option_unwrap`/`option.unwrap` sobre `none` (`unwrap_none`, ADR-0030).
+    UnwrapNone,
     /// Fuel esgotado antes do despacho.
     OutOfFuel,
     /// Profundidade máxima de chamadas excedida.
@@ -600,6 +657,7 @@ impl ErrorCode {
             ErrorCode::InvalidShift => "invalid_shift",
             ErrorCode::StringTooLong => "string_too_long",
             ErrorCode::IndexOutOfBounds => "index_out_of_bounds",
+            ErrorCode::UnwrapNone => "unwrap_none",
             ErrorCode::OutOfFuel => "out_of_fuel",
             ErrorCode::CallDepthExceeded => "call_depth_exceeded",
             ErrorCode::OutOfMemory => "out_of_memory",
@@ -629,6 +687,7 @@ impl ErrorCode {
             "invalid_shift" => Some(ErrorCode::InvalidShift),
             "string_too_long" => Some(ErrorCode::StringTooLong),
             "index_out_of_bounds" => Some(ErrorCode::IndexOutOfBounds),
+            "unwrap_none" => Some(ErrorCode::UnwrapNone),
             "out_of_fuel" => Some(ErrorCode::OutOfFuel),
             "call_depth_exceeded" => Some(ErrorCode::CallDepthExceeded),
             "out_of_memory" => Some(ErrorCode::OutOfMemory),
@@ -656,7 +715,8 @@ impl ErrorCode {
             | ErrorCode::DivisionByZero
             | ErrorCode::InvalidShift
             | ErrorCode::StringTooLong
-            | ErrorCode::IndexOutOfBounds => ErrorCategory::Trap,
+            | ErrorCode::IndexOutOfBounds
+            | ErrorCode::UnwrapNone => ErrorCategory::Trap,
             ErrorCode::OutOfFuel | ErrorCode::CallDepthExceeded | ErrorCode::OutOfMemory => {
                 ErrorCategory::Resource
             }

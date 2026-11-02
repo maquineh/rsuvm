@@ -1,0 +1,12 @@
+; id: N-035
+; expect: trap unwrap_none
+; extra: option_unwrap sobre none produz o trap unwrap_none (ADR-0030)
+module n035 version 1
+entry f
+
+fn f() -> i64 {
+  entry:
+    v0 = option_none i64
+    v1 = option_unwrap v0
+    return v1
+}

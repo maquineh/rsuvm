@@ -54,7 +54,7 @@
 use rvm_ir::{
     Block, BlockId, BranchTarget, FnId, Function, Instr, Module, Op, StructDef, Terminator, ValueId,
 };
-use rvm_spec::{ArrayElem, ErrorCode, Limits, Location, RvmError, StructId, Type};
+use rvm_spec::{ArrayElem, ErrorCode, Limits, Location, OptionalElem, RvmError, StructId, Type};
 
 /// Módulo que passou pela verificação completa.
 ///
@@ -330,6 +330,40 @@ impl<'a> FunctionFacts<'a> {
                 }
                 Ok(())
             }
+            Op::OptionNone(_) => Ok(()),
+            Op::OptionSome { value } => {
+                self.check_use(block_index, instr_index, *value, location)?;
+                if OptionalElem::from_type(self.type_of_value(*value, location)?).is_none() {
+                    return Err(invalid(
+                        ErrorCode::InvalidType,
+                        "option_some exige payload escalar".to_string(),
+                        location.clone(),
+                    ));
+                }
+                Ok(())
+            }
+            Op::OptionIsSome { value } | Op::OptionUnwrap { value } => {
+                self.check_use(block_index, instr_index, *value, location)?;
+                self.require_optional(*value, location)
+            }
+            Op::Coalesce { option, fallback } => {
+                self.check_use(block_index, instr_index, *option, location)?;
+                self.check_use(block_index, instr_index, *fallback, location)?;
+                let elem = self.option_element(*option, location)?;
+                let fallback_ty = self.type_of_value(*fallback, location)?;
+                if fallback_ty != elem.ty() && fallback_ty != Type::Optional(elem) {
+                    return Err(invalid(
+                        ErrorCode::InvalidType,
+                        format!(
+                            "coalesce exige fallback `{}` ou `{}`, recebeu {fallback_ty}",
+                            elem.ty(),
+                            Type::Optional(elem)
+                        ),
+                        location.clone(),
+                    ));
+                }
+                Ok(())
+            }
             Op::Call { callee, args } => {
                 let target = self.module.function(*callee).ok_or_else(|| {
                     invalid(
@@ -562,6 +596,34 @@ impl<'a> FunctionFacts<'a> {
             other => Err(invalid(
                 ErrorCode::InvalidType,
                 format!("valor v{value} tem tipo {other}, esperado struct"),
+                location.clone(),
+            )),
+        }
+    }
+
+    /// Exige que `value` tenha tipo `option`.
+    fn require_optional(&self, value: ValueId, location: &Location) -> Result<(), RvmError> {
+        match self.type_of_value(value, location)? {
+            Type::Optional(_) => Ok(()),
+            other => Err(invalid(
+                ErrorCode::InvalidType,
+                format!("valor v{value} tem tipo {other}, esperado option"),
+                location.clone(),
+            )),
+        }
+    }
+
+    /// Payload do tipo `option` de `value`, exigindo que seja um `option`.
+    fn option_element(
+        &self,
+        value: ValueId,
+        location: &Location,
+    ) -> Result<OptionalElem, RvmError> {
+        match self.type_of_value(value, location)? {
+            Type::Optional(elem) => Ok(elem),
+            other => Err(invalid(
+                ErrorCode::InvalidType,
+                format!("valor v{value} tem tipo {other}, esperado option"),
                 location.clone(),
             )),
         }
@@ -956,6 +1018,56 @@ fn build_values(
                         }
                     }
                 }
+                Op::OptionNone(elem) => Type::Optional(*elem),
+                Op::OptionSome { value } => {
+                    let index = value_index(*value, location)?;
+                    let ty = types.get(index).copied().flatten().ok_or_else(|| {
+                        invalid(
+                            ErrorCode::InvalidModule,
+                            "tipo do payload desconhecido".to_string(),
+                            location.clone(),
+                        )
+                    })?;
+                    let elem = OptionalElem::from_type(ty).ok_or_else(|| {
+                        invalid(
+                            ErrorCode::InvalidType,
+                            "option_some exige payload escalar".to_string(),
+                            location.clone(),
+                        )
+                    })?;
+                    Type::Optional(elem)
+                }
+                Op::OptionIsSome { .. } => Type::Bool,
+                Op::OptionUnwrap { value } => {
+                    let index = value_index(*value, location)?;
+                    let ty = types.get(index).copied().flatten().ok_or_else(|| {
+                        invalid(
+                            ErrorCode::InvalidModule,
+                            "tipo do option desconhecido".to_string(),
+                            location.clone(),
+                        )
+                    })?;
+                    match ty {
+                        Type::Optional(elem) => elem.ty(),
+                        _ => {
+                            return Err(invalid(
+                                ErrorCode::InvalidType,
+                                "option_unwrap sobre valor que não é option".to_string(),
+                                location.clone(),
+                            ))
+                        }
+                    }
+                }
+                Op::Coalesce { fallback, .. } => {
+                    let index = value_index(*fallback, location)?;
+                    types.get(index).copied().flatten().ok_or_else(|| {
+                        invalid(
+                            ErrorCode::InvalidModule,
+                            "tipo do fallback desconhecido".to_string(),
+                            location.clone(),
+                        )
+                    })?
+                }
                 other => operation_type(module, other, location)?,
             };
             record_type(&mut types, index, ty, location)?;
@@ -989,6 +1101,11 @@ fn operation_type(module: &Module, op: &Op, location: &Location) -> Result<Type,
         Op::StructNew { struct_id, .. } => Ok(Type::Struct(*struct_id)),
         // `FieldGet` é resolvido em `build_values` (depende do tipo do objeto).
         Op::FieldGet { .. } => Ok(Type::Unit),
+        Op::OptionNone(elem) => Ok(Type::Optional(*elem)),
+        Op::OptionSome { .. } => Ok(Type::Optional(OptionalElem::I64)),
+        Op::OptionIsSome { .. } => Ok(Type::Bool),
+        Op::OptionUnwrap { .. } => Ok(Type::I64),
+        Op::Coalesce { .. } => Ok(Type::I64),
         Op::Call { callee, .. } => module
             .function(*callee)
             .map(|target| target.ret)

@@ -39,6 +39,7 @@ humanas nunca são contrato.
 | `invalid_shift` | trap | trap | deslocamento com quantidade fora de `0..=63` (ADR-0023) | `rvm-interpreter` |
 | `string_too_long` | trap | trap | concatenação acima de `max_string_bytes` (ADR-0025) | `rvm-interpreter` |
 | `index_out_of_bounds` | trap | trap | `array_get`/`array_set` com índice fora de `0..len` (ADR-0027/0028) | `rvm-interpreter` |
+| `unwrap_none` | trap | trap | `option_unwrap` sobre `none` (ADR-0030) | `rvm-interpreter` |
 | `out_of_fuel` | resource | resource_limit | saldo de fuel insuficiente antes do despacho | `rvm-interpreter` |
 | `call_depth_exceeded` | resource | resource_limit | profundidade de chamadas excederia o limite | `rvm-interpreter` |
 | `out_of_memory` | resource | resource_limit | quota de memória modelada de frames excedida | `rvm-interpreter` |
@@ -86,6 +87,9 @@ aparecem durante a execução de um `VerifiedModule`.
 | N-032 `field_get` sobre não-struct | `invalid_type` | verificação |
 | N-033 `field_get` com campo inexistente | `invalid_type` | verificação |
 | N-034 `struct_new` com valor de tipo errado | `invalid_type` | verificação |
+| N-035 `option_unwrap` de `none` | `unwrap_none` | execução (trap) |
+| N-036 `option_is_some` de não-option | `invalid_type` | verificação |
+| N-037 `option_some` de não-escalar | `invalid_type` | verificação |
 
 `invalid_module` também cobre limite estrutural excedido: a distinção entre
 "estrutura inválida" e "quota de execução" é feita por `class`, não pelo texto.

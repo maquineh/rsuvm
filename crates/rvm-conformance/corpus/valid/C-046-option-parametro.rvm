@@ -1,0 +1,19 @@
+; id: C-046
+; expect: value i64:5
+; extra: tipo `option i64` como parâmetro de função (ADR-0030)
+module c046 version 1
+entry usa
+
+fn extrai(x: option i64) -> i64 {
+  entry:
+    v0 = option_unwrap x
+    return v0
+}
+
+fn usa() -> i64 {
+  entry:
+    v1 = const_i64 5
+    v2 = option_some v1
+    v3 = call_static extrai(v2)
+    return v3
+}
