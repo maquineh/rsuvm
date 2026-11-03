@@ -17,17 +17,20 @@ compatibility.
 - `lift-encode` compiles the supported Lift subset to verified RVM bytecode
   (`.rsvmbc`); `lift-run` remains the direct execution path.
 - Lift examples under `examples/lift/` and guide `docs/LIFT-TO-RVM.md`.
-
-### Proposed (not implemented)
-
-- ADR-0039 / `docs/CONTRATOS/ENUMS-UNIONS-PROPOSTA.md`: nominal enums, tagged
-  variant payloads, recursive enums, enum ops, text/bytecode mapping and Lift
-  lowering plan. No code or format change yet; the adapter still rejects
-  enums/unions.
+- Nominal enums in the RIR (ADR-0039): `TypeDef::Enum`, `Module.enums`,
+  `Value::Enum`, `enum_new`/`enum_is_variant`/`enum_payload`/`enum_eq`/`enum_ne`,
+  recursive enums, textual/bytecode mapping, `invalid_variant` and
+  `value_too_deep` (`MAX_VALUE_DEPTH = 256`). Covered by C-063..C-066 and
+  N-044..N-049. `rvm-link` with enums and the Lift adapter lowering remain out
+  of this increment (both fail closed).
 
 ### Verification
 
 - Lift adapter: 9 CLI + 34 differential + 4 encode = **47 passed**.
+- Workspace gates: `cargo test --workspace --locked`,
+  `cargo clippy --workspace --all-targets -- -D warnings`,
+  `cargo fmt --all -- --check` and `cargo +1.75.0 check --workspace
+  --all-targets --locked`.
 
 ## [0.1.0-alpha.1] - 2026-11-02
 

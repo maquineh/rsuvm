@@ -57,10 +57,10 @@ and `result.ok`/`result.err`.
 
 The RIR subset cannot represent these features directly; the adapter rejects
 them instead of approximating semantics. See [LIFT-TO-RVM](../../docs/LIFT-TO-RVM.md)
-for the user guide and examples. A proposed RIR design for enums/unions is in
-[ADR-0039](../../docs/ADRs/ADR-0039-ENUMS-UNIONS-RIR.md) and
-[ENUMS-UNIONS-PROPOSTA](../../docs/CONTRATOS/ENUMS-UNIONS-PROPOSTA.md) (proposal,
-not implemented).
+for the user guide and examples. The RIR now has nominal enums (ADR-0039 and
+[ENUMS-UNIONS-PROPOSTA](../../docs/CONTRATOS/ENUMS-UNIONS-PROPOSTA.md)), but the
+adapter lowering for enums/unions/`match` remains out of scope in this increment
+and still fails closed.
 
 ## Verification
 

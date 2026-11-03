@@ -52,6 +52,9 @@ desenvolvimento).
 - `Limits` só é consumido na etapa estrutural: `verify` repassa `limits` a
   `structure::check` (`lib.rs:82`) e `verify_function` não recebe limites
   (`lib.rs:408`).
+- Operações de enum validam tipo nominal, variante, campo e aridade; `enum_eq`/
+  `enum_ne` exigem o mesmo `EnumId`; `enum_payload` resolve o tipo do campo em
+  `resolve_op_type` (ADR-0039).
 - Ordem de diagnóstico determinística: funções por índice (`lib.rs:83-85`),
   blocos por índice (`lib.rs:422-424`), instruções por índice e terminador por
   último (`lib.rs:165-184`); o primeiro erro vence (`lib.rs:29-30`).

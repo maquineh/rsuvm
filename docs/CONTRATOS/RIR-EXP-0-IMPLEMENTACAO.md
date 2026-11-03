@@ -8,11 +8,15 @@ o intérprete e o corpus devem cumprir.
 
 ~~~text
 Module    { name, version = 1, entry: FnId, types: Vec<TypeDef>, structs: Vec<StructDef>,
-            functions: Vec<Function> }
+            enums: Vec<EnumDef>, functions: Vec<Function> }
 TypeDef   = unit | bool | i64 | string | f64
-          | array(TypeId) | struct(StructId) | option(TypeId) | result(TypeId, TypeId)
+          | array(TypeId) | struct(StructId) | enum(EnumId) | option(TypeId)
+          | result(TypeId, TypeId)
 StructDef { id = índice, name, fields: Vec<FieldDef> }
 FieldDef  { name, ty: TypeId }
+EnumDef   { id = índice, name, variants: Vec<EnumVariantDef> }
+EnumVariantDef { name, fields: Vec<EnumFieldDef> }
+EnumFieldDef   { name: Option<String>, ty: TypeId }   // None = posicional
 Function  { id = índice, name, params: Vec<Param>, ret: TypeId, entry: BlockId,
             blocks: Vec<Block> }
 Param     { name, ty: TypeId }               // ValueId implícito = índice
@@ -28,6 +32,8 @@ Op        = const_i64 | const_bool | const_str | const_f64 | bin(op,lhs,rhs) | c
           | coalesce(o,f) | option_eq(lhs,rhs) | option_ne(lhs,rhs)
           | result_ok(ty,v) | result_err(ty,v) | result_is_ok(v)
           | result_unwrap(v) | result_unwrap_err(v)
+          | enum_new(ty, variant, fields) | enum_is_variant(v, variant)
+          | enum_payload(v, variant, field) | enum_eq(lhs,rhs) | enum_ne(lhs,rhs)
           | call(callee,args) | host_call(function,args)
 Term      = return [v] | br(target,args) | cond_br(cond, target, target)
 ~~~
@@ -38,8 +44,14 @@ Todo módulo começa a tabela com os cinco tipos embutidos canônicos, nesta ord
 `0 = unit`, `1 = bool`, `2 = i64`, `3 = string`, `4 = f64`. Tipos compostos
 ocupam ids densos a partir de `5` e são **recursivos por id**: `array(T)`,
 `option(T)` e `result(T, E)` referenciam outros `TypeId`; `struct(S)` referencia a
-tabela de structs. O grafo de tipos precisa ser **acíclico** (inclusive campos de
-struct).
+tabela de structs; `enum(E)` referencia a tabela de enums (ADR-0039). O grafo de
+tipos deve ser **acíclico**, exceto ciclos que contenham um enum: a recursão do
+enum é heap-backed em `Vec<Value>` e fornece o ponto nominal que quebra o ciclo.
+Ciclos sem enum (inclusive `struct S { s: S }`) continuam rejeitados.
+
+Cada `EnumDef` tem ao menos uma variante; cada variante tem campos **todos
+posicionais** (`name == None`) ou **todos nomeados** (`name == Some`), nunca
+misturados. Existe exatamente um `TypeDef::Enum(id)` canônico para cada `EnumDef`.
 
 ### Declarações externas e ligação estática (ADR-0018)
 
@@ -78,13 +90,22 @@ proporcional ao módulo:
     verificada; a alocação do vetor de presença ocorre **depois** da checagem do
     limite.
 12. A tabela de tipos é densa e começa com `unit`, `bool`, `i64`, `string`, `f64`
-    (`0..=4`); todo `TypeId` referenciado existe; o grafo de tipos é **acíclico**
-    (campos de struct inclusos); `module.types.len() <= max_types` (ADR-0034).
+    (`0..=4`); todo `TypeId` referenciado existe; `struct(S)` referencia uma
+    `StructDef` existente; `enum(E)` referencia um `EnumDef` existente; o grafo de
+    tipos é **acíclico**, exceto ciclos que contenham um enum; `module.types.len()
+    <= max_types` (ADR-0034/ADR-0039).
+13. `module.structs.len() <= max_structs`; `structs[i].id == i`; nomes de struct
+    únicos, não vazios e não compartilhados com enums.
+14. `module.enums.len() <= max_enums`; `enums[i].id == i`; nomes de enum únicos e
+    não compartilhados com structs; variantes não vazias, nomes únicos por enum;
+    campos homogêneos e com `TypeId` existente; aridade por variante dentro de
+    `max_fields_per_enum_variant`.
 
 Limites padrão: 64 funções, 256 blocos/função, 16 parâmetros, 8 parâmetros por
 bloco, 1024 instruções/bloco, 4096 valores/função, 16 argumentos por
 chamada/desvio, 64 bytes de nome, 4096 bytes por literal `string` (ADR-0024),
-1 MiB de entrada.
+1 MiB de entrada, 256 structs, 256 campos/struct, 256 enums, 256
+variantes/enum e 256 campos/variante.
 
 ## 3. Verificação de tipos e fluxo (`rvm-verify::VerifiedModule::verify`)
 
@@ -130,6 +151,10 @@ Depois de `structure::check`:
    | `result_ok`/`result_err` | valor no tipo da variante | `result(T, E)` (no op) |
    | `result_is_ok` | `result(T, E)` | `bool` |
    | `result_unwrap`/`result_unwrap_err` | `result(T, E)` | `T`/`E` |
+   | `enum_new` | `ty` é `enum(E)`; um valor por campo, no tipo do campo | `ty` (no op) |
+   | `enum_is_variant` | `enum(E)`, variante em faixa | `bool` |
+   | `enum_payload` | `enum(E)`, variante e campo em faixa | tipo do campo |
+   | `enum_eq`/`enum_ne` | `enum(E)`, `enum(E)` (mesmo enum nominal) | `bool` |
    | `host_read_file` | `string`, `i64` (ABI fechada, ADR-0036) | `result string string` |
    | comparações `*_i64` | `i64`, `i64` | `bool` |
    | `call_static` | casam com `params` do alvo | `ret` do alvo |
@@ -194,6 +219,14 @@ terminador por último. O primeiro erro vence.
 - `result_ok`/`result_err` constroem um `result` do tipo declarado no op
   (ADR-0033/0034); `result_is_ok` testa; `result_unwrap`/`result_unwrap_err`
   extraem o payload e produzem o trap `unwrap_error` sobre a variante errada.
+- `enum_new` constrói `Value::Enum` com a variante e os campos na ordem de
+  declaração, retendo `SLOT_BYTES × (1 + campos)` mais os filhos; `enum_is_variant`
+  testa a variante; `enum_payload` extrai um campo e produz o trap
+  `invalid_variant` se o valor estiver em outra variante (ADR-0039).
+  `enum_eq`/`enum_ne` comparam tipo nominal, variante e campos por valor.
+  `enum_new` calcula a profundidade dos campos de forma iterativa e falha com
+  `value_too_deep` (`resource_limit`) se `1 + max(profundidade dos campos) >
+  MAX_VALUE_DEPTH` (256), antes de gravar o slot (ADR-0039).
 - `host_read_file` é a única chamada de host do EXP-0 (ADR-0036): exige a
   capability `filesystem_read` para o escopo do argumento `path` **antes** de
   chamar o backend; sem concessão ⇒ `capability_denied`. Antes do IO, o

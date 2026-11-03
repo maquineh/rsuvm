@@ -31,8 +31,10 @@ estável, não há checksum e bytes não são confiáveis. Depende de `rvm-spec`
 - **Contagem antes de alocação**: cada contagem declarada é comparada com o limite
   estrutural correspondente **e** com os bytes restantes antes de reservar
   memória; contagem maior que os bytes restantes é `truncated_input`.
-- Tag de tipo fora de `0..=8` é `unknown_type`; `const_bool` fora de `0|1` é
-  `invalid_number`; opcode/kind desconhecido é `unknown_opcode`.
+- Tag de tipo fora de `0..=9` (inclui `enum`) é `unknown_type`; `const_bool`
+  fora de `0|1` é `invalid_number`; opcode/kind desconhecido é `unknown_opcode`.
+  A tabela de enums segue as structs e usa `TAG_ENUM = 9`, opcodes 55..=59
+  (ADR-0039).
 - `host_read_file` (opcode 54) carrega `u8 function` (0 = `read_file`),
   `u16 argc` e `u32 args[]`; `function` desconhecida é `unknown_opcode` e `argc`
   respeita `Limits::max_call_args` (ADR-0036).

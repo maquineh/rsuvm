@@ -11,8 +11,8 @@ semântica de overflow independente do perfil de compilação: toda aritmética 
 
 ## Interface
 
-- `TypeDef`/`TypeId` — tipos escalares e compostos (`array`, `struct`, `option`,
-  `result`), recursivos por id; builtins canônicos (`TYPE_UNIT`..`TYPE_F64`),
+- `TypeDef`/`TypeId` — tipos escalares e compostos (`array`, `struct`, `enum`,
+  `option`, `result`), recursivos por id; builtins canônicos (`TYPE_UNIT`..`TYPE_F64`),
   `builtin_types`, `TypeDef::name`/`is_scalar`, `Display` (`lib.rs:TypeDef`).
 - `BinOp` — `AddI64Checked`, `SubI64Checked`, `MulI64Checked`;
   `eval_i64(lhs, rhs) -> Option<i64>` (devolve `None` no transbordo),
@@ -29,13 +29,14 @@ semântica de overflow independente do perfil de compilação: toda aritmética 
 - `ErrorClass` — `Module`, `Trap`, `ResourceLimit`, `Capability` (RF-05).
 - `ErrorCode::OutOfMemory` — quota de memória de frames excedida (classe
   `ResourceLimit`, categoria `Resource`).
-- `ErrorCode` — 16 códigos estáveis; `as_str`, `from_stable_name`, `category`,
-  `class` (`lib.rs:ErrorCode`).
+- `ErrorCode` — códigos estáveis; `as_str`, `from_stable_name`, `category`,
+  `class` (`lib.rs:ErrorCode`). Inclui `invalid_variant` e `value_too_deep`.
 - `Location` — `Module`, `Function`, `Block`, `Instruction`, `Value`.
 - `RvmError` — `new(code, detail)`, `at(location)`, `code`, `category`, `class`,
   `detail`, `location`, `Display`, `std::error::Error`.
 - `Limits` — contagens máximas de funções, blocos, parâmetros, instruções,
-  valores, argumentos, nomes e bytes de entrada; `Default` com valores pequenos.
+  valores, argumentos, nomes, bytes de entrada, structs, enums, variantes e
+  campos; `Default` com valores pequenos.
 - `IR_VERSION` — versão do formato implementado (valor `1`).
 
 ## Invariants

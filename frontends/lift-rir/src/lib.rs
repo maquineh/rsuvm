@@ -211,6 +211,7 @@ pub fn lower(program: &HirProgram, entry: &str) -> Result<Module, AdapterError> 
         entry: entry_id,
         types: table.types,
         structs: struct_defs,
+        enums: Vec::new(),
         functions: lowered,
     })
 }

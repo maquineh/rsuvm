@@ -1,5 +1,11 @@
 # Evidências de execução — 2026-11-02
 
+> Snapshot do release `v0.1.0-alpha.1` (commit `65f07c8`). O working tree
+> pós-ADR-0039, ainda não lançado, tem 187 testes no workspace e 66+48 casos de
+> corpus; ver
+> [ENUMS-RIR-INCREMENTO](./ENUMS-RIR-INCREMENTO.md). Este arquivo não foi
+> regenerado para não reescrever a evidência do release.
+
 Log gerado por `scripts/gerar-evidencias.ps1`, com captura literal de stdout/stderr (UTF-8) no checkout `H:\projetos\rsuvm`, rustc/cargo 1.94.1, Windows. Nenhum resultado abaixo é estimado.
 
 ## cargo build --workspace --all-targets

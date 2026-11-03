@@ -127,9 +127,9 @@ Guia completo: [GUIA-USUARIO](./docs/GUIA-USUARIO.md). Para incorporar a VM:
   (fuzzing guiado por cobertura, nightly). Releases em tag `v*` usam
   `.github/workflows/release.yml`; ver `docs/RELEASE-CHECKLIST.md`.
 - Resultados atuais e log bruto: [RELATORIO-IMPLEMENTACAO](./docs/RELATORIOS/RELATORIO-IMPLEMENTACAO.md)
-  e [EVIDENCIAS-EXECUCAO](./docs/RELATORIOS/EVIDENCIAS-EXECUCAO.md): 176 testes
+  e [EVIDENCIAS-EXECUCAO](./docs/RELATORIOS/EVIDENCIAS-EXECUCAO.md): 187 testes
   verdes (o teste de symlink é `cfg(unix)` e o de junção é `cfg(windows)`),
-  62 casos válidos + 42 inválidos no corpus.
+  66 casos válidos + 48 inválidos no corpus.
 - Empacotamento e instalação limpa: [DRYRUN-RELEASE-0.1.0-alpha.1](./docs/RELATORIOS/DRYRUN-RELEASE-0.1.0-alpha.1.md).
 - Fuzzing curto: [FUZZING-EXP-0](./docs/RELATORIOS/FUZZING-EXP-0.md) §7.
 

@@ -1,5 +1,10 @@
 # Relatório de implementação — RSUVM EXP-0
 
+> Snapshot do release `v0.1.0-alpha.1`. O incremento pós-ADR-0039 (enums) ainda
+> não foi lançado; ver
+> [ENUMS-RIR-INCREMENTO](./ENUMS-RIR-INCREMENTO.md) para os gates e totais
+> atuais.
+
 - **Data:** 2026-11-01
 - **Checkout:** `H:\projetos\rsuvm` (sem repositório git inicializado; ver lacuna 5)
 - **Ambiente:** Windows, rustc 1.94.1, cargo 1.94.1, rustfmt 1.8.0, clippy 0.1.94

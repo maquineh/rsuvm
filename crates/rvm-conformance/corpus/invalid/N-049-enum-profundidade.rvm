@@ -1,0 +1,30 @@
+; id: N-049
+; expect: limit value_too_deep
+; extra: valor recursivo acima de MAX_VALUE_DEPTH é rejeitado (ADR-0039)
+module n049 version 1
+entry main
+type 5 = enum Lista
+
+enum Lista {
+  Fim
+  Cons(i64, enum Lista)
+}
+
+fn main() -> i64 {
+  entry:
+    v0 = enum_new Lista.Fim
+    v1 = const_i64 0
+    br laco(v0, v1)
+  laco(lista: enum Lista, n: i64):
+    limite = const_i64 300
+    continua = lt_i64 n, limite
+    cond_br continua, corpo, fim
+  corpo:
+    novo = enum_new Lista.Cons n, lista
+    um = const_i64 1
+    proximo = add_i64_checked n, um
+    br laco(novo, proximo)
+  fim:
+    zero = const_i64 0
+    return zero
+}

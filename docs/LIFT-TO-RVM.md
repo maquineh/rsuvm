@@ -79,20 +79,21 @@ and does not grant host effects.
 
 ### Not supported by this adapter
 
-- Enums and unions (nominal tagged types).
+- Enums and unions (nominal tagged types): the RIR already represents them
+  (ADR-0039), but this adapter does not lower them yet.
 - Generics/type parameters, generic interfaces/enums.
 - Closures, function values, higher-order array methods.
 - `match`, `for-of`, `break`, `continue`, `throw`, `try/catch`, `?` propagation.
 - `console.log`, top-level statements, imports/modules, FFI/`import interface`.
 - `result.ok`/`result.err` constructors and `try` propagation.
 
-These are Lift features that the RIR subset cannot represent directly. The
-adapter fails closed instead of approximating them.
+These are Lift features that this adapter does not lower yet. The adapter fails
+closed instead of approximating them.
 
-A proposed RIR design for enums/unions is in
+The RIR representation for enums/unions is specified in
 [ADR-0039](../ADRs/ADR-0039-ENUMS-UNIONS-RIR.md) and
-[ENUMS-UNIONS-PROPOSTA](./ENUMS-UNIONS-PROPOSTA.md) (Portuguese; proposal only,
-not implemented).
+[ENUMS-UNIONS-PROPOSTA](./CONTRATOS/ENUMS-UNIONS-PROPOSTA.md) (Portuguese;
+core implemented, Lift lowering deferred).
 
 ## 5. Examples
 

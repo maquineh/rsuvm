@@ -1,8 +1,9 @@
 # Enums e unions no RIR — proposta técnica
 
-**Status:** proposta, **não implementada**. Este documento não é contrato vigente;
-o RIR atual continua sem enums/unions e o adaptador Lift os rejeita com
-`Unsupported`. A decisão está em
+**Status:** implementado no núcleo (modelo, verificação, interpretador, texto e
+bytecode) no incremento de 2026-11-02. **Fora deste incremento:** enums em
+módulos ligados por `rvm-link` e o adaptador Lift, que continua rejeitando
+enums/unions com `Unsupported`. A decisão está em
 [ADR-0039](../ADRs/ADR-0039-ENUMS-UNIONS-RIR.md).
 
 ## 1. Escopo
@@ -163,11 +164,13 @@ pub enum Value {
 
 ### 3.2 Recursão e profundidade
 
-Valores recursivos podem ser profundos. As operações de igualdade,
-`retained_bytes` e `Display` devem ser **depth-safe** (iterativas ou com pilha
-explícita/limite) ou documentar explicitamente o risco de stack overflow. O
-orçamento de memória não limita a profundidade sozinho; a proposta exige um
-teste adversarial de lista profunda e uma decisão de implementação.
+Valores recursivos podem ser profundos. A implementação adota um teto explícito
+`MAX_VALUE_DEPTH = 256` (raiz = 1): `enum_new` calcula a profundidade dos campos
+de forma iterativa e falha com `value_too_deep` (`resource_limit`) antes de criar
+o valor. O teto mantém seguras as operações recursivas existentes (`PartialEq`,
+`Display`, `retained_bytes` e o `Drop` derivado), que continuam sem pilha
+explícita. O orçamento de memória sozinho não limita a profundidade; o teste
+adversarial é o caso N-049 (lista de 300 `Cons`).
 
 ## 4. Operações
 
@@ -212,7 +215,7 @@ EnumNe { lhs: ValueId, rhs: ValueId },
   resultado é o `ty` do campo.
 - Execução: se a variante do valor não for `variant`, trap
   `invalid_variant` (novo código, classe `trap`); se `field` for inválido,
-  `invalid_module` (defesa contra valor corrompido; o verificador já rejeitou).
+  `invalid_type` (defesa contra valor corrompido; o verificador já rejeitou).
   Caso contrário, copia o campo para o slot de destino (cobrança normal).
 - Erro estático: `invalid_type`; dinâmico: `invalid_variant`.
 
@@ -240,6 +243,7 @@ Adicionar ao contrato de erros:
 | Código | Categoria | Classe | Situação |
 |---|---|---|---|
 | `invalid_variant` | trap | trap | `enum_payload` sobre variante diferente da solicitada |
+| `value_too_deep` | resource | resource_limit | `enum_new` produziria valor acima de `MAX_VALUE_DEPTH` |
 
 `invalid_type` cobre variante fora de faixa, campo fora de faixa, aridade/tipo
 divergente e igualdade entre enums diferentes. `invalid_module` cobre tabela de
@@ -249,14 +253,14 @@ enums inconsistente, `TypeDef::Enum` órfão/duplicado e ciclo sem enum.
 
 ### 6.1 Declaração
 
-Forma canônica proposta:
+Forma canônica:
 
 ```text
 enum Shape {
-  Circle(number),
-  Rect(number, number),
+  Circle(i64),
+  Rect(i64, i64),
   Empty,
-  Named { radius: number, label: string },
+  Named { radius: i64, label: string }
 }
 
 type 5 = enum Shape
@@ -264,28 +268,29 @@ type 5 = enum Shape
 
 - `enum` declara as variantes; `type <id> = enum <Name>` registra o tipo na
   tabela densa (como `type` já faz para `option`/`result`).
-- A ordem canônica de impressão é: `module`, `entry`, declarações `enum`,
-  declarações `type`, declarações `struct`, `import`, funções. O parser pode
-  aceitar referências para frente, mas a forma impressa é fixa.
+- A ordem canônica de impressão é: `module`, `entry`, declarações `type`,
+  declarações `enum`, declarações `struct`, `import`, funções. O parser aceita
+  referências para frente a structs/enums e a forma impressa é fixa.
 - Variantes vazias, posicionais e nomeadas são mutuamente exclusivas; vírgula
   final é opcional. Sem discriminantes explícitos.
 
 ### 6.2 Operações
 
 ```text
-enum_new Shape.Circle, v0, v1
-enum_is_variant v0, Shape.Circle
-enum_payload v0, Shape.Circle, 0
+enum_new Shape.Circle v0, v1
+enum_is_variant v0, 0
+enum_payload v0, 0, 0
 enum_eq v0, v1
 enum_ne v0, v1
 ```
 
 - `enum_new` usa o nome qualificado da variante e os valores na **ordem de
   declaração** dos campos (campos nomeados são reordenados pelo frontend).
-- `enum_is_variant`/`enum_payload` usam `Enum.Variant`; o campo é o índice
-  posicional (para variantes nomeadas, a ordem de declaração).
-- O printer emite nomes qualificados e índices; o parser resolve para
-  `EnumId`/`EnumVariantId`.
+- `enum_is_variant`/`enum_payload` usam o **índice da variante** e o índice
+  posicional do campo. O tipo nominal do enum vem do operando; não há
+  discriminante exposto em `Value`.
+- O printer emite nomes qualificados em `enum_new` e índices numéricos nas
+  operações de inspeção; o parser resolve tudo para `EnumId`/índice de variante.
 
 ## 7. Bytecode
 
@@ -331,17 +336,19 @@ desconhecida continua `unknown_type`; enum_id fora da tabela é
 | 59 | `enum_ne` | `u32 lhs`, `u32 rhs` |
 
 Códigos 55–59 são novos; decoders antigos os rejeitam com `unknown_opcode`
-(falha fechada). A proposta **não** altera `IR_VERSION` nem `FORMAT_VERSION`:
-a mudança é aditiva e o formato continua experimental. Se o mantenedor preferir
-versionar, a alternativa é `IR_VERSION = 2` com migração do corpus.
+(falha fechada). A decisão mantém `IR_VERSION` e `FORMAT_VERSION` em `1`: o
+formato continua experimental e **não promete compatibilidade entre revisões**
+(ADR-0004); a inserção de `enum_count` após as structs altera o layout de
+arquivos gerados antes deste incremento. Arquivos de layouts diferentes falham
+fechado nos testes de truncamento/estrutura, sem execução ambígua.
 
 ## 8. Limites
 
-Adicionar a `Limits`:
+Adicionados a `Limits`:
 
-- `max_enums` (proposta inicial: 256);
-- `max_variants_per_enum` (proposta: 256);
-- `max_fields_per_enum_variant` (proposta: 256).
+- `max_enums` (256);
+- `max_variants_per_enum` (256);
+- `max_fields_per_enum_variant` (256).
 
 A soma total de variantes/campos é limitada indiretamente por
 `max_input_bytes` e `max_types`; se a medição mostrar risco de memória, adicionar
@@ -350,7 +357,7 @@ contagem é checada antes de alocar.
 
 ## 9. Verificação
 
-Ordem proposta (após a checagem estrutural existente):
+Ordem implementada (após a checagem estrutural existente):
 
 1. IDs densos, nomes únicos, variantes não vazias, campos homogêneos.
 2. `TypeDef::Enum` ↔ `EnumDef` exatamente um-para-um.
@@ -366,6 +373,8 @@ frontend (Lift já exige todas as variantes). O RIR não tem `match` próprio.
 
 - `EnumNew`/`EnumPayload` cobram memória na gravação do slot; `EnumPayload`
   copia o campo e o `write_current` cobra os bytes retidos.
+- `EnumNew` verifica `MAX_VALUE_DEPTH` antes de criar o valor e falha com
+  `value_too_deep` (`resource_limit`).
 - `EnumIsVariant`/`EnumEq`/`EnumNe` não alocam (exceto clones temporários já
   existentes no modelo).
 - `EnumPayload` sobre variante errada: trap `invalid_variant`, antes de copiar
@@ -407,20 +416,21 @@ frontend (Lift já exige todas as variantes). O RIR não tem `match` próprio.
 
 ### 12.1 Corpus RIR
 
-Casos válidos propostos (numeração a definir após o próximo C):
+Casos válidos implementados no corpus:
 
-- enum vazio (`enum E { A, B }`);
-- payload posicional (`Circle(f64)`);
+- enum sem payload (`enum E { A, B }`);
+- payload posicional;
 - campos nomeados;
 - enum recursivo (`List`/`Cons`);
-- enums mutuamente recursivos;
-- enum em array, struct, option e result;
+- enum em struct;
 - igualdade estrutural (`eq`/`ne`, inclusive variantes diferentes);
-- construção + payload + match exaustivo;
-- union desugerada (via adaptador);
 - round-trip texto ↔ bytecode, incluindo recursão.
 
-Casos inválidos propostos:
+Ainda propostos/adiados: enums mutuamente recursivos no corpus, enum em
+array/option/result, `match` exaustivo e union desugerada (dependem do
+adaptador Lift).
+
+Casos inválidos implementados no corpus:
 
 - enum sem variantes;
 - variante duplicada;
@@ -431,7 +441,8 @@ Casos inválidos propostos:
 - payload com aridade/tipo errado;
 - igualdade entre enums diferentes;
 - ciclo sem enum (deve continuar inválido);
-- `enum_payload` sobre variante errada em execução (`invalid_variant`).
+- `enum_payload` sobre variante errada em execução (`invalid_variant`);
+- valor recursivo acima de `MAX_VALUE_DEPTH` (`value_too_deep`).
 
 ### 12.2 Adaptador Lift
 
@@ -451,12 +462,14 @@ contrato: nenhum pânico; erros são `RvmError`. Não alegar ausência de bugs.
 
 ## 13. Critérios de aceitação
 
-- `cargo test --workspace` verde com os novos casos.
-- Corpus válido/inválido cobre todos os novos códigos e operações.
+- `cargo test --workspace` verde com os novos casos (atendido no núcleo).
+- Corpus válido/inválido cobre todos os novos códigos e operações (atendido:
+  C-063..C-066, N-044..N-049).
 - Bytecode round-trip e decoder hostil rejeitam contagens/tags/índices
-  inválidos antes de alocar.
+  inválidos antes de alocar (round-trip coberto; casos hostis específicos de
+  enum ainda são lacuna declarada).
 - Adaptador Lift executa enums/unions e `lift-encode` produz `.rsvmbc`
-  consumível por `rsuvm run-bc`.
+  consumível por `rsuvm run-bc` — **adiado**; o adaptador continua rejeitando.
 - `clippy -D warnings`, `fmt --check`, MSRV e docs verdes.
 - Nenhuma alegação de estabilidade de formato ou de segurança multi-tenant.
 
@@ -464,14 +477,14 @@ contrato: nenhum pânico; erros são `RvmError`. Não alegar ausência de bugs.
 
 | Crate/área | Mudança |
 |---|---|
-| `rvm-spec` | `TypeDef::Enum(EnumId)`, `EnumId`, `invalid_variant`, novos `Limits` |
+| `rvm-spec` | `TypeDef::Enum(EnumId)`, `EnumId`, `invalid_variant`, `value_too_deep`, novos `Limits` |
 | `rvm-ir` | `Module.enums`, `EnumDef`/`EnumVariantDef`/`EnumFieldDef`, `Op::{EnumNew, EnumIsVariant, EnumPayload, EnumEq, EnumNe}`, checagem estrutural e fixture |
-| `rvm-runtime` | `Value::Enum`, `as_enum`, `Display`, `retained_bytes` |
+| `rvm-runtime` | `Value::Enum`, `as_enum`, `Display`, `retained_bytes`, `depth`, `MAX_VALUE_DEPTH` |
 | `rvm-verify` | tabela de enums, tipos das ops, igualdade nominal, travessia de ciclos |
-| `rvm-interpreter` | dispatch, construção, inspeção, trap `invalid_variant`, memória |
-| `rvm-text` | declaração `enum`, `type = enum`, impressão e operações qualificadas |
+| `rvm-interpreter` | dispatch, construção, inspeção, trap `invalid_variant`, `value_too_deep`, memória |
+| `rvm-text` | declaração `enum`, `type = enum`, impressão e operações de enum |
 | `rvm-bytecode` | `TAG_ENUM`, tabela de enums, opcodes 55–59, contagens/limites |
-| `rvm-link` | fundir/remap `EnumId`, `TypeDef::Enum`, campos e ops; hoje o linker já é restrito a módulos sem tipos compostos — enums multi-módulo exigem resolver essa lacuna |
+| `rvm-link` | rejeita módulos com `enums` não vazio; remapeamento de `EnumId` fica para incremento separado |
 | `rvm-conformance` | casos C/N, expectativas e cobertura de ops |
 | `rvm-cli` | sem mudança própria; `encode`/`run-bc` passam a transportar enums |
 | `frontends/lift-rir` | `HirEnum`, `EnumConstruct`, `Match`, unions e testes |
@@ -484,14 +497,17 @@ enums sejam usados apenas em módulos já ligados/planos (como o adaptador Lift,
 que produz um módulo único), deixando a ligação multi-módulo com enums para um
 incremento separado.
 
-## 15. Questões abertas
+## 15. Questões abertas (resolvidas neste incremento)
 
-1. Ciclos: permitir só com enum ou qualquer indireção heap?
-2. `invalid_variant` novo ou reutilizar `unwrap_error`?
-3. `IR_VERSION` aditivo (1) ou bump para 2?
-4. Limites agregados para variantes/campos?
-5. Formato textual de `type`/`enum` e ordem canônica.
-6. `Display`/igualdade depth-safe: iterativo ou limite explícito?
-7. Suportar `match` de `Option`/`Result` junto ou apenas enums neste incremento?
-8. Enums em módulos ligados por `rvm-link` neste incremento ou apenas em módulos
-   planos (single-module), adiando o remapeamento de `EnumId`?
+1. Ciclos: somente ciclos que contenham enum.
+2. `invalid_variant`: código novo, classe `trap`.
+3. `IR_VERSION`: mantido em `1`; o bytecode experimental muda de layout, sem
+   promessa de compatibilidade entre revisões.
+4. Limites agregados: adiados; limites por enum/variante/campo verificados antes
+   de alocar.
+5. Formato textual: definido em `TEXTO-EXP-0.md`; índices numéricos em
+   `enum_is_variant`/`enum_payload`.
+6. Profundidade: `MAX_VALUE_DEPTH = 256` + `value_too_deep`; as operações
+   recursivas continuam permitidas dentro do teto.
+7. `match` de `Option`/`Result`: fora deste incremento.
+8. Enums em `rvm-link`: adiados; apenas módulos planos neste incremento.

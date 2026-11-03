@@ -20,6 +20,8 @@ const APP: &str = "module app version 1\nentry main\nimport soma\n\nfn main() ->
 
 const PROV: &str = "module prov version 1\nentry soma\n\nfn soma(a: i64, b: i64) -> i64 {\n  entry:\n    v2 = add_i64_checked a, b\n    return v2\n}\n";
 
+const COM_ENUM: &str = "module enummod version 1\nentry main\ntype 5 = enum E\n\nenum E {\n  A\n  B\n}\n\nfn main() -> i64 {\n  entry:\n    v0 = const_i64 0\n    return v0\n}\n";
+
 fn parse_ok(source: &str) -> Module {
     rvm_text::parse(source, &Limits::default()).expect("módulo deveria parsear")
 }
@@ -58,6 +60,16 @@ fn modulo_linkado_sobrevive_ao_diferencial_de_bytecode() {
     let verified = VerifiedModule::verify(decoded, &limits).expect("verificação do bytecode");
     let outcome = rvm_interpreter::execute(&verified, entry, &[], &config()).expect("execução");
     assert_eq!(outcome.value, Value::I64(30));
+}
+
+#[test]
+fn modulo_com_enum_e_rejeitado_pelo_linker() {
+    let limits = Limits::default();
+    let error =
+        rvm_link::link(&[parse_ok(COM_ENUM)], 0, 0, &limits).expect_err("enum não é linkável");
+    assert_eq!(error.code(), ErrorCode::InvalidModule);
+    assert_eq!(error.class(), ErrorClass::Module);
+    assert!(error.detail().contains("enums"));
 }
 
 #[test]

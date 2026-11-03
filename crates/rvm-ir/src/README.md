@@ -12,9 +12,11 @@ dados compartilhada (ADR-0002).
 ## Interface
 
 - `FnId`, `BlockId`, `ValueId` — aliases `u32` com invariante de densidade.
-- `Module` — `name`, `version`, `entry`, `types`, `structs`, `functions`
+- `Module` — `name`, `version`, `entry`, `types`, `structs`, `enums`, `functions`
   (`lib.rs:Module`); `function(id)`, `function_by_name(name)`, `struct_def(id)`,
-  `type_def(id)`, `find_type(def)`.
+  `enum_def(id)`, `enum_by_name(name)`, `type_def(id)`, `find_type(def)`.
+- `EnumDef`/`EnumVariantDef`/`EnumFieldDef` — enum nominal, variantes e campos
+  posicionais (`name == None`) ou nomeados (ADR-0039).
 - `Function` — `id`, `name`, `params`, `ret`, `entry`, `blocks`
   (`lib.rs:Function`); `block(id)`, `value_count()`.
 - `Param` — `name`, `ty: TypeId`.
@@ -22,8 +24,8 @@ dados compartilhada (ADR-0002).
 - `BlockParam` — `value`, `name`, `ty` (merge por phi explícito).
 - `Instr` — `def`, `op`.
 - `Op` — variantes do subset (`ConstI64`, `ConstBool`, `ConstStr`, `ConstF64`,
-  `Bin`, `Cmp`, operações de `string`/`f64`/array/struct/option/result, `Call` e
-  `HostCall`); `result_type`, `operand_ids` (`lib.rs:Op`).
+  `Bin`, `Cmp`, operações de `string`/`f64`/array/struct/option/result/enum,
+  `Call` e `HostCall`); `result_type`, `operand_ids` (`lib.rs:Op`).
 - `Terminator` — `Return`, `Br`, `CondBr`; `operand_ids` (`lib.rs:Terminator`).
 - `BranchTarget` — `target`, `args`.
 - `structure::check(&Module, &Limits) -> Result<(), RvmError>`
@@ -52,8 +54,14 @@ dados compartilhada (ADR-0002).
 - O terminador é obrigatório por tipo (`Block::term` não é `Option`); bloco sem
   terminador é rejeitado na fronteira textual, não representável aqui.
 - Tipos vivem na tabela do módulo (`types`, ADR-0034); construções resolvidas
-  pelos operandos (`array`, `option_some`, `coalesce`, `field_get`) não expõem
-  tipo fixo em `Op::result_type` (`None`).
+  pelos operandos (`array`, `option_some`, `coalesce`, `field_get`,
+  `enum_payload`) não expõem tipo fixo em `Op::result_type` (`None`).
+- `enums[i].id == i`; nomes de enum são únicos e não colidem com structs; cada
+  variante tem campos homogêneos e cada enum tem exatamente um `TypeDef::Enum`
+  canônico; os limites `max_enums`/`max_variants_per_enum`/
+  `max_fields_per_enum_variant` são checados antes de alocar (ADR-0039).
+- O grafo de tipos é acíclico, exceto ciclos que contenham um enum; ciclos sem
+  enum continuam `invalid_module`.
 - `structure::check` não olha tipos de operandos nem dominância; isso é
   responsabilidade de `rvm-verify`.
 

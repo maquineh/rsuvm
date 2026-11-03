@@ -27,6 +27,7 @@ fn modulo_host() -> Module {
         entry: 0,
         types,
         structs: Vec::new(),
+        enums: Vec::new(),
         functions: vec![Function {
             id: 0,
             name: "le".to_string(),

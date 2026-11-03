@@ -1,0 +1,31 @@
+; id: C-066
+; expect: value i64:5
+; extra: enum como campo de struct (ADR-0039)
+module c066 version 1
+entry main
+type 5 = enum Estado
+type 6 = struct Caixa
+
+enum Estado {
+  Off
+  On
+}
+
+struct Caixa {
+  e: enum Estado
+}
+
+fn main() -> i64 {
+  entry:
+    v0 = enum_new Estado.On
+    v1 = struct_new Caixa v0
+    v2 = field_get v1, e
+    v3 = enum_is_variant v2, 1
+    cond_br v3, ok, falha
+  ok:
+    v4 = const_i64 5
+    return v4
+  falha:
+    v5 = const_i64 0
+    return v5
+}

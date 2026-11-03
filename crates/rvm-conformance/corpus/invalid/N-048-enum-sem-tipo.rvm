@@ -1,0 +1,15 @@
+; id: N-048
+; expect: error invalid_module
+; extra: enum declarado sem TypeDef::Enum correspondente (ADR-0039)
+module n048 version 1
+entry main
+
+enum E {
+  A
+}
+
+fn main() -> i64 {
+  entry:
+    v0 = const_i64 0
+    return v0
+}

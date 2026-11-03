@@ -31,6 +31,7 @@ pub fn check(module: &Module, limits: &Limits) -> Result<(), RvmError> {
     }
     check_name(&module.name, "nome do módulo", &Location::Module, limits)?;
     check_structs(module, limits)?;
+    check_enums(module, limits)?;
     check_types(module, limits)?;
 
     let function_count = module.functions.len();
@@ -151,6 +152,177 @@ fn check_structs(module: &Module, limits: &Limits) -> Result<(), RvmError> {
     Ok(())
 }
 
+/// Valida a tabela de enums (ADR-0039): IDs densos, nomes, variantes e campos.
+fn check_enums(module: &Module, limits: &Limits) -> Result<(), RvmError> {
+    if module.enums.len() > limit(limits.max_enums) {
+        return Err(invalid(
+            ErrorCode::InvalidModule,
+            format!(
+                "limite de enums excedido: {} > {}",
+                module.enums.len(),
+                limits.max_enums
+            ),
+            Location::Module,
+        ));
+    }
+    let struct_names: BTreeSet<&str> = module
+        .structs
+        .iter()
+        .map(|definition| definition.name.as_str())
+        .collect();
+    let mut enum_names: BTreeSet<&str> = BTreeSet::new();
+    for (index, definition) in module.enums.iter().enumerate() {
+        let expected = u32::try_from(index)
+            .map_err(|_| invalid(ErrorCode::InvalidModule, "enums demais", Location::Module))?;
+        if definition.id != expected {
+            return Err(invalid(
+                ErrorCode::InvalidModule,
+                format!(
+                    "enum {} fora de ordem: esperado id {expected}",
+                    definition.id
+                ),
+                Location::Module,
+            ));
+        }
+        check_name(&definition.name, "nome de enum", &Location::Module, limits)?;
+        if struct_names.contains(definition.name.as_str())
+            || !enum_names.insert(definition.name.as_str())
+        {
+            return Err(invalid(
+                ErrorCode::InvalidModule,
+                format!("nome de enum duplicado `{}`", definition.name),
+                Location::Module,
+            ));
+        }
+        if definition.variants.is_empty() {
+            return Err(invalid(
+                ErrorCode::InvalidModule,
+                format!("enum `{}` não tem variantes", definition.name),
+                Location::Module,
+            ));
+        }
+        if definition.variants.len() > limit(limits.max_variants_per_enum) {
+            return Err(invalid(
+                ErrorCode::InvalidModule,
+                format!(
+                    "limite de variantes excedido no enum `{}`: {} > {}",
+                    definition.name,
+                    definition.variants.len(),
+                    limits.max_variants_per_enum
+                ),
+                Location::Module,
+            ));
+        }
+        let mut variant_names: BTreeSet<&str> = BTreeSet::new();
+        for variant in &definition.variants {
+            check_name(&variant.name, "nome de variante", &Location::Module, limits)?;
+            if !variant_names.insert(variant.name.as_str()) {
+                return Err(invalid(
+                    ErrorCode::InvalidModule,
+                    format!(
+                        "variante duplicada `{}` no enum `{}`",
+                        variant.name, definition.name
+                    ),
+                    Location::Module,
+                ));
+            }
+            if variant.fields.len() > limit(limits.max_fields_per_enum_variant) {
+                return Err(invalid(
+                    ErrorCode::InvalidModule,
+                    format!(
+                        "limite de campos excedido na variante `{}.{}`: {} > {}",
+                        definition.name,
+                        variant.name,
+                        variant.fields.len(),
+                        limits.max_fields_per_enum_variant
+                    ),
+                    Location::Module,
+                ));
+            }
+            let mut field_names: BTreeSet<&str> = BTreeSet::new();
+            let mut named_style: Option<bool> = None;
+            for field in &variant.fields {
+                let named = field.name.is_some();
+                if let Some(expected_style) = named_style {
+                    if expected_style != named {
+                        return Err(invalid(
+                            ErrorCode::InvalidModule,
+                            format!(
+                                "variante `{}.{}` mistura campos posicionais e nomeados",
+                                definition.name, variant.name
+                            ),
+                            Location::Module,
+                        ));
+                    }
+                } else {
+                    named_style = Some(named);
+                }
+                if let Some(name) = &field.name {
+                    check_name(name, "nome de campo de enum", &Location::Module, limits)?;
+                    if !field_names.insert(name.as_str()) {
+                        return Err(invalid(
+                            ErrorCode::InvalidModule,
+                            format!(
+                                "campo duplicado `{name}` na variante `{}.{}`",
+                                definition.name, variant.name
+                            ),
+                            Location::Module,
+                        ));
+                    }
+                }
+                if !index_in_range(field.ty, module.types.len()) {
+                    return Err(invalid(
+                        ErrorCode::InvalidModule,
+                        format!(
+                            "campo da variante `{}.{}` referencia o tipo {} inexistente",
+                            definition.name, variant.name, field.ty
+                        ),
+                        Location::Module,
+                    ));
+                }
+            }
+        }
+    }
+
+    // Exatamente um TypeDef::Enum(id) canônico para cada EnumDef.
+    let mut seen = vec![false; module.enums.len()];
+    for definition in &module.types {
+        let TypeDef::Enum(enum_id) = *definition else {
+            continue;
+        };
+        let index = usize::try_from(enum_id).map_err(|_| {
+            invalid(
+                ErrorCode::InvalidModule,
+                format!("tipo enum {enum_id} não representável"),
+                Location::Module,
+            )
+        })?;
+        let Some(slot) = seen.get_mut(index) else {
+            return Err(invalid(
+                ErrorCode::InvalidModule,
+                format!("tipo enum {enum_id} referencia enum inexistente"),
+                Location::Module,
+            ));
+        };
+        if *slot {
+            return Err(invalid(
+                ErrorCode::InvalidModule,
+                format!("tipo enum {enum_id} duplicado na tabela"),
+                Location::Module,
+            ));
+        }
+        *slot = true;
+    }
+    if seen.iter().any(|value| !value) {
+        return Err(invalid(
+            ErrorCode::InvalidModule,
+            "enum sem TypeDef::Enum na tabela de tipos".to_string(),
+            Location::Module,
+        ));
+    }
+    Ok(())
+}
+
 /// Valida a tabela de tipos: builtins canônicos, referências em faixa e ausência
 /// de ciclos (ADR-0034).
 fn check_types(module: &Module, limits: &Limits) -> Result<(), RvmError> {
@@ -204,6 +376,15 @@ fn check_types(module: &Module, limits: &Limits) -> Result<(), RvmError> {
                 ));
             }
         }
+        if let TypeDef::Struct(struct_id) = def {
+            if module.struct_def(struct_id).is_none() {
+                return Err(invalid(
+                    ErrorCode::InvalidModule,
+                    format!("tipo {id} referencia a struct {struct_id} inexistente"),
+                    Location::Module,
+                ));
+            }
+        }
     }
     check_acyclic(module)
 }
@@ -218,20 +399,36 @@ fn referenced_types(module: &Module, def: TypeDef) -> Vec<TypeId> {
             .struct_def(id)
             .map(|def| def.fields.iter().map(|field| field.ty).collect())
             .unwrap_or_default(),
+        TypeDef::Enum(id) => module
+            .enum_def(id)
+            .map(|def| {
+                def.variants
+                    .iter()
+                    .flat_map(|variant| variant.fields.iter().map(|field| field.ty))
+                    .collect()
+            })
+            .unwrap_or_default(),
     }
 }
 
-/// Garante que o grafo de tipos é acíclico (0=novo, 1=em visita, 2=concluído).
+/// Garante que o grafo de tipos é acíclico, exceto ciclos que contêm um enum
+/// (ADR-0039): a recursão do enum é heap-backed em `Vec<Value>`.
 fn check_acyclic(module: &Module) -> Result<(), RvmError> {
     let mut state = vec![0u8; module.types.len()];
     for id in 0..module.types.len() {
-        visit_type(module, id, &mut state)?;
+        visit_type(module, id, &mut state, &mut Vec::new())?;
     }
     Ok(())
 }
 
-fn visit_type(module: &Module, id: usize, state: &mut [u8]) -> Result<(), RvmError> {
+fn visit_type(
+    module: &Module,
+    id: usize,
+    state: &mut [u8],
+    stack: &mut Vec<usize>,
+) -> Result<(), RvmError> {
     match state.get(id).copied() {
+        Some(2) => return Ok(()),
         Some(1) => {
             return Err(invalid(
                 ErrorCode::InvalidModule,
@@ -239,7 +436,6 @@ fn visit_type(module: &Module, id: usize, state: &mut [u8]) -> Result<(), RvmErr
                 Location::Module,
             ))
         }
-        Some(2) => return Ok(()),
         _ => {}
     }
     let Some(def) = module.types.get(id).copied() else {
@@ -248,11 +444,32 @@ fn visit_type(module: &Module, id: usize, state: &mut [u8]) -> Result<(), RvmErr
     if let Some(slot) = state.get_mut(id) {
         *slot = 1;
     }
+    stack.push(id);
     for referenced in referenced_types(module, def) {
-        if let Ok(referenced) = usize::try_from(referenced) {
-            visit_type(module, referenced, state)?;
+        let Ok(referenced) = usize::try_from(referenced) else {
+            continue;
+        };
+        if state.get(referenced).copied() == Some(1) {
+            let start = stack.iter().position(|node| *node == referenced);
+            let has_enum = start.is_some_and(|start| {
+                stack.get(start..).is_some_and(|nodes| {
+                    nodes
+                        .iter()
+                        .any(|node| matches!(module.types.get(*node), Some(TypeDef::Enum(_))))
+                })
+            });
+            if !has_enum {
+                return Err(invalid(
+                    ErrorCode::InvalidModule,
+                    format!("ciclo de tipos sem enum envolvendo o tipo {referenced}"),
+                    Location::Module,
+                ));
+            }
+            continue;
         }
+        visit_type(module, referenced, state, stack)?;
     }
+    stack.pop();
     if let Some(slot) = state.get_mut(id) {
         *slot = 2;
     }
@@ -744,7 +961,10 @@ fn invalid(code: ErrorCode, detail: impl Into<String>, location: Location) -> Rv
 mod tests {
     use super::*;
     use crate::testing;
-    use crate::{BlockParam, Op, Param, Terminator, ValueId};
+    use crate::{
+        BlockParam, EnumDef, EnumFieldDef, EnumVariantDef, FieldDef, Op, Param, StructDef,
+        Terminator, ValueId,
+    };
     use rvm_spec::{builtin_types, TYPE_I64};
 
     fn soma() -> Module {
@@ -971,6 +1191,7 @@ mod tests {
             entry: 0,
             types: builtin_types(),
             structs: Vec::new(),
+            enums: Vec::new(),
             functions: vec![Function {
                 id: 0,
                 name: "main".to_string(),
@@ -1130,5 +1351,138 @@ mod tests {
         let error = check(&module, &limits).unwrap_err();
         assert_eq!(error.code(), ErrorCode::InvalidModule);
         assert!(error.detail().contains("string"));
+    }
+
+    /// Módulo unitário com tabela de tipos e enums adicionais.
+    fn com_enums(types: Vec<TypeDef>, enums: Vec<EnumDef>, structs: Vec<StructDef>) -> Module {
+        let mut module = testing::unidade();
+        module.types.extend(types);
+        module.enums = enums;
+        module.structs = structs;
+        module
+    }
+
+    fn enum_e_com_variante(field: Option<EnumFieldDef>) -> EnumDef {
+        EnumDef {
+            id: 0,
+            name: "E".to_string(),
+            variants: vec![EnumVariantDef {
+                name: "V".to_string(),
+                fields: field.into_iter().collect(),
+            }],
+        }
+    }
+
+    #[test]
+    fn aceita_ciclo_que_contem_enum() {
+        // enum E { V(struct S) } ; struct S { e: enum E }
+        let enums = vec![enum_e_com_variante(Some(EnumFieldDef {
+            name: None,
+            ty: 6,
+        }))];
+        let structs = vec![StructDef {
+            id: 0,
+            name: "S".to_string(),
+            fields: vec![FieldDef {
+                name: "e".to_string(),
+                ty: 5,
+            }],
+        }];
+        let module = com_enums(vec![TypeDef::Enum(0), TypeDef::Struct(0)], enums, structs);
+        assert!(check(&module, &Limits::default()).is_ok());
+    }
+
+    #[test]
+    fn rejeita_ciclo_de_struct_sem_enum() {
+        let structs = vec![StructDef {
+            id: 0,
+            name: "S".to_string(),
+            fields: vec![FieldDef {
+                name: "s".to_string(),
+                ty: 5,
+            }],
+        }];
+        let module = com_enums(vec![TypeDef::Struct(0)], Vec::new(), structs);
+        let error = check(&module, &Limits::default()).unwrap_err();
+        assert_eq!(error.code(), ErrorCode::InvalidModule);
+        assert!(error.detail().contains("ciclo"));
+    }
+
+    #[test]
+    fn rejeita_enum_sem_type_def() {
+        let module = com_enums(Vec::new(), vec![enum_e_com_variante(None)], Vec::new());
+        let error = check(&module, &Limits::default()).unwrap_err();
+        assert_eq!(error.code(), ErrorCode::InvalidModule);
+        assert!(error.detail().contains("TypeDef::Enum"));
+    }
+
+    #[test]
+    fn rejeita_type_def_de_enum_duplicado() {
+        let module = com_enums(
+            vec![TypeDef::Enum(0), TypeDef::Enum(0)],
+            vec![enum_e_com_variante(None)],
+            Vec::new(),
+        );
+        let error = check(&module, &Limits::default()).unwrap_err();
+        assert_eq!(error.code(), ErrorCode::InvalidModule);
+        assert!(error.detail().contains("duplicado"));
+    }
+
+    #[test]
+    fn rejeita_variante_duplicada() {
+        let mut definition = enum_e_com_variante(None);
+        if let Some(variant) = definition.variants.first().cloned() {
+            definition.variants.push(variant);
+        }
+        let module = com_enums(vec![TypeDef::Enum(0)], vec![definition], Vec::new());
+        let error = check(&module, &Limits::default()).unwrap_err();
+        assert_eq!(error.code(), ErrorCode::InvalidModule);
+        assert!(error.detail().contains("variante"));
+    }
+
+    #[test]
+    fn rejeita_campos_mistos_em_variante() {
+        let definition = EnumDef {
+            id: 0,
+            name: "E".to_string(),
+            variants: vec![EnumVariantDef {
+                name: "V".to_string(),
+                fields: vec![
+                    EnumFieldDef {
+                        name: Some("a".to_string()),
+                        ty: TYPE_I64,
+                    },
+                    EnumFieldDef {
+                        name: None,
+                        ty: TYPE_I64,
+                    },
+                ],
+            }],
+        };
+        let module = com_enums(vec![TypeDef::Enum(0)], vec![definition], Vec::new());
+        let error = check(&module, &Limits::default()).unwrap_err();
+        assert_eq!(error.code(), ErrorCode::InvalidModule);
+        assert!(error.detail().contains("mistura"));
+    }
+
+    #[test]
+    fn rejeita_enums_acima_do_limite() {
+        let module = com_enums(
+            vec![TypeDef::Enum(0), TypeDef::Enum(1)],
+            vec![enum_e_com_variante(None), {
+                let mut second = enum_e_com_variante(None);
+                second.id = 1;
+                second.name = "F".to_string();
+                second
+            }],
+            Vec::new(),
+        );
+        let limits = Limits {
+            max_enums: 1,
+            ..Limits::default()
+        };
+        let error = check(&module, &limits).unwrap_err();
+        assert_eq!(error.code(), ErrorCode::InvalidModule);
+        assert!(error.detail().contains("enums"));
     }
 }

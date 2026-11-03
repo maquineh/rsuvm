@@ -1,0 +1,19 @@
+; id: N-046
+; expect: error invalid_type
+; extra: enum_payload com campo fora da variante (ADR-0039)
+module n046 version 1
+entry main
+type 5 = enum E
+
+enum E {
+  A(i64)
+  B
+}
+
+fn main() -> i64 {
+  entry:
+    v0 = const_i64 1
+    v1 = enum_new E.A v0
+    v2 = enum_payload v1, 0, 1
+    return v2
+}

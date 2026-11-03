@@ -83,6 +83,7 @@ fn modulos_base() -> Vec<Module> {
     modulos.push(testing::recursao());
     modulos.push(testing::overflow());
     modulos.push(testing::comparacao());
+    modulos.push(testing::enum_simples());
     modulos
 }
 
@@ -351,6 +352,7 @@ fn modulo_provedor() -> Module {
         entry: 0,
         types: builtin_types(),
         structs: Vec::new(),
+        enums: Vec::new(),
         functions: vec![Function {
             id: 0,
             name: "alvo".to_string(),
@@ -392,6 +394,7 @@ fn modulo_com_import() -> Module {
         entry: 0,
         types: builtin_types(),
         structs: Vec::new(),
+        enums: Vec::new(),
         functions: vec![
             Function {
                 id: 0,

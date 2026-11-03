@@ -48,6 +48,14 @@ pub const FRAME_BASE_BYTES: u64 = 256;
 /// Custo modelado de um slot de valor, em bytes.
 pub const SLOT_BYTES: u64 = 24;
 
+/// Profundidade máxima de um `Value` recursivo (ADR-0039).
+///
+/// O limite existe porque `PartialEq`, `Display`, `retained_bytes` e o `Drop`
+/// derivado são recursivos; sem teto, um enum construído em laço poderia estourar
+/// a pilha nativa. `enum_new` rejeita valores acima do teto com
+/// `value_too_deep` antes de gravar o slot.
+pub const MAX_VALUE_DEPTH: u32 = 256;
+
 /// Custo modelado de um frame com `slots` valores, em bytes.
 ///
 /// É um **modelo determinístico** de quota, não a medição de RSS do processo:
@@ -144,6 +152,15 @@ pub enum Value {
         /// Variante: `Ok` com o payload, ou `Err` com o payload.
         value: std::result::Result<Box<Value>, Box<Value>>,
     },
+    /// Valor de enum (ADR-0039).
+    Enum {
+        /// Tipo do enum na tabela do módulo.
+        ty: TypeId,
+        /// Índice da variante, na ordem de declaração.
+        variant: u32,
+        /// Campos da variante, na ordem de declaração.
+        fields: Vec<Value>,
+    },
 }
 
 impl Value {
@@ -159,7 +176,8 @@ impl Value {
             Value::Array { ty, .. }
             | Value::Struct { ty, .. }
             | Value::Option { ty, .. }
-            | Value::Result { ty, .. } => *ty,
+            | Value::Result { ty, .. }
+            | Value::Enum { ty, .. } => *ty,
         }
     }
 
@@ -239,10 +257,58 @@ impl Value {
         }
     }
 
+    /// Variante e campos, se o valor for enum (ADR-0039).
+    #[must_use]
+    pub fn as_enum(&self) -> Option<(u32, &[Value])> {
+        match self {
+            Value::Enum {
+                variant, fields, ..
+            } => Some((*variant, fields.as_slice())),
+            _ => None,
+        }
+    }
+
     /// `true` se o valor pertence ao tipo declarado (sem conversão implícita).
     #[must_use]
     pub fn matches_type(&self, ty: TypeId) -> bool {
         self.ty() == ty
+    }
+
+    /// Profundidade do valor, com a raiz em `1` (ADR-0039).
+    ///
+    /// Iterativa e determinística; usada por `enum_new` para impor
+    /// [`MAX_VALUE_DEPTH`] antes de criar valores recursivos profundos.
+    #[must_use]
+    pub fn depth(&self) -> u32 {
+        let mut max = 0_u32;
+        let mut stack: Vec<(&Value, u32)> = vec![(self, 1)];
+        while let Some((value, depth)) = stack.pop() {
+            max = max.max(depth);
+            let child = depth.saturating_add(1);
+            match value {
+                Value::Array { items, .. }
+                | Value::Struct { fields: items, .. }
+                | Value::Enum { fields: items, .. } => {
+                    for item in items {
+                        stack.push((item, child));
+                    }
+                }
+                Value::Option {
+                    value: Some(inner), ..
+                }
+                | Value::Result {
+                    value: Ok(inner) | Err(inner),
+                    ..
+                } => stack.push((inner, child)),
+                Value::Unit
+                | Value::Bool(_)
+                | Value::I64(_)
+                | Value::Str(_)
+                | Value::F64(_)
+                | Value::Option { value: None, .. } => {}
+            }
+        }
+        max
     }
 
     /// Bytes modelados retidos pelo valor (ADR-0035).
@@ -270,6 +336,11 @@ impl Value {
             Value::Result { value, .. } => match value {
                 Ok(inner) | Err(inner) => SLOT_BYTES.saturating_add(inner.retained_bytes()),
             },
+            Value::Enum { fields, .. } => u64::try_from(fields.len())
+                .unwrap_or(u64::MAX)
+                .saturating_mul(SLOT_BYTES)
+                .saturating_add(SLOT_BYTES)
+                .saturating_add(sum_retained(fields.iter())),
         }
     }
 }
@@ -322,6 +393,24 @@ impl fmt::Display for Value {
                 Ok(inner) => write!(f, "ok:{inner}"),
                 Err(inner) => write!(f, "err:{inner}"),
             },
+            Value::Enum {
+                ty,
+                variant,
+                fields,
+            } => {
+                write!(f, "enum:{ty}:{variant}")?;
+                if !fields.is_empty() {
+                    f.write_str("[")?;
+                    for (index, field) in fields.iter().enumerate() {
+                        if index > 0 {
+                            f.write_str(", ")?;
+                        }
+                        write!(f, "{field}")?;
+                    }
+                    f.write_str("]")?;
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -663,6 +752,36 @@ mod tests {
         assert_eq!(Value::I64(30).to_string(), "i64:30");
         assert_eq!(Value::Bool(false).to_string(), "bool:false");
         assert_eq!(Value::Unit.to_string(), "unit");
+    }
+
+    #[test]
+    fn enum_tem_display_estavel_e_bytes_retidos() {
+        let vazia = Value::Enum {
+            ty: 5,
+            variant: 0,
+            fields: Vec::new(),
+        };
+        assert_eq!(vazia.to_string(), "enum:5:0");
+        assert_eq!(vazia.retained_bytes(), SLOT_BYTES);
+        assert_eq!(
+            vazia
+                .as_enum()
+                .map(|(variant, fields)| (variant, fields.len())),
+            Some((0, 0))
+        );
+
+        let com_payload = Value::Enum {
+            ty: 5,
+            variant: 1,
+            fields: vec![Value::I64(2), Value::Str("ab".to_string())],
+        };
+        assert_eq!(com_payload.to_string(), "enum:5:1[i64:2, str:ab]");
+        assert_eq!(
+            com_payload.retained_bytes(),
+            SLOT_BYTES + 2 * SLOT_BYTES + 2
+        );
+        assert_eq!(com_payload.depth(), 2);
+        assert_eq!(vazia.depth(), 1);
     }
 
     #[test]

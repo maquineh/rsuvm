@@ -1,6 +1,7 @@
-# ADR-0039 — Enums e unions no RIR (proposta)
+# ADR-0039 — Enums e unions no RIR
 
-- **Status:** Proposto
+- **Status:** Aceito; implementado no núcleo (single-module). Linker multi-módulo
+  e adaptador Lift permanecem fora deste incremento.
 - **Data:** 2026-11-02
 - **Requisitos:** pedido do mantenedor para iniciar a especificação de
   enums/unions no RIR; adaptador Lift atualizado para `e04bc26`, que já expõe
@@ -8,9 +9,10 @@
   ADR-0035 (memória retida) e ADR-0021 (adaptador Lift).
 - **Especificação técnica:** [ENUMS-UNIONS-PROPOSTA](../CONTRATOS/ENUMS-UNIONS-PROPOSTA.md)
 
-> Esta ADR **propõe** o desenho. Nenhum código, tipo, opcode, corpus ou
-> adaptador foi alterado para enums/unions nesta rodada. O adaptador Lift
-> continua rejeitando esses recursos com `Unsupported`.
+> Esta ADR foi aceita e o núcleo foi implementado: `rvm-spec`, `rvm-ir`,
+> `rvm-runtime`, `rvm-verify`, `rvm-interpreter`, `rvm-text`, `rvm-bytecode` e o
+> corpus. `rvm-link` rejeita módulos com enums e o adaptador Lift continua
+> rejeitando esses recursos com `Unsupported` (falha fechada).
 
 ## Contexto
 
@@ -28,7 +30,7 @@ Uma representação por “struct + tag `i64`” perderia a nominalidade, a chec
 de variante e a exaustividade. `option`/`result` não expressam N variantes com
 payloads distintos. É necessário um tipo nominal próprio.
 
-## Decisão proposta
+## Decisão
 
 1. **Tipo nominal `TypeDef::Enum(EnumId)` + tabela `Module.enums`.** Cada
    `EnumDef` tem nome e variantes; cada variante tem campos posicionais ou
@@ -45,19 +47,27 @@ payloads distintos. É necessário um tipo nominal próprio.
    heap-backed (`Vec<Value>`); ciclos sem enum continuam rejeitados pela regra
    do ADR-0034. `struct S { s: S }` continua inválido.
 6. **Formato textual:** declaração `enum Name { ... }` + `type <id> = enum
-   Name`; operações qualificadas por `Enum.Variant`; forma canônica e ordem de
-   impressão definidas no contrato.
-7. **Bytecode aditivo:** `TAG_ENUM = 9`, tabela de enums após structs e opcodes
-   55–59. Sem bump de `IR_VERSION`/`FORMAT_VERSION` nesta proposta; decoders
-   antigos rejeitam os novos tags/opcodes com falha fechada. Se o mantenedor
-   preferir versionar, `IR_VERSION = 2` é a alternativa.
+   Name`; `enum_new` usa `Enum.Variant`; `enum_is_variant`/`enum_payload` usam
+   índice de variante e índice posicional do campo. Ordem canônica e forma
+   definidas no contrato.
+7. **Bytecode:** `TAG_ENUM = 9`, tabela de enums após structs e opcodes
+   55–59. `IR_VERSION`/`FORMAT_VERSION` permanecem `1`; como o formato é
+   experimental e não promete compatibilidade entre revisões (ADR-0004), a
+   inserção da tabela altera o layout de arquivos gerados antes deste incremento.
+   Decoders antigos/new decoders sobre o layout antigo falham fechado
+   (`truncated_input`/`invalid_module`/`unknown_type`), nunca executam bytes
+   ambíguos.
 8. **Limites novos** (`max_enums`, `max_variants_per_enum`,
    `max_fields_per_enum_variant`) com checagem antes de alocar; sem teto
    agregado nesta primeira proposta.
-9. **Adaptador Lift:** mapear `HirEnum`/`EnumConstruct`/`Match` para os novos
-   tipos/ops; ignorar `field_boxed` (o RIR já é heap-backed); validar
+9. **Adaptador Lift (adiado):** mapear `HirEnum`/`EnumConstruct`/`Match` para
+   os novos tipos/ops; ignorar `field_boxed` (o RIR já é heap-backed); validar
    exaustividade defensivamente; `lift-encode` passa a emitir `.rsvmbc` com
-   enums.
+   enums. Neste incremento o adaptador continua retornando `Unsupported`.
+10. **Profundidade de valor:** `MAX_VALUE_DEPTH = 256`; `enum_new` calcula a
+    profundidade de forma iterativa e falha com `value_too_deep`
+    (`resource_limit`). O teto mantém seguros `PartialEq`, `Display`,
+    `retained_bytes` e o `Drop` derivado, que continuam recursivos.
 
 ## Alternativas consideradas
 
@@ -110,26 +120,56 @@ payloads distintos. É necessário um tipo nominal próprio.
 - Sem host ABI com enums; a ABI atual continua `read_file`/`string`.
 - Sem prova de ausência de bugs; fuzzing/auditoria continuam necessários.
 
-## Validação proposta
+## Validação
 
 - Contrato técnico: `docs/CONTRATOS/ENUMS-UNIONS-PROPOSTA.md`.
-- Corpus RIR: casos válidos/inválidos listados no contrato (§12).
-- Adaptador Lift: enums posicionais/nomeados/recursivos, `match`, unions,
-  enums em arrays/structs/options, teste diferencial e `lift-encode`.
-- Bytecode: round-trip e decoder hostil para tags/contagens/índices.
-- Gates: `cargo test --workspace`, `clippy -D warnings`, `fmt --check`, MSRV,
-  docs; `cargo test --manifest-path frontends/lift-rir/Cargo.toml`.
-- Critério de aceitação: todos os casos acima executam/verificam e o adaptador
-  deixa de rejeitar enums/unions suportados.
+- Corpus RIR: C-063..C-066 (válidos) e N-044..N-049 (inválidos/trap/limite).
+- Modelo e estrutura: testes em `crates/rvm-ir/src/structure.rs` (ciclo com
+  enum, tabela canônica, variantes/campos e limites).
+- Texto: round-trip com enum recursivo e ciclo enum↔struct em `rvm-text`.
+- Bytecode: fixture `testing::enum_simples` no round-trip do decoder.
+- Interpretador: `enum_simples` em `crates/rvm-interpreter/tests/execucao.rs` e
+  N-044/N-049 no corpus.
+- Gates executados neste incremento: `cargo test --workspace --locked`,
+  `cargo clippy --workspace --all-targets -- -D warnings`,
+  `cargo fmt --all -- --check` e `cargo test --locked` em `frontends/lift-rir`.
+- Critério de aceitação **parcial**: o núcleo está implementado; o adaptador
+  Lift e o linker multi-módulo continuam rejeitando enums, como declarado no
+  escopo.
+
+## Estado de implementação
+
+Implementado e coberto:
+
+- `TypeDef::Enum`, `EnumId`, `Module.enums`, `EnumDef`/`EnumVariantDef`/
+  `EnumFieldDef`; `TypeDef` continua `Copy`.
+- `Value::Enum`, `as_enum`, `Display`, `retained_bytes`, `depth` e
+  `MAX_VALUE_DEPTH`.
+- `Op::{EnumNew, EnumIsVariant, EnumPayload, EnumEq, EnumNe}` em
+  `operand_ids`, `result_type`, verificação, interpretador e bytecode
+  (`TAG_ENUM = 9`, opcodes 55..=59).
+- Regra de ciclos com enum, `invalid_variant` e `value_too_deep`.
+- Texto: declaração `enum`, `type <id> = enum <Nome>`, operações e round-trip.
+- Corpus C-063..C-066 e N-044..N-049.
+
+Adiado explicitamente:
+
+- `rvm-link` com enums (rejeita módulos com `enums` não vazio).
+- Adaptador Lift, `match` lowering e unions (continua `Unsupported`).
+- `IR_VERSION`/`FORMAT_VERSION` permanecem `1`; a tabela de enums muda o layout
+  do bytecode experimental. Não há promessa de compatibilidade entre revisões
+  (ADR-0004): arquivos de layouts diferentes falham fechado.
 
 ## Questões abertas
 
-1. Ciclos: só com enum ou qualquer indireção heap?
-2. `invalid_variant` novo ou reutilizar `unwrap_error`?
-3. `IR_VERSION` aditivo (1) ou bump para 2?
-4. Limites agregados para variantes/campos?
-5. Formato textual de `type`/`enum` e ordem canônica.
-6. Igualdade/`retained_bytes`/`Display` depth-safe: iterativo ou limite?
-7. Suportar `match` de `Option`/`Result` no mesmo incremento ou só enums?
-8. Enums em módulos ligados por `rvm-link` neste incremento ou apenas em módulos
-   planos (single-module), adiando o remapeamento de `EnumId`?
+1. Ciclos: decidido permitir somente ciclos que contenham enum.
+2. `invalid_variant`: decidido criar o código novo (classe `trap`).
+3. `IR_VERSION`: decidido manter `1`; o layout do bytecode experimental muda,
+   sem promessa de compatibilidade entre revisões.
+4. Limites agregados: adiados; os limites por enum/variante/campo são
+   verificados antes de alocar.
+5. Formato textual: decidido; `type`/`enum`/`struct` e índices numéricos nas
+   operações de inspeção estão no contrato `TEXTO-EXP-0.md`.
+6. Profundidade: decidido `MAX_VALUE_DEPTH = 256` + `value_too_deep`.
+7. `match` de `Option`/`Result`: fora deste incremento.
+8. Enums em `rvm-link`: adiados; apenas módulos planos neste incremento.

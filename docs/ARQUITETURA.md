@@ -57,8 +57,10 @@ linguagem (ADR-0009).
 ## 3. Subset semântico (EXP-0)
 
 - Tipos: `unit`, `bool`, `i64`, `string`, `f64` mais os compostos `array T`,
-  `struct Nome`, `option T` e `result T T`, todos recursivos pela **tabela de
-  tipos** do módulo (ADR-0034). Sem coerção implícita.
+  `struct Nome`, `enum Nome`, `option T` e `result T T`, todos recursivos pela
+  **tabela de tipos** do módulo (ADR-0034/ADR-0039). O grafo de tipos é acíclico,
+  exceto ciclos que contenham um enum (a recursão do enum é heap-backed). Sem
+  coerção implícita.
 - Operações: `const_i64`, `const_bool`, `const_str`, `const_f64`, `add_i64_checked`,
   `sub_i64_checked`, `mul_i64_checked`, `div_i64_checked`, `rem_i64_checked`,
   `shl_i64_checked`, `shr_i64_checked`, `and_i64`, `or_i64`, `xor_i64`, `eq_i64`,
@@ -68,6 +70,7 @@ linguagem (ADR-0009).
   `array_set`, `struct_new`, `field_get`, `field_set`, `option_none`, `option_some`,
   `option_is_some`, `option_unwrap`, `coalesce`, `option_eq`, `option_ne`,
   `result_ok`, `result_err`, `result_is_ok`, `result_unwrap`, `result_unwrap_err`,
+  `enum_new`, `enum_is_variant`, `enum_payload`, `enum_eq`, `enum_ne`,
   `call_static`, `host_read_file` (ABI fechada, ADR-0036).
 - Terminadores: `return`, `br`, `cond_br`.
 - Merge por parâmetros de bloco (phi explícito).
@@ -78,7 +81,9 @@ linguagem (ADR-0009).
   (ADR-0029/0034), com atualização **funcional** por `field_set` (ADR-0032), sem
   mutação in-place; `option`/`result` existem com **qualquer payload**, inclusive
   agregados e aninhados (ADR-0030/0033/0034), com igualdade
-  `option_eq`/`option_ne` (ADR-0031); `f64` existe (ADR-0026) sem
+  `option_eq`/`option_ne` (ADR-0031); enums existem com variantes vazias,
+  posicionais ou nomeadas, igualdade estrutural e recursão com enum
+  (ADR-0039); `f64` existe (ADR-0026) sem
   `%`/`pow`/conversões; concatenação de `string` existe (ADR-0025), sem slicing.
 
 Semântica aritmética: `i64::checked_*`; resultado fora de `[-2^63, 2^63-1]`
@@ -106,10 +111,14 @@ zero → `inf`/`NaN`, ADR-0026). O comportamento é idêntico em debug e release
   buffer transitório de argumentos = `args × 24` bytes; a cobrança acontece antes
   de alocar, conta memória viva e libera ao fim. O **conteúdo** dos slots também é
   contabilizado: `string` custa os bytes UTF-8, `array`/`struct` custam
-  `itens × 24` + filhos, `option`/`result` custam `24` + payload; a gravação de um
+  `itens × 24` + filhos, `option`/`result` custam `24` + payload, `enum` custa
+  `24 × (1 + campos)` + filhos; a gravação de um
   slot cobra o valor novo e libera o anterior, e o retorno do frame libera os
   slots (ADR-0035). Teto padrão de 16 MiB e `out_of_memory` ao exceder
   (ADR-0013, ADR-0016, ADR-0035). É modelo determinístico, não RSS.
+- **Profundidade de valor:** `MAX_VALUE_DEPTH = 256`; `enum_new` calcula a
+  profundidade de forma iterativa e falha com `value_too_deep`
+  (`resource_limit`) antes de criar valores recursivos mais fundos (ADR-0039).
 - **Quota por efeito (host):** `read_file` exige `max_bytes` e a ABI impõe teto de
   1 MiB; o host pode impor teto menor. Antes do IO, o intérprete reserva
   `SLOT_BYTES + min(max_bytes, 1 MiB)` e falha com `out_of_memory` se não couber;

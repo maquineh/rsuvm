@@ -101,6 +101,7 @@ fn cadeia(k: u32) -> Module {
         entry: 0,
         types: builtin_types(),
         structs: Vec::new(),
+        enums: Vec::new(),
         functions: vec![main, funcao_inc(1)],
     }
 }
@@ -137,6 +138,7 @@ fn app_externo(k: u32) -> Module {
         entry: 0,
         types: builtin_types(),
         structs: Vec::new(),
+        enums: Vec::new(),
         functions: vec![main, externa],
     }
 }
@@ -149,6 +151,7 @@ fn prov() -> Module {
         entry: 0,
         types: builtin_types(),
         structs: Vec::new(),
+        enums: Vec::new(),
         functions: vec![funcao_inc(0)],
     }
 }

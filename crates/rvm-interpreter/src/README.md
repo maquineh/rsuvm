@@ -44,8 +44,12 @@ Efeitos de host só existem quando o chamador fornece um `Host` explícito a
 - `br`/`cond_br` copiam os argumentos para os slots dos parâmetros do bloco alvo
   antes do salto (phi explícito); `return` sem valor produz `Value::Unit`.
 - Erros de execução carregam `Location` de função, bloco ou instrução; trap de
-  overflow é `ErrorClass::Trap`; fuel e profundidade são
+  overflow é `ErrorClass::Trap`; fuel, profundidade e `value_too_deep` são
   `ErrorClass::ResourceLimit`.
+- Enums: `enum_new` constrói `Value::Enum` e cobra memória; `enum_is_variant`
+  testa; `enum_payload` sobre variante errada produz `invalid_variant`; `enum_eq`/
+  `enum_ne` comparam estruturalmente. Valores acima de `MAX_VALUE_DEPTH` falham
+  com `value_too_deep` antes de gravar o slot (ADR-0039).
 - Determinismo: nenhum `HashMap`, tempo, ambiente ou estado compartilhado entre
   execuções; `execute` cria todo o estado localmente. Reexecutar o mesmo módulo
   produz o mesmo valor e o mesmo fuel. `host_read_file` é a única exceção e só

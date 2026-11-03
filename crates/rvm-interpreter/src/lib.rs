@@ -56,7 +56,9 @@
 )]
 
 use rvm_ir::{BlockId, FnId, Function, Module, Op, Terminator, ValueId};
-use rvm_runtime::{arg_buffer_cost, frame_cost, ExecConfig, Host, NoHost, Value, SLOT_BYTES};
+use rvm_runtime::{
+    arg_buffer_cost, frame_cost, ExecConfig, Host, NoHost, Value, MAX_VALUE_DEPTH, SLOT_BYTES,
+};
 use rvm_spec::{
     BinOp, BuiltinHost, ErrorCode, Location, RvmError, TypeDef, TypeId, TYPE_F64, TYPE_STR,
 };
@@ -1162,6 +1164,192 @@ impl<'a> Interpreter<'a> {
                         ));
                     }
                     self.write_current(&mut stack, top, instr.def, value, &site)?;
+                    self.advance(&mut stack, top, &site)?;
+                }
+                Op::EnumNew {
+                    ty,
+                    variant,
+                    fields,
+                } => {
+                    let mut values: Vec<Value> = Vec::new();
+                    {
+                        let frame = stack.get(top).ok_or_else(|| {
+                            error_at(
+                                ErrorCode::InvalidModule,
+                                "frame ausente ao construir enum",
+                                &site,
+                            )
+                        })?;
+                        values.try_reserve_exact(fields.len()).map_err(|_| {
+                            error_at(
+                                ErrorCode::InvalidModule,
+                                "não foi possível alocar o enum",
+                                &site,
+                            )
+                        })?;
+                        for id in fields {
+                            values.push(read_slot(frame, *id, &site)?);
+                        }
+                    }
+                    let enum_id = match self.module.type_def(*ty) {
+                        Some(TypeDef::Enum(id)) => id,
+                        _ => {
+                            return Err(error_at(
+                                ErrorCode::InvalidModule,
+                                format!("tipo {ty} de enum_new não é enum"),
+                                &site,
+                            ))
+                        }
+                    };
+                    let definition = self.module.enum_def(enum_id).ok_or_else(|| {
+                        error_at(
+                            ErrorCode::InvalidModule,
+                            format!("enum {enum_id} não existe no módulo"),
+                            &site,
+                        )
+                    })?;
+                    let variant_def = usize::try_from(*variant)
+                        .ok()
+                        .and_then(|index| definition.variants.get(index))
+                        .ok_or_else(|| {
+                            error_at(
+                                ErrorCode::InvalidType,
+                                format!(
+                                    "variante {variant} não existe no enum `{}`",
+                                    definition.name
+                                ),
+                                &site,
+                            )
+                        })?;
+                    if values.len() != variant_def.fields.len() {
+                        return Err(error_at(
+                            ErrorCode::InvalidType,
+                            format!(
+                                "enum_new de `{}.{}` espera {} campo(s), recebeu {}",
+                                definition.name,
+                                variant_def.name,
+                                variant_def.fields.len(),
+                                values.len()
+                            ),
+                            &site,
+                        ));
+                    }
+                    let depth =
+                        1_u32.saturating_add(values.iter().map(Value::depth).max().unwrap_or(0));
+                    if depth > MAX_VALUE_DEPTH {
+                        return Err(error_at(
+                            ErrorCode::ValueTooDeep,
+                            format!(
+                                "enum_new produziria profundidade {depth}, acima do limite de {MAX_VALUE_DEPTH}"
+                            ),
+                            &site,
+                        ));
+                    }
+                    let value = Value::Enum {
+                        ty: *ty,
+                        variant: *variant,
+                        fields: values,
+                    };
+                    self.ensure_memory(value.retained_bytes(), &site)?;
+                    self.write_current(&mut stack, top, instr.def, value, &site)?;
+                    self.advance(&mut stack, top, &site)?;
+                }
+                Op::EnumIsVariant { value, variant } => {
+                    let matches = {
+                        let frame = stack.get(top).ok_or_else(|| {
+                            error_at(
+                                ErrorCode::InvalidModule,
+                                "frame ausente ao testar variante",
+                                &site,
+                            )
+                        })?;
+                        match read_slot(frame, *value, &site)? {
+                            Value::Enum {
+                                variant: actual, ..
+                            } => actual == *variant,
+                            _ => {
+                                return Err(error_at(
+                                    ErrorCode::InvalidType,
+                                    format!("v{value} não é um enum"),
+                                    &site,
+                                ))
+                            }
+                        }
+                    };
+                    self.write_current(&mut stack, top, instr.def, Value::Bool(matches), &site)?;
+                    self.advance(&mut stack, top, &site)?;
+                }
+                Op::EnumPayload {
+                    value,
+                    variant,
+                    field,
+                } => {
+                    let payload = {
+                        let frame = stack.get(top).ok_or_else(|| {
+                            error_at(
+                                ErrorCode::InvalidModule,
+                                "frame ausente ao extrair payload de enum",
+                                &site,
+                            )
+                        })?;
+                        match read_slot(frame, *value, &site)? {
+                            Value::Enum {
+                                variant: actual,
+                                fields,
+                                ..
+                            } => {
+                                if actual != *variant {
+                                    return Err(error_at(
+                                        ErrorCode::InvalidVariant,
+                                        format!(
+                                            "enum_payload esperava variante {variant}, encontrou {actual}"
+                                        ),
+                                        &site,
+                                    ));
+                                }
+                                usize::try_from(*field)
+                                    .ok()
+                                    .and_then(|index| fields.get(index))
+                                    .cloned()
+                                    .ok_or_else(|| {
+                                        error_at(
+                                            ErrorCode::InvalidType,
+                                            format!(
+                                                "campo {field} não existe na variante {variant}"
+                                            ),
+                                            &site,
+                                        )
+                                    })?
+                            }
+                            _ => {
+                                return Err(error_at(
+                                    ErrorCode::InvalidType,
+                                    format!("v{value} não é um enum"),
+                                    &site,
+                                ))
+                            }
+                        }
+                    };
+                    self.write_current(&mut stack, top, instr.def, payload, &site)?;
+                    self.advance(&mut stack, top, &site)?;
+                }
+                Op::EnumEq { lhs, rhs } | Op::EnumNe { lhs, rhs } => {
+                    let equal = {
+                        let frame = stack.get(top).ok_or_else(|| {
+                            error_at(
+                                ErrorCode::InvalidModule,
+                                "frame ausente ao comparar enum",
+                                &site,
+                            )
+                        })?;
+                        read_slot(frame, *lhs, &site)? == read_slot(frame, *rhs, &site)?
+                    };
+                    let result = if matches!(&instr.op, Op::EnumEq { .. }) {
+                        equal
+                    } else {
+                        !equal
+                    };
+                    self.write_current(&mut stack, top, instr.def, Value::Bool(result), &site)?;
                     self.advance(&mut stack, top, &site)?;
                 }
                 Op::Call { callee, args } => {

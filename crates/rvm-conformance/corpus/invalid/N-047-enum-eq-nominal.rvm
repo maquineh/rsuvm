@@ -1,0 +1,24 @@
+; id: N-047
+; expect: error invalid_type
+; extra: enum_eq exige o mesmo enum nominal (ADR-0039)
+module n047 version 1
+entry main
+type 5 = enum A
+type 6 = enum B
+
+enum A {
+  X
+}
+
+enum B {
+  X
+}
+
+fn main() -> i64 {
+  entry:
+    v0 = enum_new A.X
+    v1 = enum_new B.X
+    v2 = enum_eq v0, v1
+    v3 = const_i64 0
+    return v3
+}

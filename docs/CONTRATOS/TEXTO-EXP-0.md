@@ -9,9 +9,12 @@ sujeita a mudança sem compatibilidade.
 ## 1. Gramática
 
 ~~~text
-arquivo    = comentário* módulo declaração_tipo* declaração_struct* import* entrada declaração_fn+ EOF ;
+arquivo    = comentário* módulo declaração_tipo* declaração_enum* declaração_struct* import* entrada declaração_fn+ EOF ;
 módulo     = "module" ident "version" inteiro ;
 declaração_tipo = "type" inteiro "=" tipo ;
+declaração_enum = "enum" ident "{" variante { "," variante } [ "," ] "}" ;
+variante   = ident [ "(" tipo { "," tipo } [ "," ] ")"
+                   | "{" campo { "," campo } [ "," ] "}" ] ;
 declaração_struct = "struct" ident "{" campo+ "}" ;
 campo      = ident ":" tipo ;
 import     = "import" ident ;
@@ -20,7 +23,8 @@ declaração_fn = "fn" ident "(" [parâmetros] ")" "->" tipo bloco+ ;
 parâmetros = parâmetro { "," parâmetro } ;
 parâmetro  = ident ":" tipo ;
 tipo       = "unit" | "bool" | "i64" | "string" | "f64"
-           | "array" tipo | "struct" ident | "option" tipo | "result" tipo tipo ;
+           | "array" tipo | "struct" ident | "enum" ident
+           | "option" tipo | "result" tipo tipo ;
 bloco      = rótulo [ "(" parâmetros ")" ] ":" instrução* terminador ;
 instrução  = ident "=" operação ;
 operação   = "const_i64" inteiro
@@ -52,6 +56,11 @@ operação   = "const_i64" inteiro
            | "result_is_ok" valor
            | "result_unwrap" valor
            | "result_unwrap_err" valor
+           | "enum_new" ident "." ident [ valor { "," valor } ]
+           | "enum_is_variant" valor "," inteiro
+           | "enum_payload" valor "," inteiro "," inteiro
+           | "enum_eq" valor "," valor
+           | "enum_ne" valor "," valor
            | "host_read_file" valor "," valor
            | "call_static" ident "(" [valores] ")" ;
 op_binário = "add_i64_checked" | "sub_i64_checked" | "mul_i64_checked"
@@ -106,6 +115,14 @@ terminador de instrução.
     `result string string` na tabela (`type <id> = result string string`). O texto
     não escolhe o efeito nem o escopo: ambos vêm da ABI; a capability é conferida
     em execução.
+12. `enum` declara variantes; `type <id> = enum <Nome>` registra o tipo na tabela
+    densa (ADR-0039). Structs e enums compartilham o espaço de nomes nominal.
+    Variantes vazias, posicionais e nomeadas são mutuamente exclusivas; a vírgula
+    final é opcional. `enum_new` usa `Enum.Variant`; `enum_is_variant` e
+    `enum_payload` usam o índice da variante e o índice posicional do campo.
+13. Referências para frente a structs/enums são aceitas; uma referência sem
+    declaração correspondente é `unknown_type`. Um enum declarado sem
+    `type <id> = enum <Nome>` é `invalid_module` (regra estrutural).
 
 ## 3. Resolução de nomes e identificadores de valor
 
@@ -130,6 +147,13 @@ depois usos), o que permite referências a definições posteriores — a legali
 module <nome> version 1
 entry <nome_da_entrada>
 type <id> = <tipo>                  ; tipos compostos (ids >= 5), na ordem
+
+enum <Nome> {
+  <Variante>
+  <Variante>(<tipo>, ...)
+  <Variante> { <campo>: <tipo>, ... }
+}
+
 import <nome_da_funcao_externa>     ; opcional, zero ou mais
 
 struct <Nome> { <campo>: <tipo> ... }   ; opcional, zero ou mais
@@ -143,6 +167,10 @@ fn <nome>(<param>: <tipo>, ...) -> <tipo> {
 
 Regras:
 
+- A ordem canônica de impressão é `module`, `entry`, `type`, `enum`, `struct`,
+  `import`, funções. Cada enum é separado por uma linha em branco; variantes usam
+  dois espaços de recuo. Uma variante vazia não tem payload; uma posicional usa
+  `(...)`; uma nomeada usa `{ ... }` com vírgulas.
 - Parâmetros e parâmetros de bloco usam o nome armazenado na IR (validado como
   identificador não reservado).
 - Definições de instrução são impressas como `v<id>`, independentemente do nome

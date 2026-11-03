@@ -55,8 +55,8 @@ use rvm_ir::{
     Block, BlockId, BranchTarget, FnId, Function, Instr, Module, Op, StructDef, Terminator, ValueId,
 };
 use rvm_spec::{
-    BuiltinHost, ErrorCode, Limits, Location, RvmError, StructId, TypeDef, TypeId, TYPE_BOOL,
-    TYPE_F64, TYPE_I64, TYPE_STR, TYPE_UNIT,
+    BuiltinHost, EnumId, ErrorCode, Limits, Location, RvmError, StructId, TypeDef, TypeId,
+    TYPE_BOOL, TYPE_F64, TYPE_I64, TYPE_STR, TYPE_UNIT,
 };
 
 /// Módulo que passou pela verificação completa.
@@ -449,6 +449,150 @@ impl<'a> FunctionFacts<'a> {
                 }
                 Ok(())
             }
+            Op::EnumNew {
+                ty,
+                variant,
+                fields,
+            } => {
+                for field in fields {
+                    self.check_use(block_index, instr_index, *field, location)?;
+                }
+                let enum_id = match self.module.type_def(*ty) {
+                    Some(TypeDef::Enum(id)) => id,
+                    other => {
+                        return Err(invalid(
+                            ErrorCode::InvalidType,
+                            format!("enum_new usa tipo {other:?}, esperado enum"),
+                            location.clone(),
+                        ))
+                    }
+                };
+                let definition = self.module.enum_def(enum_id).ok_or_else(|| {
+                    invalid(
+                        ErrorCode::InvalidModule,
+                        format!("enum {enum_id} não existe no módulo"),
+                        location.clone(),
+                    )
+                })?;
+                let variant_def = definition
+                    .variants
+                    .get(usize::try_from(*variant).unwrap_or(usize::MAX))
+                    .ok_or_else(|| {
+                        invalid(
+                            ErrorCode::InvalidType,
+                            format!(
+                                "variante {variant} não existe no enum `{}`",
+                                definition.name
+                            ),
+                            location.clone(),
+                        )
+                    })?;
+                if fields.len() != variant_def.fields.len() {
+                    return Err(invalid(
+                        ErrorCode::InvalidType,
+                        format!(
+                            "enum_new de `{}.{}` espera {} campo(s), recebeu {}",
+                            definition.name,
+                            variant_def.name,
+                            variant_def.fields.len(),
+                            fields.len()
+                        ),
+                        location.clone(),
+                    ));
+                }
+                for (field, expected) in fields.iter().zip(variant_def.fields.iter()) {
+                    self.check_operand_type(*field, expected.ty, location)?;
+                }
+                Ok(())
+            }
+            Op::EnumIsVariant { value, variant } => {
+                self.check_use(block_index, instr_index, *value, location)?;
+                let enum_id = self.require_enum(*value, location)?;
+                let definition = self.module.enum_def(enum_id).ok_or_else(|| {
+                    invalid(
+                        ErrorCode::InvalidModule,
+                        format!("enum {enum_id} não existe no módulo"),
+                        location.clone(),
+                    )
+                })?;
+                if usize::try_from(*variant)
+                    .ok()
+                    .and_then(|index| definition.variants.get(index))
+                    .is_none()
+                {
+                    return Err(invalid(
+                        ErrorCode::InvalidType,
+                        format!(
+                            "variante {variant} não existe no enum `{}`",
+                            definition.name
+                        ),
+                        location.clone(),
+                    ));
+                }
+                Ok(())
+            }
+            Op::EnumPayload {
+                value,
+                variant,
+                field,
+            } => {
+                self.check_use(block_index, instr_index, *value, location)?;
+                let enum_id = self.require_enum(*value, location)?;
+                let definition = self.module.enum_def(enum_id).ok_or_else(|| {
+                    invalid(
+                        ErrorCode::InvalidModule,
+                        format!("enum {enum_id} não existe no módulo"),
+                        location.clone(),
+                    )
+                })?;
+                let variant_def = usize::try_from(*variant)
+                    .ok()
+                    .and_then(|index| definition.variants.get(index))
+                    .ok_or_else(|| {
+                        invalid(
+                            ErrorCode::InvalidType,
+                            format!(
+                                "variante {variant} não existe no enum `{}`",
+                                definition.name
+                            ),
+                            location.clone(),
+                        )
+                    })?;
+                if usize::try_from(*field)
+                    .ok()
+                    .and_then(|index| variant_def.fields.get(index))
+                    .is_none()
+                {
+                    return Err(invalid(
+                        ErrorCode::InvalidType,
+                        format!(
+                            "campo {field} não existe na variante `{}.{}`",
+                            definition.name, variant_def.name
+                        ),
+                        location.clone(),
+                    ));
+                }
+                Ok(())
+            }
+            Op::EnumEq { lhs, rhs } | Op::EnumNe { lhs, rhs } => {
+                self.check_use(block_index, instr_index, *lhs, location)?;
+                self.check_use(block_index, instr_index, *rhs, location)?;
+                let left = self.type_def_of(*lhs, location)?;
+                let right = self.type_def_of(*rhs, location)?;
+                match (left, right) {
+                    (TypeDef::Enum(a), TypeDef::Enum(b)) if a == b => Ok(()),
+                    (TypeDef::Enum(_), TypeDef::Enum(_)) => Err(invalid(
+                        ErrorCode::InvalidType,
+                        "enum_eq/enum_ne exige o mesmo enum".to_string(),
+                        location.clone(),
+                    )),
+                    _ => Err(invalid(
+                        ErrorCode::InvalidType,
+                        "enum_eq/enum_ne exige operandos enum".to_string(),
+                        location.clone(),
+                    )),
+                }
+            }
             Op::Call { callee, args } => {
                 let target = self.module.function(*callee).ok_or_else(|| {
                     invalid(
@@ -705,6 +849,18 @@ impl<'a> FunctionFacts<'a> {
             other => Err(invalid(
                 ErrorCode::InvalidType,
                 format!("valor v{value} tem tipo {other}, esperado result"),
+                location.clone(),
+            )),
+        }
+    }
+
+    /// Exige que `value` tenha tipo enum e devolve o `EnumId`.
+    fn require_enum(&self, value: ValueId, location: &Location) -> Result<EnumId, RvmError> {
+        match self.type_def_of(value, location)? {
+            TypeDef::Enum(id) => Ok(id),
+            other => Err(invalid(
+                ErrorCode::InvalidType,
+                format!("valor v{value} tem tipo {other}, esperado enum"),
                 location.clone(),
             )),
         }
@@ -1090,6 +1246,56 @@ fn resolve_op_type(
             let (_, ret) = host_signature(module, *function, location)?;
             Ok(ret)
         }
+        Op::EnumPayload {
+            value,
+            variant,
+            field,
+        } => {
+            let enum_id = match module.type_def(type_at(types, *value, location)?) {
+                Some(TypeDef::Enum(id)) => id,
+                _ => {
+                    return Err(invalid(
+                        ErrorCode::InvalidType,
+                        "enum_payload exige operando enum".to_string(),
+                        location.clone(),
+                    ))
+                }
+            };
+            let definition = module.enum_def(enum_id).ok_or_else(|| {
+                invalid(
+                    ErrorCode::InvalidModule,
+                    format!("enum {enum_id} não existe no módulo"),
+                    location.clone(),
+                )
+            })?;
+            let variant_def = usize::try_from(*variant)
+                .ok()
+                .and_then(|index| definition.variants.get(index))
+                .ok_or_else(|| {
+                    invalid(
+                        ErrorCode::InvalidType,
+                        format!(
+                            "variante {variant} não existe no enum `{}`",
+                            definition.name
+                        ),
+                        location.clone(),
+                    )
+                })?;
+            usize::try_from(*field)
+                .ok()
+                .and_then(|index| variant_def.fields.get(index))
+                .map(|field| field.ty)
+                .ok_or_else(|| {
+                    invalid(
+                        ErrorCode::InvalidType,
+                        format!(
+                            "campo {field} não existe na variante `{}.{}`",
+                            definition.name, variant_def.name
+                        ),
+                        location.clone(),
+                    )
+                })
+        }
         Op::Call { callee, .. } => module
             .function(*callee)
             .map(|target| target.ret)
@@ -1317,6 +1523,7 @@ mod tests {
             entry: 0,
             types: builtin_types(),
             structs: Vec::new(),
+            enums: Vec::new(),
             functions: vec![Function {
                 id: 0,
                 name: "main".to_string(),

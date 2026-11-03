@@ -136,9 +136,9 @@ Portuguese versions: [README](./README.pt-BR.md),
   `.github/workflows/release.yml`; see `docs/RELEASE-CHECKLIST.md`.
 - Current results and raw log:
   [RELATORIO-IMPLEMENTACAO](./docs/RELATORIOS/RELATORIO-IMPLEMENTACAO.md) and
-  [EVIDENCIAS-EXECUCAO](./docs/RELATORIOS/EVIDENCIAS-EXECUCAO.md): 176 tests
+  [EVIDENCIAS-EXECUCAO](./docs/RELATORIOS/EVIDENCIAS-EXECUCAO.md): 187 tests
   green (the symlink test is `cfg(unix)`, the junction test is `cfg(windows)`),
-  62 valid + 42 invalid corpus cases.
+  66 valid + 48 invalid corpus cases.
 - Packaging and clean install:
   [DRYRUN-RELEASE-0.1.0-alpha.1](./docs/RELATORIOS/DRYRUN-RELEASE-0.1.0-alpha.1.md).
 - Short fuzzing campaign:

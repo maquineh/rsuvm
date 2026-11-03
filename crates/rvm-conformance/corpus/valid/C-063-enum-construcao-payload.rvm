@@ -1,0 +1,23 @@
+; id: C-063
+; expect: value i64:3
+; extra: enum_new, enum_is_variant e enum_payload sobre campos nomeados (ADR-0039)
+module c063 version 1
+entry main
+type 5 = enum Cor
+
+enum Cor {
+  Vermelho
+  Personalizada { r: i64, g: i64 }
+}
+
+fn main() -> i64 {
+  entry:
+    v0 = const_i64 1
+    v1 = const_i64 2
+    v2 = enum_new Cor.Personalizada v0, v1
+    v3 = enum_is_variant v2, 1
+    v4 = enum_payload v2, 1, 0
+    v5 = enum_payload v2, 1, 1
+    v6 = add_i64_checked v4, v5
+    return v6
+}

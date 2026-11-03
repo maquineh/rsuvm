@@ -51,15 +51,15 @@
     )
 )]
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use rvm_ir::{
-    Block, BlockId, BlockParam, BranchTarget, FieldDef, FnId, Function, Instr, Module, Op, Param,
-    StructDef, Terminator, ValueId,
+    Block, BlockId, BlockParam, BranchTarget, EnumDef, EnumFieldDef, EnumVariantDef, FieldDef,
+    FnId, Function, Instr, Module, Op, Param, StructDef, Terminator, ValueId,
 };
 use rvm_spec::{
-    builtin_types, BinOp, BuiltinHost, CmpOp, ErrorCode, FloatOp, Limits, Location, RvmError,
-    StructId, TypeDef, TypeId, IR_VERSION,
+    builtin_types, BinOp, BuiltinHost, CmpOp, EnumId, ErrorCode, FloatOp, Limits, Location,
+    RvmError, StructId, TypeDef, TypeId, IR_VERSION,
 };
 
 /// Converte o texto experimental em um módulo RIR estruturalmente válido.
@@ -121,6 +121,45 @@ pub fn print(module: &Module) -> String {
         out.push_str(" = ");
         print_type_def(module, *def, &mut out);
         out.push('\n');
+    }
+
+    for def in &module.enums {
+        out.push('\n');
+        out.push_str("enum ");
+        out.push_str(&def.name);
+        out.push_str(" {\n");
+        for variant in &def.variants {
+            out.push_str("  ");
+            out.push_str(&variant.name);
+            if !variant.fields.is_empty() {
+                if variant.fields.iter().all(|field| field.name.is_some()) {
+                    out.push_str(" {");
+                    for (index, field) in variant.fields.iter().enumerate() {
+                        if index > 0 {
+                            out.push(',');
+                        }
+                        if let Some(name) = &field.name {
+                            out.push(' ');
+                            out.push_str(name);
+                            out.push_str(": ");
+                            print_type(module, field.ty, &mut out);
+                        }
+                    }
+                    out.push_str(" }");
+                } else {
+                    out.push('(');
+                    for (index, field) in variant.fields.iter().enumerate() {
+                        if index > 0 {
+                            out.push_str(", ");
+                        }
+                        print_type(module, field.ty, &mut out);
+                    }
+                    out.push(')');
+                }
+            }
+            out.push('\n');
+        }
+        out.push_str("}\n");
     }
 
     for def in &module.structs {
@@ -260,6 +299,13 @@ fn print_type_def(module: &Module, def: TypeDef, out: &mut String) {
         TypeDef::Struct(id) => {
             out.push_str("struct ");
             match module.struct_def(id) {
+                Some(def) => out.push_str(&def.name),
+                None => out.push_str(&id.to_string()),
+            }
+        }
+        TypeDef::Enum(id) => {
+            out.push_str("enum ");
+            match module.enum_def(id) {
                 Some(def) => out.push_str(&def.name),
                 None => out.push_str(&id.to_string()),
             }
@@ -493,6 +539,66 @@ fn print_op(module: &Module, function: &Function, op: &Op, out: &mut String) {
                 }
             }
         }
+        Op::EnumNew {
+            ty,
+            variant,
+            fields,
+        } => {
+            out.push_str("enum_new ");
+            let (enum_name, variant_name) = match module.type_def(*ty) {
+                Some(TypeDef::Enum(id)) => module
+                    .enum_def(id)
+                    .and_then(|definition| {
+                        let variant_def = definition
+                            .variants
+                            .get(usize::try_from(*variant).unwrap_or(usize::MAX))?;
+                        Some((definition.name.as_str(), variant_def.name.as_str()))
+                    })
+                    .unwrap_or(("enum", "variant")),
+                _ => ("enum", "variant"),
+            };
+            out.push_str(enum_name);
+            out.push('.');
+            out.push_str(variant_name);
+            if let Some((first, rest)) = fields.split_first() {
+                out.push(' ');
+                print_value(function, *first, out);
+                for field in rest {
+                    out.push_str(", ");
+                    print_value(function, *field, out);
+                }
+            }
+        }
+        Op::EnumIsVariant { value, variant } => {
+            out.push_str("enum_is_variant ");
+            print_value(function, *value, out);
+            out.push_str(", ");
+            out.push_str(&variant.to_string());
+        }
+        Op::EnumPayload {
+            value,
+            variant,
+            field,
+        } => {
+            out.push_str("enum_payload ");
+            print_value(function, *value, out);
+            out.push_str(", ");
+            out.push_str(&variant.to_string());
+            out.push_str(", ");
+            out.push_str(&field.to_string());
+        }
+        Op::EnumEq { lhs, rhs } => {
+            out.push_str("enum_eq ");
+            print_value(function, *lhs, out);
+            out.push_str(", ");
+            print_value(function, *rhs, out);
+        }
+        Op::EnumNe { lhs, rhs } => {
+            out.push_str("enum_ne ");
+            print_value(function, *lhs, out);
+            out.push_str(", ");
+            print_value(function, *rhs, out);
+        }
         Op::Bin { op, lhs, rhs } => {
             out.push_str(op.name());
             out.push(' ');
@@ -583,6 +689,7 @@ enum Token {
     RParen,
     Colon,
     Comma,
+    Dot,
     Arrow,
     Assign,
     Eof,
@@ -627,6 +734,10 @@ fn tokenize(input: &str) -> Result<Vec<Token>, RvmError> {
             }
             b',' => {
                 tokens.push(Token::Comma);
+                index += 1;
+            }
+            b'.' => {
+                tokens.push(Token::Dot);
                 index += 1;
             }
             b'=' => {
@@ -821,6 +932,8 @@ struct RawModule {
     types: Vec<TypeDef>,
     /// Structs declaradas, na ordem do arquivo.
     structs: Vec<RawStruct>,
+    /// Enums declarados, na ordem do arquivo (ADR-0039).
+    enums: Vec<RawEnum>,
     functions: Vec<RawFunction>,
     /// Nomes de funções externas (`import <nome>`), resolvidas pelo linker.
     imports: Vec<String>,
@@ -828,8 +941,23 @@ struct RawModule {
 
 #[derive(Debug)]
 struct RawStruct {
+    id: StructId,
     name: String,
     fields: Vec<(String, TypeId)>,
+}
+
+#[derive(Debug)]
+struct RawEnum {
+    id: EnumId,
+    name: String,
+    variants: Vec<RawEnumVariant>,
+}
+
+#[derive(Debug)]
+struct RawEnumVariant {
+    name: String,
+    /// `None` = posicional; `Some` = campo nomeado.
+    fields: Vec<(Option<String>, TypeId)>,
 }
 
 #[derive(Debug)]
@@ -887,6 +1015,11 @@ enum RawOp {
     ResultUnwrap(String),
     ResultUnwrapErr(String),
     HostReadFile(String, String),
+    EnumNew(TypeId, u32, Vec<String>),
+    EnumIsVariant(String, u32),
+    EnumPayload(String, u32, u32),
+    EnumEq(String, String),
+    EnumNe(String, String),
     Call(String, Vec<String>),
 }
 
@@ -916,6 +1049,14 @@ struct Parser {
     index: usize,
     /// Structs já declaradas, para resolver `struct <Nome>` em tipos.
     structs: BTreeMap<String, StructId>,
+    /// Enums já declarados, para resolver `enum <Nome>` em tipos.
+    enums: BTreeMap<String, EnumId>,
+    /// Nomes com declaração `struct` já lida (referências para frente não contam).
+    declared_structs: BTreeSet<String>,
+    /// Nomes com declaração `enum` já lida.
+    declared_enums: BTreeSet<String>,
+    /// Nomes e quantidade de campos das variantes por enum, na ordem.
+    enum_variants: BTreeMap<String, Vec<(String, usize)>>,
     /// Tabela de tipos em construção (builtins + tipos do arquivo).
     types: Vec<TypeDef>,
     /// Índice estrutural para deduplicar tipos.
@@ -935,6 +1076,10 @@ impl Parser {
             tokens,
             index: 0,
             structs: BTreeMap::new(),
+            enums: BTreeMap::new(),
+            declared_structs: BTreeSet::new(),
+            declared_enums: BTreeSet::new(),
+            enum_variants: BTreeMap::new(),
             types,
             type_index,
         }
@@ -1044,6 +1189,17 @@ impl Parser {
         }
     }
 
+    fn expect_u32(&mut self, what: &str) -> Result<u32, RvmError> {
+        let raw = self.expect_int(what)?;
+        u32::try_from(raw).map_err(|_| {
+            RvmError::new(
+                ErrorCode::InvalidNumber,
+                format!("{what} {raw} não cabe em u32"),
+            )
+            .at(Location::Module)
+        })
+    }
+
     fn parse_type(&mut self) -> Result<TypeId, RvmError> {
         let def = self.parse_type_def()?;
         self.intern(def)
@@ -1062,14 +1218,47 @@ impl Parser {
             "array" => Ok(TypeDef::Array(self.parse_type()?)),
             "struct" => {
                 let struct_name = self.expect_ident("nome de struct após `struct`")?;
-                let id = self.structs.get(&struct_name).copied().ok_or_else(|| {
-                    RvmError::new(
+                if self.enums.contains_key(&struct_name) {
+                    return Err(RvmError::new(
                         ErrorCode::UnknownType,
-                        format!("struct desconhecida `{struct_name}`"),
+                        format!("`{struct_name}` é enum, não struct"),
                     )
-                    .at(Location::Module)
-                })?;
+                    .at(Location::Module));
+                }
+                let id = match self.structs.get(&struct_name).copied() {
+                    Some(id) => id,
+                    None => {
+                        let id = u32::try_from(self.structs.len()).map_err(|_| {
+                            RvmError::new(ErrorCode::InvalidModule, "structs demais")
+                                .at(Location::Module)
+                        })?;
+                        self.structs.insert(struct_name.clone(), id);
+                        id
+                    }
+                };
                 Ok(TypeDef::Struct(id))
+            }
+            "enum" => {
+                let enum_name = self.expect_ident("nome de enum após `enum`")?;
+                if self.structs.contains_key(&enum_name) {
+                    return Err(RvmError::new(
+                        ErrorCode::UnknownType,
+                        format!("`{enum_name}` é struct, não enum"),
+                    )
+                    .at(Location::Module));
+                }
+                let id = match self.enums.get(&enum_name).copied() {
+                    Some(id) => id,
+                    None => {
+                        let id = u32::try_from(self.enums.len()).map_err(|_| {
+                            RvmError::new(ErrorCode::InvalidModule, "enums demais")
+                                .at(Location::Module)
+                        })?;
+                        self.enums.insert(enum_name.clone(), id);
+                        id
+                    }
+                };
+                Ok(TypeDef::Enum(id))
             }
             "option" => Ok(TypeDef::Optional(self.parse_type()?)),
             "result" => {
@@ -1115,10 +1304,24 @@ impl Parser {
     fn parse_struct(&mut self) -> Result<RawStruct, RvmError> {
         self.expect_keyword("struct")?;
         let name = self.expect_ident("nome de struct")?;
-        let id = u32::try_from(self.structs.len()).map_err(|_| {
-            RvmError::new(ErrorCode::InvalidModule, "structs demais").at(Location::Module)
-        })?;
-        if self.structs.insert(name.clone(), id).is_some() {
+        if self.enums.contains_key(&name) {
+            return Err(RvmError::new(
+                ErrorCode::InvalidModule,
+                format!("tipo duplicado `{name}`"),
+            )
+            .at(Location::Module));
+        }
+        let id = match self.structs.get(&name).copied() {
+            Some(id) => id,
+            None => {
+                let id = u32::try_from(self.structs.len()).map_err(|_| {
+                    RvmError::new(ErrorCode::InvalidModule, "structs demais").at(Location::Module)
+                })?;
+                self.structs.insert(name.clone(), id);
+                id
+            }
+        };
+        if !self.declared_structs.insert(name.clone()) {
             return Err(RvmError::new(
                 ErrorCode::InvalidModule,
                 format!("struct duplicada `{name}`"),
@@ -1144,7 +1347,115 @@ impl Parser {
             )
             .at(Location::Module));
         }
-        Ok(RawStruct { name, fields })
+        Ok(RawStruct { id, name, fields })
+    }
+
+    fn parse_enum(&mut self) -> Result<RawEnum, RvmError> {
+        self.expect_keyword("enum")?;
+        let name = self.expect_ident("nome do enum")?;
+        if self.structs.contains_key(&name) {
+            return Err(RvmError::new(
+                ErrorCode::InvalidModule,
+                format!("tipo duplicado `{name}`"),
+            )
+            .at(Location::Module));
+        }
+        let id = match self.enums.get(&name).copied() {
+            Some(id) => id,
+            None => {
+                let id = u32::try_from(self.enums.len()).map_err(|_| {
+                    RvmError::new(ErrorCode::InvalidModule, "enums demais").at(Location::Module)
+                })?;
+                self.enums.insert(name.clone(), id);
+                id
+            }
+        };
+        if !self.declared_enums.insert(name.clone()) {
+            return Err(RvmError::new(
+                ErrorCode::InvalidModule,
+                format!("enum duplicado `{name}`"),
+            )
+            .at(Location::Module));
+        }
+        self.expect_token(Token::LBrace, "`{` no enum")?;
+        let mut variants: Vec<RawEnumVariant> = Vec::new();
+        let mut variant_names: BTreeSet<String> = BTreeSet::new();
+        let mut ordered_variants: Vec<(String, usize)> = Vec::new();
+        while self.peek() != &Token::RBrace {
+            if self.peek() == &Token::Eof {
+                return Err(self.syntax("enum sem `}`"));
+            }
+            let variant_name = self.expect_ident("nome da variante")?;
+            if !variant_names.insert(variant_name.clone()) {
+                return Err(RvmError::new(
+                    ErrorCode::InvalidModule,
+                    format!("variante duplicada `{variant_name}` no enum `{name}`"),
+                )
+                .at(Location::Module));
+            }
+            let fields = if self.peek() == &Token::LParen {
+                self.bump();
+                let mut fields: Vec<(Option<String>, TypeId)> = Vec::new();
+                while self.peek() != &Token::RParen {
+                    let ty = self.parse_type()?;
+                    fields.push((None, ty));
+                    if self.peek() == &Token::Comma {
+                        self.bump();
+                    } else {
+                        break;
+                    }
+                }
+                self.expect_token(Token::RParen, "`)` no payload posicional")?;
+                fields
+            } else if self.peek() == &Token::LBrace {
+                self.bump();
+                let mut fields: Vec<(Option<String>, TypeId)> = Vec::new();
+                let mut field_names: BTreeSet<String> = BTreeSet::new();
+                while self.peek() != &Token::RBrace {
+                    if self.peek() == &Token::Eof {
+                        return Err(self.syntax("payload nomeado sem `}`"));
+                    }
+                    let field_name = self.expect_ident("nome de campo")?;
+                    if !field_names.insert(field_name.clone()) {
+                        return Err(RvmError::new(
+                            ErrorCode::InvalidModule,
+                            format!("campo duplicado `{field_name}` na variante `{variant_name}`"),
+                        )
+                        .at(Location::Module));
+                    }
+                    self.expect_token(Token::Colon, "`:` entre campo e tipo")?;
+                    let ty = self.parse_type()?;
+                    fields.push((Some(field_name), ty));
+                    if self.peek() == &Token::Comma {
+                        self.bump();
+                    } else {
+                        break;
+                    }
+                }
+                self.expect_token(Token::RBrace, "`}` no payload nomeado")?;
+                fields
+            } else {
+                Vec::new()
+            };
+            ordered_variants.push((variant_name.clone(), fields.len()));
+            variants.push(RawEnumVariant {
+                name: variant_name,
+                fields,
+            });
+            if self.peek() == &Token::Comma {
+                self.bump();
+            }
+        }
+        self.expect_token(Token::RBrace, "`}` no fim do enum")?;
+        if variants.is_empty() {
+            return Err(RvmError::new(
+                ErrorCode::InvalidModule,
+                format!("enum `{name}` sem variantes"),
+            )
+            .at(Location::Module));
+        }
+        self.enum_variants.insert(name.clone(), ordered_variants);
+        Ok(RawEnum { id, name, variants })
     }
 
     fn parse_module(&mut self) -> Result<RawModule, RvmError> {
@@ -1171,6 +1482,7 @@ impl Parser {
         let mut functions: Vec<RawFunction> = Vec::new();
         let mut imports: Vec<String> = Vec::new();
         let mut structs: Vec<RawStruct> = Vec::new();
+        let mut enums: Vec<RawEnum> = Vec::new();
         loop {
             if self.peek() == &Token::Eof {
                 break;
@@ -1181,6 +1493,10 @@ impl Parser {
             }
             if self.at_keyword("struct") {
                 structs.push(self.parse_struct()?);
+                continue;
+            }
+            if self.at_keyword("enum") {
+                enums.push(self.parse_enum()?);
                 continue;
             }
             if self.at_keyword("import") {
@@ -1213,12 +1529,37 @@ impl Parser {
             RvmError::new(ErrorCode::InvalidModule, "declaração `entry` ausente")
                 .at(Location::Module)
         })?;
+        if let Some(name) = self
+            .structs
+            .keys()
+            .find(|name| !self.declared_structs.contains(*name))
+        {
+            return Err(RvmError::new(
+                ErrorCode::UnknownType,
+                format!("struct `{name}` referenciada mas não declarada"),
+            )
+            .at(Location::Module));
+        }
+        if let Some(name) = self
+            .enums
+            .keys()
+            .find(|name| !self.declared_enums.contains(*name))
+        {
+            return Err(RvmError::new(
+                ErrorCode::UnknownType,
+                format!("enum `{name}` referenciado mas não declarado"),
+            )
+            .at(Location::Module));
+        }
+        structs.sort_by_key(|definition| definition.id);
+        enums.sort_by_key(|definition| definition.id);
         Ok(RawModule {
             name,
             version,
             entry,
             types: self.types.clone(),
             structs,
+            enums,
             functions,
             imports,
         })
@@ -1517,6 +1858,85 @@ impl Parser {
                 let max = self.expect_ident("limite de bytes")?;
                 RawOp::HostReadFile(path, max)
             }
+            "enum_new" => {
+                let enum_name = self.expect_ident("nome do enum")?;
+                let enum_id = self.enums.get(&enum_name).copied().ok_or_else(|| {
+                    RvmError::new(
+                        ErrorCode::UnknownType,
+                        format!("enum desconhecido `{enum_name}`"),
+                    )
+                    .at(Location::Module)
+                })?;
+                self.expect_token(Token::Dot, "`.` entre enum e variante")?;
+                let variant_name = self.expect_ident("nome da variante")?;
+                let variants = self.enum_variants.get(&enum_name).ok_or_else(|| {
+                    RvmError::new(
+                        ErrorCode::InvalidModule,
+                        format!("enum `{enum_name}` sem variantes registradas"),
+                    )
+                    .at(Location::Module)
+                })?;
+                let index = variants
+                    .iter()
+                    .position(|(name, _)| name == &variant_name)
+                    .ok_or_else(|| {
+                        RvmError::new(
+                            ErrorCode::InvalidModule,
+                            format!("variante `{variant_name}` desconhecida em `{enum_name}`"),
+                        )
+                        .at(Location::Module)
+                    })?;
+                let variant = u32::try_from(index).map_err(|_| {
+                    RvmError::new(ErrorCode::InvalidModule, "variantes demais").at(Location::Module)
+                })?;
+                let field_count = variants.get(index).map(|(_, count)| *count).unwrap_or(0);
+                let ty = self
+                    .types
+                    .iter()
+                    .position(|def| *def == TypeDef::Enum(enum_id))
+                    .and_then(|index| TypeId::try_from(index).ok())
+                    .ok_or_else(|| {
+                        RvmError::new(
+                            ErrorCode::UnknownType,
+                            format!("tipo `enum {enum_name}` não declarado na tabela"),
+                        )
+                        .at(Location::Module)
+                    })?;
+                let mut fields: Vec<String> = Vec::new();
+                for field_index in 0..field_count {
+                    if field_index > 0 {
+                        self.expect_token(Token::Comma, "`,` entre campos do enum")?;
+                    }
+                    fields.push(self.expect_ident("campo do enum_new")?);
+                }
+                RawOp::EnumNew(ty, variant, fields)
+            }
+            "enum_is_variant" => {
+                let value = self.expect_ident("operando enum")?;
+                self.expect_token(Token::Comma, "`,` entre operandos")?;
+                let variant = self.expect_u32("variante")?;
+                RawOp::EnumIsVariant(value, variant)
+            }
+            "enum_payload" => {
+                let value = self.expect_ident("operando enum")?;
+                self.expect_token(Token::Comma, "`,` entre operandos")?;
+                let variant = self.expect_u32("variante")?;
+                self.expect_token(Token::Comma, "`,` entre operandos")?;
+                let field = self.expect_u32("campo")?;
+                RawOp::EnumPayload(value, variant, field)
+            }
+            "enum_eq" => {
+                let lhs = self.expect_ident("operando esquerdo")?;
+                self.expect_token(Token::Comma, "`,` entre operandos")?;
+                let rhs = self.expect_ident("operando direito")?;
+                RawOp::EnumEq(lhs, rhs)
+            }
+            "enum_ne" => {
+                let lhs = self.expect_ident("operando esquerdo")?;
+                self.expect_token(Token::Comma, "`,` entre operandos")?;
+                let rhs = self.expect_ident("operando direito")?;
+                RawOp::EnumNe(lhs, rhs)
+            }
             "call_static" => {
                 let callee = self.expect_ident("nome da função chamada")?;
                 self.expect_token(Token::LParen, "`(` na chamada")?;
@@ -1594,20 +2014,15 @@ fn lower(raw: RawModule, limits: &Limits) -> Result<Module, RvmError> {
         entry,
         types,
         structs: raw_structs,
+        enums: raw_enums,
         functions: raw_functions,
         imports,
     } = raw;
 
     let mut struct_ids: BTreeMap<String, StructId> = BTreeMap::new();
     let mut structs: Vec<StructDef> = Vec::new();
-    for (index, raw_struct) in raw_structs.into_iter().enumerate() {
-        let id = u32::try_from(index).map_err(|_| {
-            RvmError::new(
-                ErrorCode::InvalidModule,
-                "quantidade de structs não representável".to_string(),
-            )
-            .at(Location::Module)
-        })?;
+    for raw_struct in raw_structs {
+        let id = raw_struct.id;
         struct_ids.insert(raw_struct.name.clone(), id);
         structs.push(StructDef {
             id,
@@ -1621,6 +2036,26 @@ fn lower(raw: RawModule, limits: &Limits) -> Result<Module, RvmError> {
     }
 
     let mut function_ids: BTreeMap<String, FnId> = BTreeMap::new();
+    let mut enums: Vec<EnumDef> = Vec::new();
+    for raw_enum in raw_enums {
+        let id = raw_enum.id;
+        enums.push(EnumDef {
+            id,
+            name: raw_enum.name,
+            variants: raw_enum
+                .variants
+                .into_iter()
+                .map(|variant| EnumVariantDef {
+                    name: variant.name,
+                    fields: variant
+                        .fields
+                        .into_iter()
+                        .map(|(name, ty)| EnumFieldDef { name, ty })
+                        .collect(),
+                })
+                .collect(),
+        });
+    }
     for (index, function) in raw_functions.iter().enumerate() {
         let id = u32::try_from(index).map_err(|_| {
             RvmError::new(
@@ -1700,6 +2135,7 @@ fn lower(raw: RawModule, limits: &Limits) -> Result<Module, RvmError> {
         entry,
         types,
         structs,
+        enums,
         functions,
     };
     rvm_ir::structure::check(&module, limits)?;
@@ -1996,6 +2432,34 @@ fn lower_op(
             function: BuiltinHost::ReadFile,
             args: vec![value(path)?, value(max)?],
         },
+        RawOp::EnumNew(ty, variant, fields) => {
+            let mut resolved: Vec<ValueId> = Vec::new();
+            for field in fields {
+                resolved.push(value(field)?);
+            }
+            Op::EnumNew {
+                ty: *ty,
+                variant: *variant,
+                fields: resolved,
+            }
+        }
+        RawOp::EnumIsVariant(operand, variant) => Op::EnumIsVariant {
+            value: value(operand)?,
+            variant: *variant,
+        },
+        RawOp::EnumPayload(operand, variant, field) => Op::EnumPayload {
+            value: value(operand)?,
+            variant: *variant,
+            field: *field,
+        },
+        RawOp::EnumEq(lhs, rhs) => Op::EnumEq {
+            lhs: value(lhs)?,
+            rhs: value(rhs)?,
+        },
+        RawOp::EnumNe(lhs, rhs) => Op::EnumNe {
+            lhs: value(lhs)?,
+            rhs: value(rhs)?,
+        },
         RawOp::Bin(op, lhs, rhs) => Op::Bin {
             op: *op,
             lhs: value(lhs)?,
@@ -2129,6 +2593,51 @@ fn soma(a: i64, b: i64) -> i64 {
             module, reparsed,
             "impressão canônica precisa ser reparseável:\n{printed}"
         );
+    }
+
+    #[test]
+    fn round_trip_de_enums_inclui_ciclo_com_struct() {
+        let texto = r#"module enums version 1
+entry main
+type 5 = enum Caixa
+type 6 = struct Ponto
+type 7 = enum Lista
+
+enum Caixa {
+  P(struct Ponto)
+  Vazia
+  Nomeada { x: i64, y: i64 }
+}
+enum Lista {
+  Fim
+  Cons(i64, enum Lista)
+}
+
+struct Ponto {
+  c: enum Caixa
+}
+
+fn main() -> i64 {
+  entry:
+    v0 = const_i64 1
+    v1 = const_i64 2
+    v2 = enum_new Caixa.Nomeada v0, v1
+    v3 = enum_payload v2, 2, 0
+    v4 = enum_payload v2, 2, 1
+    v5 = add_i64_checked v3, v4
+    v6 = enum_new Lista.Fim
+    v7 = enum_is_variant v6, 0
+    v8 = enum_eq v2, v2
+    v9 = enum_ne v2, v6
+    return v5
+}
+"#;
+        let module = parse_ok(texto);
+        assert_eq!(module.enums.len(), 2);
+        assert_eq!(module.structs.len(), 1);
+        let printed = print(&module);
+        let reparsed = parse_ok(&printed);
+        assert_eq!(module, reparsed, "round-trip de enums divergiu:\n{printed}");
     }
 
     #[test]

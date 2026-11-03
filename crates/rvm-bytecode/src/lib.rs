@@ -34,8 +34,8 @@
 
 use rvm_ir::structure;
 use rvm_ir::{
-    Block, BlockParam, BranchTarget, FieldDef, Function, Instr, Module, Op, Param, StructDef,
-    Terminator, ValueId,
+    Block, BlockParam, BranchTarget, EnumDef, EnumFieldDef, EnumVariantDef, FieldDef, Function,
+    Instr, Module, Op, Param, StructDef, Terminator, ValueId,
 };
 use rvm_spec::{BinOp, BuiltinHost, CmpOp, ErrorCode, FloatOp, Limits, RvmError, TypeDef};
 
@@ -55,6 +55,7 @@ const TAG_ARRAY: u8 = 5;
 const TAG_STRUCT: u8 = 6;
 const TAG_OPTIONAL: u8 = 7;
 const TAG_RESULT: u8 = 8;
+const TAG_ENUM: u8 = 9;
 
 // Opcodes de instrução (tabela de `BYTECODE-EXP-0-IMPLEMENTACAO.md` §1).
 const OP_CONST_I64: u8 = 0;
@@ -112,6 +113,11 @@ const OP_RESULT_IS_OK: u8 = 51;
 const OP_RESULT_UNWRAP: u8 = 52;
 const OP_RESULT_UNWRAP_ERR: u8 = 53;
 const OP_HOST_CALL: u8 = 54;
+const OP_ENUM_NEW: u8 = 55;
+const OP_ENUM_IS_VARIANT: u8 = 56;
+const OP_ENUM_PAYLOAD: u8 = 57;
+const OP_ENUM_EQ: u8 = 58;
+const OP_ENUM_NE: u8 = 59;
 
 // Tipos de terminador (tabela de `BYTECODE-EXP-0-IMPLEMENTACAO.md` §1).
 const TERM_RETURN: u8 = 0;
@@ -145,6 +151,10 @@ pub fn encode(module: &Module) -> Vec<u8> {
     push_u16(&mut out, len_u16(module.structs.len()));
     for def in &module.structs {
         encode_struct(&mut out, def);
+    }
+    push_u16(&mut out, len_u16(module.enums.len()));
+    for def in &module.enums {
+        encode_enum(&mut out, def);
     }
     push_u32(&mut out, len_u32(module.functions.len()));
     for function in &module.functions {
@@ -220,6 +230,12 @@ pub fn decode(bytes: &[u8], limits: &Limits) -> Result<Module, RvmError> {
         structs.push(read_struct(&mut reader, limits)?);
     }
 
+    let enum_count = reader.read_count_u16(limits.max_enums, "contagem de enums")?;
+    let mut enums = Vec::with_capacity(enum_count);
+    for _ in 0..enum_count {
+        enums.push(read_enum(&mut reader, limits)?);
+    }
+
     // Contagem antes da alocação (invariante 5): `read_count_u32` compara com os
     // bytes restantes e com `max_functions` antes do `with_capacity` abaixo.
     let function_count = reader.read_count_u32(limits.max_functions, "contagem de funções")?;
@@ -243,6 +259,7 @@ pub fn decode(bytes: &[u8], limits: &Limits) -> Result<Module, RvmError> {
         entry,
         types,
         structs,
+        enums,
         functions,
     };
     // Invariante 8: nenhum `Module` é devolvido sem a checagem estrutural. Ela
@@ -260,6 +277,29 @@ fn encode_struct(out: &mut Vec<u8>, def: &StructDef) {
     for field in &def.fields {
         push_string(out, &field.name);
         push_u32(out, field.ty);
+    }
+}
+
+/// Escreve um enum na ordem do layout (ADR-0039).
+fn encode_enum(out: &mut Vec<u8>, def: &EnumDef) {
+    push_u32(out, def.id);
+    push_string(out, &def.name);
+    push_u16(out, len_u16(def.variants.len()));
+    for variant in &def.variants {
+        push_string(out, &variant.name);
+        let named = variant.fields.iter().any(|field| field.name.is_some());
+        push_u8(out, u8::from(named));
+        push_u16(out, len_u16(variant.fields.len()));
+        for field in &variant.fields {
+            if named {
+                if let Some(name) = &field.name {
+                    push_string(out, name);
+                } else {
+                    push_string(out, "");
+                }
+            }
+            push_u32(out, field.ty);
+        }
     }
 }
 
@@ -453,6 +493,44 @@ fn encode_instr(out: &mut Vec<u8>, instr: &Instr) {
                 push_u32(out, *arg);
             }
         }
+        Op::EnumNew {
+            ty,
+            variant,
+            fields,
+        } => {
+            push_u8(out, OP_ENUM_NEW);
+            push_u32(out, *ty);
+            push_u32(out, *variant);
+            push_u16(out, len_u16(fields.len()));
+            for field in fields {
+                push_u32(out, *field);
+            }
+        }
+        Op::EnumIsVariant { value, variant } => {
+            push_u8(out, OP_ENUM_IS_VARIANT);
+            push_u32(out, *value);
+            push_u32(out, *variant);
+        }
+        Op::EnumPayload {
+            value,
+            variant,
+            field,
+        } => {
+            push_u8(out, OP_ENUM_PAYLOAD);
+            push_u32(out, *value);
+            push_u32(out, *variant);
+            push_u32(out, *field);
+        }
+        Op::EnumEq { lhs, rhs } => {
+            push_u8(out, OP_ENUM_EQ);
+            push_u32(out, *lhs);
+            push_u32(out, *rhs);
+        }
+        Op::EnumNe { lhs, rhs } => {
+            push_u8(out, OP_ENUM_NE);
+            push_u32(out, *lhs);
+            push_u32(out, *rhs);
+        }
         Op::Bin { op, lhs, rhs } => {
             push_u8(out, bin_opcode(*op));
             push_u32(out, *lhs);
@@ -560,6 +638,47 @@ fn read_struct(reader: &mut Reader<'_>, limits: &Limits) -> Result<StructDef, Rv
         });
     }
     Ok(StructDef { id, name, fields })
+}
+
+/// Lê um enum, com contagens validadas antes de alocar (ADR-0039).
+fn read_enum(reader: &mut Reader<'_>, limits: &Limits) -> Result<EnumDef, RvmError> {
+    let id = reader.read_u32("id de enum")?;
+    let name = reader.read_name(limits, "nome de enum")?;
+    let variant_count =
+        reader.read_count_u16(limits.max_variants_per_enum, "contagem de variantes")?;
+    let mut variants = Vec::with_capacity(variant_count);
+    for _ in 0..variant_count {
+        let variant_name = reader.read_name(limits, "nome de variante")?;
+        let named = reader.read_u8("estilo de campos do enum")?;
+        if named > 1 {
+            return Err(decode_error(
+                ErrorCode::InvalidNumber,
+                format!("estilo de campos do enum {named} inválido; esperado 0 ou 1"),
+            ));
+        }
+        let field_count = reader.read_count_u16(
+            limits.max_fields_per_enum_variant,
+            "contagem de campos do enum",
+        )?;
+        let mut fields = Vec::with_capacity(field_count);
+        for _ in 0..field_count {
+            let field_name = if named == 1 {
+                Some(reader.read_name(limits, "nome de campo do enum")?)
+            } else {
+                None
+            };
+            let ty = reader.read_u32("tipo de campo do enum")?;
+            fields.push(EnumFieldDef {
+                name: field_name,
+                ty,
+            });
+        }
+        variants.push(EnumVariantDef {
+            name: variant_name,
+            fields,
+        });
+    }
+    Ok(EnumDef { id, name, variants })
 }
 
 /// Lê um bloco inteiro, já com contagens validadas antes de alocar.
@@ -738,6 +857,38 @@ fn read_instr(reader: &mut Reader<'_>, limits: &Limits) -> Result<Instr, RvmErro
             }
             Op::HostCall { function, args }
         }
+        OP_ENUM_NEW => {
+            let ty = reader.read_u32("tipo do enum_new")?;
+            let variant = reader.read_u32("variante do enum_new")?;
+            let count =
+                reader.read_count_u16(limits.max_fields_per_enum_variant, "campos do enum_new")?;
+            let mut fields: Vec<u32> = Vec::with_capacity(count);
+            for _ in 0..count {
+                fields.push(reader.read_u32("campo do enum_new")?);
+            }
+            Op::EnumNew {
+                ty,
+                variant,
+                fields,
+            }
+        }
+        OP_ENUM_IS_VARIANT => Op::EnumIsVariant {
+            value: reader.read_u32("operando enum_is_variant")?,
+            variant: reader.read_u32("variante de enum_is_variant")?,
+        },
+        OP_ENUM_PAYLOAD => Op::EnumPayload {
+            value: reader.read_u32("operando enum_payload")?,
+            variant: reader.read_u32("variante de enum_payload")?,
+            field: reader.read_u32("campo de enum_payload")?,
+        },
+        OP_ENUM_EQ => Op::EnumEq {
+            lhs: reader.read_u32("operando esquerdo de enum_eq")?,
+            rhs: reader.read_u32("operando direito de enum_eq")?,
+        },
+        OP_ENUM_NE => Op::EnumNe {
+            lhs: reader.read_u32("operando esquerdo de enum_ne")?,
+            rhs: reader.read_u32("operando direito de enum_ne")?,
+        },
         OP_ADD_I64_CHECKED => read_bin_operands(reader, BinOp::AddI64Checked)?,
         OP_SUB_I64_CHECKED => read_bin_operands(reader, BinOp::SubI64Checked)?,
         OP_MUL_I64_CHECKED => read_bin_operands(reader, BinOp::MulI64Checked)?,
@@ -854,6 +1005,10 @@ fn encode_typedef(out: &mut Vec<u8>, def: TypeDef) {
             push_u32(out, ok);
             push_u32(out, err);
         }
+        TypeDef::Enum(id) => {
+            push_u8(out, TAG_ENUM);
+            push_u32(out, id);
+        }
     }
 }
 
@@ -873,6 +1028,7 @@ fn read_typedef(reader: &mut Reader<'_>) -> Result<TypeDef, RvmError> {
             let err = reader.read_u32("payload err de result")?;
             Ok(TypeDef::Result(ok, err))
         }
+        TAG_ENUM => Ok(TypeDef::Enum(reader.read_u32("enum do tipo")?)),
         tag => Err(decode_error(
             ErrorCode::UnknownType,
             format!("tag de tipo {tag} desconhecida"),
@@ -1168,7 +1324,7 @@ mod tests {
     use rvm_ir::testing;
 
     /// Corpus válido compartilhado (`rvm_ir::testing`).
-    fn fixtures() -> [Module; 10] {
+    fn fixtures() -> [Module; 11] {
         [
             testing::soma(),
             testing::constante(42),
@@ -1180,6 +1336,7 @@ mod tests {
             testing::overflow(),
             testing::comparacao(),
             testing::host_read_file(),
+            testing::enum_simples(),
         ]
     }
 
@@ -1229,6 +1386,7 @@ mod tests {
         expected.push(3); // type 3: string
         expected.push(4); // type 4: f64
         expected.extend_from_slice(&0u16.to_le_bytes()); // struct_count
+        expected.extend_from_slice(&0u16.to_le_bytes()); // enum_count
         expected.extend_from_slice(&1u32.to_le_bytes()); // function_count
         expected.extend_from_slice(&0u32.to_le_bytes()); // id da função
         expected.extend_from_slice(&4u16.to_le_bytes()); // comprimento de "main"

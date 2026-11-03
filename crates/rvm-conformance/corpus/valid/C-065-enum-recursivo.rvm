@@ -1,0 +1,25 @@
+; id: C-065
+; expect: value i64:3
+; extra: enum recursivo com payload heap-backed (ADR-0039)
+module c065 version 1
+entry main
+type 5 = enum Lista
+
+enum Lista {
+  Fim
+  Cons(i64, enum Lista)
+}
+
+fn main() -> i64 {
+  entry:
+    v0 = const_i64 1
+    v1 = const_i64 2
+    v2 = enum_new Lista.Fim
+    v3 = enum_new Lista.Cons v1, v2
+    v4 = enum_new Lista.Cons v0, v3
+    v5 = enum_payload v4, 1, 0
+    v6 = enum_payload v4, 1, 1
+    v7 = enum_payload v6, 1, 0
+    v8 = add_i64_checked v5, v7
+    return v8
+}

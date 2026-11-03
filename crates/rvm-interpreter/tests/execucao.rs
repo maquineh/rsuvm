@@ -55,6 +55,14 @@ fn esperar_erro(
 }
 
 #[test]
+fn enum_constroi_inspeciona_e_extrai_payload() {
+    let module = verificar(testing::enum_simples());
+    let outcome = executar(&module, 0, &[], &ExecConfig::default());
+    assert_eq!(outcome.value, Value::I64(7));
+    assert_eq!(outcome.fuel_used, 5, "4 instruções + 1 terminador");
+}
+
+#[test]
 fn constante_consome_duas_unidades_de_fuel() {
     let module = verificar(testing::constante(42));
     let outcome = executar(&module, 0, &[], &ExecConfig::default());

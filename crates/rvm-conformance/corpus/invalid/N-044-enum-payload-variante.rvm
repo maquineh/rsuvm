@@ -1,0 +1,19 @@
+; id: N-044
+; expect: trap invalid_variant
+; extra: enum_payload sobre variante errada trapa invalid_variant (ADR-0039)
+module n044 version 1
+entry main
+type 5 = enum E
+
+enum E {
+  A(i64)
+  B(i64)
+}
+
+fn main() -> i64 {
+  entry:
+    v0 = const_i64 9
+    v1 = enum_new E.B v0
+    v2 = enum_payload v1, 0, 0
+    return v2
+}

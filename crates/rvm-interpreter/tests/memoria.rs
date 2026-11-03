@@ -99,6 +99,7 @@ fn modulo_concat() -> Module {
         entry: 0,
         types: builtin_types(),
         structs: Vec::new(),
+        enums: Vec::new(),
         functions: vec![Function {
             id: 0,
             name: "junta".to_string(),

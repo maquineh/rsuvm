@@ -7,6 +7,24 @@ O projeto usa versionamento semântico `0.x`: mudanças incompatíveis podem oco
 em minor releases. Formatos IR/texto/bytecode são **experimentais** e não têm
 compatibilidade entre versões.
 
+## [Unreleased]
+
+### Adicionado
+
+- Enums nominais na RIR (ADR-0039): `TypeDef::Enum`, `Module.enums`,
+  `Value::Enum`, `enum_new`/`enum_is_variant`/`enum_payload`/`enum_eq`/`enum_ne`,
+  enums recursivos, mapeamento texto/bytecode, `invalid_variant` e
+  `value_too_deep` (`MAX_VALUE_DEPTH = 256`). Coberto por C-063..C-066 e
+  N-044..N-049. `rvm-link` com enums e o lowering no adaptador Lift ficam fora
+  deste incremento (ambos falham fechado).
+
+### Verificação
+
+- Gates do workspace: `cargo test --workspace --locked`,
+  `cargo clippy --workspace --all-targets -- -D warnings`,
+  `cargo fmt --all -- --check` e `cargo +1.75.0 check --workspace
+  --all-targets --locked`.
+
 ## [0.1.0-alpha.1] - 2026-11-02
 
 ### Adicionado

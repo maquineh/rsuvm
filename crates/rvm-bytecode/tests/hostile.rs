@@ -3,7 +3,7 @@
 //! Este alvo de teste libera `unwrap`/`panic`/indexação apenas para montar bytes
 //! e relatar falhas; a biblioteca segue as lints do workspace (`src/lib.rs`).
 //!
-//! O teste de mutação é **determinístico e limitado**: 10 módulos válidos com 200
+//! O teste de mutação é **determinístico e limitado**: 11 módulos válidos com 200
 //! mutações de 1–3 bytes cada (seed `0x2545F4914F6CDD1D`), exigindo apenas
 //! ausência de pânico. Ele não prova ausência de bugs nem cobre todas as entradas.
 
@@ -60,6 +60,7 @@ impl Fixture {
         let type_tag = bytes.len();
         bytes.extend_from_slice(&[0, 1, 2, 3, 4]); // unit, bool, i64, string, f64
         push_u16(&mut bytes, 0); // struct_count
+        push_u16(&mut bytes, 0); // enum_count
         let function_count = bytes.len();
         push_u32(&mut bytes, 1);
 
@@ -326,7 +327,7 @@ fn entrada_maior_que_o_limite_e_input_too_large_antes_do_corpo() {
 /// Orçamento: 2 000 decodificações de bytes mutados em 1–3 posições. O teste
 /// exige apenas ausência de pânico; não afirma cobertura exaustiva de entradas.
 #[test]
-fn mutacao_xorshift_seed_2545f4914f6cdd1d_10_modulos_200_mutacoes() {
+fn mutacao_xorshift_seed_2545f4914f6cdd1d_11_modulos_200_mutacoes() {
     let limits = Limits::default();
     let mut bases: Vec<Vec<u8>> = vec![
         encode(&testing::soma()),
@@ -338,9 +339,10 @@ fn mutacao_xorshift_seed_2545f4914f6cdd1d_10_modulos_200_mutacoes() {
         encode(&testing::recursao()),
         encode(&testing::overflow()),
         encode(&testing::comparacao()),
+        encode(&testing::enum_simples()),
     ];
     bases.push(Fixture::new().bytes);
-    assert_eq!(bases.len(), 10, "o orçamento pressupõe 10 módulos válidos");
+    assert_eq!(bases.len(), 11, "o orçamento pressupõe 11 módulos válidos");
 
     let mut state: u64 = 0x2545_F491_4F6C_DD1D;
     let mut decodificacoes = 0usize;
@@ -364,5 +366,5 @@ fn mutacao_xorshift_seed_2545f4914f6cdd1d_10_modulos_200_mutacoes() {
             decodificacoes += 1;
         }
     }
-    assert_eq!(decodificacoes, 2_000);
+    assert_eq!(decodificacoes, 2_200);
 }

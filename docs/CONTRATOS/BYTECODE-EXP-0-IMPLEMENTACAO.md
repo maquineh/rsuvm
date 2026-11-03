@@ -22,14 +22,16 @@ arquivo:
   types[]          type_def (ADR-0034)
   struct_count     u16
   structs[]        struct_count vezes
+  enum_count       u16
+  enums[]          enum_count vezes
   function_count   u32
   funções[]        function_count vezes
   -- fim do arquivo; bytes excedentes são rejeitados --
 
 type_def:
   tag              u8  (0=unit, 1=bool, 2=i64, 3=string, 4=f64, 5=array, 6=struct,
-                        7=option, 8=result)
-  payload          array: u32 element_type; struct: u32 struct_id;
+                        7=option, 8=result, 9=enum)
+  payload          array: u32 element_type; struct: u32 struct_id; enum: u32 enum_id;
                    option: u32 payload_type; result: u32 ok_type + u32 err_type;
                    senão: —
 
@@ -38,6 +40,17 @@ struct:
   name             string
   field_count      u16
   fields[]         field_count vezes { name: string, ty: u32 TypeId }
+
+enum:
+  id               u32
+  name             string
+  variant_count    u16
+  variants[]       variant_count vezes {
+                     name: string
+                     named: u8 (0 = posicional, 1 = nomeado; outro é invalid_number)
+                     field_count: u16
+                     fields[]: [name: string se named = 1] + ty: u32 TypeId
+                   }
 
 function:
   id               u32
@@ -127,10 +140,16 @@ terminator:
 | 52 | `result_unwrap` | `u32 value` |
 | 53 | `result_unwrap_err` | `u32 value` |
 | 54 | `host_read_file` | `u8 function`, `u16 argc`, `u32 args[argc]` |
+| 55 | `enum_new` | `u32 ty`, `u32 variant`, `u16 count`, `u32 fields[count]` |
+| 56 | `enum_is_variant` | `u32 value`, `u32 variant` |
+| 57 | `enum_payload` | `u32 value`, `u32 variant`, `u32 field` |
+| 58 | `enum_eq` | `u32 lhs`, `u32 rhs` |
+| 59 | `enum_ne` | `u32 lhs`, `u32 rhs` |
 
 Código desconhecido ⇒ `unknown_opcode`. Na opcode 54, `function` é `0`
 (`read_file`, ADR-0036); qualquer outro valor ⇒ `unknown_opcode`; `argc` respeita
-`Limits::max_call_args`.
+`Limits::max_call_args`. Em `enum_new`, `count` respeita
+`Limits::max_fields_per_enum_variant`.
 
 ### Tipos de terminador
 
@@ -151,15 +170,15 @@ Código desconhecido ⇒ `unknown_opcode`.
 3. `format_version != 1` ou `flags != 0` ⇒ `unsupported_version`.
 4. Toda leitura checa bytes restantes; faltando ⇒ `truncated_input` (nada de
    `panic`, `unwrap` ou indexação direta).
-5. **Contagem antes de alocação**: cada contagem declarada (`function_count`,
-   `param_count`, `block_count`, `instr_count`, `argc`, comprimentos de string) é
-   comparada com o limite estrutural correspondente **e** com os bytes restantes
-   antes de reservar memória. Contagem maior que os bytes restantes ⇒
-   `truncated_input` (cada item consome ao menos 1 byte).
-6. Tag de tipo fora de `0..=8` (`unit`, `bool`, `i64`, `string`, `f64`, `array`,
-   `struct`, `option`, `result`) ⇒
-   `unknown_type`; `const_bool` fora de `0|1` ⇒
-   `invalid_number`.
+5. **Contagem antes de alocação**: cada contagem declarada (`type_count`,
+   `struct_count`, `enum_count`, `variant_count`, `field_count`,
+   `function_count`, `param_count`, `block_count`, `instr_count`, `argc`,
+   comprimentos de string) é comparada com o limite estrutural correspondente
+   **e** com os bytes restantes antes de reservar memória. Contagem maior que os
+   bytes restantes ⇒ `truncated_input` (cada item consome ao menos 1 byte).
+6. Tag de tipo fora de `0..=9` (`unit`, `bool`, `i64`, `string`, `f64`, `array`,
+   `struct`, `option`, `result`, `enum`) ⇒ `unknown_type`; `const_bool` fora de
+   `0|1` ⇒ `invalid_number`; `named` de enum fora de `0|1` ⇒ `invalid_number`.
 7. Ao final, bytes excedentes ⇒ `invalid_module`.
 8. O módulo decodificado passa por `rvm_ir::structure::check` antes de ser
    devolvido; IDs não densos, nomes inválidos, alvos inexistentes e limites

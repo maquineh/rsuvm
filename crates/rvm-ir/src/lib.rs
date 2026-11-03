@@ -33,8 +33,8 @@
 )]
 
 use rvm_spec::{
-    BinOp, BuiltinHost, CmpOp, FloatOp, StructId, TypeDef, TypeId, TYPE_BOOL, TYPE_F64, TYPE_I64,
-    TYPE_STR,
+    BinOp, BuiltinHost, CmpOp, EnumId, FloatOp, StructId, TypeDef, TypeId, TYPE_BOOL, TYPE_F64,
+    TYPE_I64, TYPE_STR,
 };
 
 pub mod structure;
@@ -69,6 +69,9 @@ pub struct Module {
     /// Structs declaradas no módulo (ADR-0029), indexadas pelo próprio
     /// [`StructId`]. Campos referenciam a tabela de tipos.
     pub structs: Vec<StructDef>,
+    /// Enums declarados no módulo (ADR-0039), indexados pelo próprio
+    /// [`EnumId`]. Campos das variantes referenciam a tabela de tipos.
+    pub enums: Vec<EnumDef>,
     /// Funções do módulo, indexadas pelo próprio `FnId`.
     pub functions: Vec<Function>,
 }
@@ -103,6 +106,51 @@ impl StructDef {
 pub struct FieldDef {
     /// Nome do campo (identificador, único dentro da struct).
     pub name: String,
+    /// Tipo do campo, referenciando a tabela do módulo.
+    pub ty: TypeId,
+}
+
+/// Enum nominal declarado no módulo (ADR-0039).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EnumDef {
+    /// Identificador denso; deve ser igual ao índice em [`Module::enums`].
+    pub id: EnumId,
+    /// Nome declarado (identificador, único entre enums/structs do módulo).
+    pub name: String,
+    /// Variantes, na ordem de declaração; o índice é o discriminante estável.
+    pub variants: Vec<EnumVariantDef>,
+}
+
+impl EnumDef {
+    /// Índice da variante `name`, se existir.
+    #[must_use]
+    pub fn variant_index(&self, name: &str) -> Option<usize> {
+        self.variants
+            .iter()
+            .position(|variant| variant.name == name)
+    }
+
+    /// Variante pelo nome.
+    #[must_use]
+    pub fn variant(&self, name: &str) -> Option<&EnumVariantDef> {
+        self.variants.iter().find(|variant| variant.name == name)
+    }
+}
+
+/// Variante de um enum: nome e campos na ordem de declaração.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EnumVariantDef {
+    /// Nome da variante (único dentro do enum).
+    pub name: String,
+    /// Campos; todos posicionais (`name == None`) ou todos nomeados.
+    pub fields: Vec<EnumFieldDef>,
+}
+
+/// Campo de uma variante de enum.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EnumFieldDef {
+    /// `None` para payload posicional; `Some` para campo nomeado.
+    pub name: Option<String>,
     /// Tipo do campo, referenciando a tabela do módulo.
     pub ty: TypeId,
 }
@@ -384,6 +432,47 @@ pub enum Op {
         /// Argumentos, na ordem da assinatura.
         args: Vec<ValueId>,
     },
+    /// Constrói uma variante de enum (`enum_new`), ADR-0039.
+    EnumNew {
+        /// Tipo enum na tabela do módulo.
+        ty: TypeId,
+        /// Índice da variante, na ordem de declaração.
+        variant: u32,
+        /// Campos na ordem de declaração da variante.
+        fields: Vec<ValueId>,
+    },
+    /// Testa a variante de um enum (`enum_is_variant`), ADR-0039.
+    EnumIsVariant {
+        /// Operando enum.
+        value: ValueId,
+        /// Índice da variante testada.
+        variant: u32,
+    },
+    /// Extrai um campo de uma variante (`enum_payload`), ADR-0039.
+    ///
+    /// Trapa `invalid_variant` se o valor estiver em outra variante.
+    EnumPayload {
+        /// Operando enum.
+        value: ValueId,
+        /// Índice da variante esperada.
+        variant: u32,
+        /// Índice do campo na variante.
+        field: u32,
+    },
+    /// Igualdade estrutural de enums (`enum_eq`), ADR-0039.
+    EnumEq {
+        /// Operando esquerdo.
+        lhs: ValueId,
+        /// Operando direito.
+        rhs: ValueId,
+    },
+    /// Desigualdade estrutural de enums (`enum_ne`), ADR-0039.
+    EnumNe {
+        /// Operando esquerdo.
+        lhs: ValueId,
+        /// Operando direito.
+        rhs: ValueId,
+    },
     /// Chama estaticamente uma função do mesmo módulo (`call_static`).
     Call {
         /// Função chamada; resolvida estaticamente pelo verificador.
@@ -431,7 +520,10 @@ impl Op {
             | Op::ResultUnwrap { .. }
             | Op::ResultUnwrapErr { .. }
             | Op::HostCall { .. }
+            | Op::EnumPayload { .. }
             | Op::Call { .. } => None,
+            Op::EnumNew { ty, .. } => Some(*ty),
+            Op::EnumIsVariant { .. } | Op::EnumEq { .. } | Op::EnumNe { .. } => Some(TYPE_BOOL),
         }
     }
 
@@ -474,6 +566,9 @@ impl Op {
             | Op::ResultUnwrap { value }
             | Op::ResultUnwrapErr { value } => vec![*value],
             Op::HostCall { args, .. } => args.clone(),
+            Op::EnumNew { fields, .. } => fields.clone(),
+            Op::EnumIsVariant { value, .. } | Op::EnumPayload { value, .. } => vec![*value],
+            Op::EnumEq { lhs, rhs } | Op::EnumNe { lhs, rhs } => vec![*lhs, *rhs],
             Op::Call { args, .. } => args.clone(),
         }
     }
@@ -548,6 +643,18 @@ impl Module {
     #[must_use]
     pub fn struct_def(&self, id: StructId) -> Option<&StructDef> {
         self.structs.get(id as usize)
+    }
+
+    /// Enum pelo identificador denso.
+    #[must_use]
+    pub fn enum_def(&self, id: EnumId) -> Option<&EnumDef> {
+        self.enums.get(id as usize)
+    }
+
+    /// Enum pelo nome declarado (primeira ocorrência).
+    #[must_use]
+    pub fn enum_by_name(&self, name: &str) -> Option<&EnumDef> {
+        self.enums.iter().find(|definition| definition.name == name)
     }
 
     /// Definição do tipo `id`.

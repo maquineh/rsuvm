@@ -10,7 +10,8 @@ use rvm_spec::{
 };
 
 use crate::{
-    Block, BlockParam, BranchTarget, Function, Instr, Module, Op, Param, Terminator, ValueId,
+    Block, BlockParam, BranchTarget, EnumDef, EnumFieldDef, EnumVariantDef, Function, Instr,
+    Module, Op, Param, Terminator, ValueId,
 };
 
 fn bloco(id: u32, label: &str, instrs: Vec<Instr>, term: Terminator) -> Block {
@@ -61,6 +62,7 @@ fn modulo(name: &str, entry: u32, functions: Vec<Function>) -> Module {
         entry,
         types: builtin_types(),
         structs: Vec::new(),
+        enums: Vec::new(),
         functions,
     }
 }
@@ -418,5 +420,75 @@ pub fn host_read_file() -> Module {
     );
     let mut module = modulo("host", 0, vec![le]);
     module.types = types;
+    module
+}
+
+/// Enum nominal com variante posicional e variante vazia (ADR-0039).
+///
+/// ```text
+/// enum E { A(i64), B }
+/// fn main() -> i64 { v0 = 7; v1 = enum_new E.A v0; v2 = enum_is_variant v1, 0; v3 = enum_payload v1, 0, 0; return v3 }
+/// ```
+#[must_use]
+pub fn enum_simples() -> Module {
+    let mut types = builtin_types();
+    types.push(TypeDef::Enum(0));
+    let enum_ty = u32::try_from(BUILTIN_TYPE_COUNT).unwrap_or(u32::MAX);
+    let main = funcao(
+        0,
+        "main",
+        Vec::new(),
+        TYPE_I64,
+        vec![bloco(
+            0,
+            "entry",
+            vec![
+                instr(0, Op::ConstI64(7)),
+                instr(
+                    1,
+                    Op::EnumNew {
+                        ty: enum_ty,
+                        variant: 0,
+                        fields: vec![0],
+                    },
+                ),
+                instr(
+                    2,
+                    Op::EnumIsVariant {
+                        value: 1,
+                        variant: 0,
+                    },
+                ),
+                instr(
+                    3,
+                    Op::EnumPayload {
+                        value: 1,
+                        variant: 0,
+                        field: 0,
+                    },
+                ),
+            ],
+            Terminator::Return(Some(3)),
+        )],
+    );
+    let mut module = modulo("enum", 0, vec![main]);
+    module.types = types;
+    module.enums = vec![EnumDef {
+        id: 0,
+        name: "E".to_string(),
+        variants: vec![
+            EnumVariantDef {
+                name: "A".to_string(),
+                fields: vec![EnumFieldDef {
+                    name: None,
+                    ty: TYPE_I64,
+                }],
+            },
+            EnumVariantDef {
+                name: "B".to_string(),
+                fields: Vec::new(),
+            },
+        ],
+    }];
     module
 }

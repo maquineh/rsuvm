@@ -13,11 +13,15 @@ sistema operacional; o efeito só existe se um `Host` externo implementar
 
 - `Value` — `Unit`, `Bool(bool)`, `I64(i64)`, `Str(String)`, `F64(f64)`,
   `Array { ty, items }`, `Struct { ty, struct_id, fields }`, `Option { ty, value }`,
-  `Result { ty, value }` (Clone, não `Copy` nem `Eq`); `ty() -> TypeId`, `as_bool`,
+  `Result { ty, value }`, `Enum { ty, variant, fields }` (Clone, não `Copy` nem `Eq`);
+  `ty() -> TypeId`, `as_bool`,
   `as_i64`, `as_str`, `as_f64`, `as_array`, `as_struct`, `as_option`, `as_result`,
-  `matches_type(TypeId)`, `retained_bytes()`, `Display` estável (`i64:30`, `bool:true`, `unit`,
+  `as_enum`, `matches_type(TypeId)`, `depth()`, `retained_bytes()`, `Display`
+  estável (`i64:30`, `bool:true`, `unit`,
   `str:<texto>`, `f64:1.5`, `array:[i64:1, i64:2]`, `struct:0[i64:1]`, `none`,
-  `some:i64:1`, `ok:i64:5`, `err:str:e`) (`lib.rs:Value`).
+  `some:i64:1`, `ok:i64:5`, `err:str:e`, `enum:5:1[i64:2]`) (`lib.rs:Value`).
+- `MAX_VALUE_DEPTH` — teto de profundidade de valor (256); `enum_new` recusa
+  valores acima dele com `value_too_deep` (ADR-0039).
 - `DEFAULT_FUEL` — saldo padrão de execução (`100_000`).
 - `DEFAULT_MEMORY_LIMIT_BYTES` (16 MiB), `FRAME_BASE_BYTES` (256), `SLOT_BYTES`
   (24), `frame_cost(slots) -> u64` e `arg_buffer_cost(args) -> u64` — modelo

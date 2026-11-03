@@ -41,6 +41,8 @@ humanas nunca são contrato.
 | `index_out_of_bounds` | trap | trap | `array_get`/`array_set` com índice fora de `0..len` (ADR-0027/0028) | `rvm-interpreter` |
 | `unwrap_none` | trap | trap | `option_unwrap` sobre `none` (ADR-0030) | `rvm-interpreter` |
 | `unwrap_error` | trap | trap | `result_unwrap`/`result_unwrap_err` sobre a variante errada (ADR-0033) | `rvm-interpreter` |
+| `invalid_variant` | trap | trap | `enum_payload` sobre variante diferente da solicitada (ADR-0039) | `rvm-interpreter` |
+| `value_too_deep` | resource | resource_limit | `enum_new` produziria valor acima de `MAX_VALUE_DEPTH` (ADR-0039) | `rvm-interpreter` |
 | `out_of_fuel` | resource | resource_limit | saldo de fuel insuficiente antes do despacho | `rvm-interpreter` |
 | `call_depth_exceeded` | resource | resource_limit | profundidade de chamadas excederia o limite | `rvm-interpreter` |
 | `out_of_memory` | resource | resource_limit | quota de memória modelada de frames excedida | `rvm-interpreter` |
@@ -97,6 +99,12 @@ aparecem durante a execução de um `VerifiedModule`.
 | N-041 `result_unwrap` de `err` | `unwrap_error` | execução (trap) |
 | N-042 `result_is_ok` de não-`result` | `invalid_type` | verificação |
 | N-043 tipo de struct recursivo (ciclo) | `invalid_module` | estrutura |
+| N-044 `enum_payload` sobre variante errada | `invalid_variant` | execução (trap) |
+| N-045 `enum_new` com tipo de campo errado | `invalid_type` | verificação |
+| N-046 `enum_payload` com campo fora da variante | `invalid_type` | verificação |
+| N-047 `enum_eq` entre enums diferentes | `invalid_type` | verificação |
+| N-048 enum sem `TypeDef::Enum` | `invalid_module` | estrutura |
+| N-049 enum recursivo acima de `MAX_VALUE_DEPTH` | `value_too_deep` | execução (limite) |
 
 `invalid_module` também cobre limite estrutural excedido: a distinção entre
 "estrutura inválida" e "quota de execução" é feita por `class`, não pelo texto.

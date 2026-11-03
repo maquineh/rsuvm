@@ -64,9 +64,12 @@ pub fn link(
                 module.name
             )));
         }
-        if !module.structs.is_empty() || module.types.len() > BUILTIN_TYPE_COUNT {
+        if !module.structs.is_empty()
+            || !module.enums.is_empty()
+            || module.types.len() > BUILTIN_TYPE_COUNT
+        {
             return Err(module_error(format!(
-                "módulo `{}` declara tipos compostos/structs; ligação com tipos compostos ainda não é suportada (ADR-0034)",
+                "módulo `{}` declara tipos compostos/structs/enums; ligação com tipos compostos ainda não é suportada (ADR-0034/ADR-0039)",
                 module.name
             )));
         }
@@ -174,6 +177,7 @@ pub fn link(
         entry,
         types: builtin_types(),
         structs: Vec::new(),
+        enums: Vec::new(),
         functions: global_functions,
     };
     rvm_ir::structure::check(&linked, limits)?;

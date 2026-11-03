@@ -82,6 +82,11 @@ fn collect_ops(module: &Module, ops: &mut BTreeSet<String>, terms: &mut BTreeSet
                     Op::ResultUnwrap { .. } => "result_unwrap".to_string(),
                     Op::ResultUnwrapErr { .. } => "result_unwrap_err".to_string(),
                     Op::HostCall { .. } => "host_read_file".to_string(),
+                    Op::EnumNew { .. } => "enum_new".to_string(),
+                    Op::EnumIsVariant { .. } => "enum_is_variant".to_string(),
+                    Op::EnumPayload { .. } => "enum_payload".to_string(),
+                    Op::EnumEq { .. } => "enum_eq".to_string(),
+                    Op::EnumNe { .. } => "enum_ne".to_string(),
                     Op::Call { .. } => "call_static".to_string(),
                 };
                 ops.insert(name);
@@ -157,6 +162,11 @@ fn corpus_valido_cobre_todas_as_operacoes_do_subset() {
         "result_is_ok",
         "result_unwrap",
         "result_unwrap_err",
+        "enum_new",
+        "enum_is_variant",
+        "enum_payload",
+        "enum_eq",
+        "enum_ne",
         "eq_i64",
         "ne_i64",
         "lt_i64",
@@ -218,6 +228,8 @@ fn corpus_invalido_cobre_os_codigos_de_erro_centrais() {
         "out_of_fuel",
         "call_depth_exceeded",
         "out_of_memory",
+        "invalid_variant",
+        "value_too_deep",
     ];
     let missing: Vec<&str> = required
         .iter()

@@ -37,6 +37,9 @@ pub const IR_VERSION: u16 = 1;
 /// Identificador denso de uma struct declarada no módulo (ADR-0029).
 pub type StructId = u32;
 
+/// Identificador denso de um enum na tabela do m�dulo (ADR-0039).
+pub type EnumId = u32;
+
 /// Identificador denso de um tipo na tabela do módulo (ADR-0034).
 pub type TypeId = u32;
 
@@ -61,6 +64,8 @@ pub enum TypeDef {
     Array(TypeId),
     /// Struct declarada no módulo.
     Struct(StructId),
+    /// Enum nominal com variantes etiquetadas (ADR-0039).
+    Enum(EnumId),
     /// Valor opcional de payload referenciado.
     Optional(TypeId),
     /// Resultado com payloads `ok`/`err` referenciados.
@@ -79,6 +84,7 @@ impl TypeDef {
             TypeDef::F64 => "f64",
             TypeDef::Array(_) => "array",
             TypeDef::Struct(_) => "struct",
+            TypeDef::Enum(_) => "enum",
             TypeDef::Optional(_) => "option",
             TypeDef::Result(..) => "result",
         }
@@ -667,6 +673,12 @@ pub enum ErrorCode {
     /// `result_unwrap`/`result_unwrap_err` sobre a variante errada
     /// (`unwrap_error`, ADR-0033).
     UnwrapError,
+    /// `enum_payload` sobre variante diferente da solicitada
+    /// (`invalid_variant`, ADR-0039).
+    InvalidVariant,
+    /// Valor recursivo acima do limite de profundidade do runtime
+    /// (`value_too_deep`, ADR-0039).
+    ValueTooDeep,
     /// Fuel esgotado antes do despacho.
     OutOfFuel,
     /// Profundidade máxima de chamadas excedida.
@@ -700,6 +712,8 @@ impl ErrorCode {
             ErrorCode::IndexOutOfBounds => "index_out_of_bounds",
             ErrorCode::UnwrapNone => "unwrap_none",
             ErrorCode::UnwrapError => "unwrap_error",
+            ErrorCode::InvalidVariant => "invalid_variant",
+            ErrorCode::ValueTooDeep => "value_too_deep",
             ErrorCode::OutOfFuel => "out_of_fuel",
             ErrorCode::CallDepthExceeded => "call_depth_exceeded",
             ErrorCode::OutOfMemory => "out_of_memory",
@@ -731,6 +745,8 @@ impl ErrorCode {
             "index_out_of_bounds" => Some(ErrorCode::IndexOutOfBounds),
             "unwrap_none" => Some(ErrorCode::UnwrapNone),
             "unwrap_error" => Some(ErrorCode::UnwrapError),
+            "invalid_variant" => Some(ErrorCode::InvalidVariant),
+            "value_too_deep" => Some(ErrorCode::ValueTooDeep),
             "out_of_fuel" => Some(ErrorCode::OutOfFuel),
             "call_depth_exceeded" => Some(ErrorCode::CallDepthExceeded),
             "out_of_memory" => Some(ErrorCode::OutOfMemory),
@@ -760,10 +776,12 @@ impl ErrorCode {
             | ErrorCode::StringTooLong
             | ErrorCode::IndexOutOfBounds
             | ErrorCode::UnwrapNone
-            | ErrorCode::UnwrapError => ErrorCategory::Trap,
-            ErrorCode::OutOfFuel | ErrorCode::CallDepthExceeded | ErrorCode::OutOfMemory => {
-                ErrorCategory::Resource
-            }
+            | ErrorCode::UnwrapError
+            | ErrorCode::InvalidVariant => ErrorCategory::Trap,
+            ErrorCode::OutOfFuel
+            | ErrorCode::CallDepthExceeded
+            | ErrorCode::OutOfMemory
+            | ErrorCode::ValueTooDeep => ErrorCategory::Resource,
             ErrorCode::CapabilityDenied => ErrorCategory::Capability,
         }
     }
@@ -947,6 +965,12 @@ pub struct Limits {
     pub max_structs: u32,
     /// Número máximo de campos de uma struct (ADR-0029).
     pub max_fields_per_struct: u32,
+    /// N�mero m�ximo de enums declarados no m�dulo (ADR-0039).
+    pub max_enums: u32,
+    /// N�mero m�ximo de variantes de um enum (ADR-0039).
+    pub max_variants_per_enum: u32,
+    /// N�mero m�ximo de campos de uma variante de enum (ADR-0039).
+    pub max_fields_per_enum_variant: u32,
     /// Número máximo de tipos na tabela do módulo (ADR-0034).
     pub max_types: u32,
     /// Tamanho máximo, em bytes, da entrada textual ou binária de um módulo.
@@ -968,6 +992,9 @@ impl Default for Limits {
             max_array_len: 4096,
             max_structs: 256,
             max_fields_per_struct: 256,
+            max_enums: 256,
+            max_variants_per_enum: 256,
+            max_fields_per_enum_variant: 256,
             max_types: 1024,
             max_input_bytes: 1_048_576,
         }
@@ -1076,6 +1103,8 @@ mod tests {
             ErrorCode::InvalidShift,
             ErrorCode::StringTooLong,
             ErrorCode::IndexOutOfBounds,
+            ErrorCode::InvalidVariant,
+            ErrorCode::ValueTooDeep,
             ErrorCode::OutOfFuel,
             ErrorCode::CallDepthExceeded,
             ErrorCode::CapabilityDenied,

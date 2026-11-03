@@ -27,8 +27,12 @@ constrói módulos estruturalmente válidos. Depende de `rvm-spec` e `rvm-ir`.
   `unsupported_feature`.
 - `version != 1` é `unsupported_version`, decidido imediatamente após ler o
   número; número fora de `i64`/`u16` é `invalid_number`.
-- Tipo fora de `unit|bool|i64|string|f64|array|struct|option|result` é
+- Tipo fora de `unit|bool|i64|string|f64|array|struct|enum|option|result` é
   `unknown_type`; operação/terminador desconhecido é `unknown_opcode`.
+- Declarações `enum` + `type <id> = enum <Nome>` são resolvidas com referências
+  para frente a structs/enums; campos de variante são posicionais ou nomeados.
+  `enum_new` usa `Enum.Variant`; `enum_is_variant`/`enum_payload` usam índices
+  (ADR-0039).
 - `host_read_file` (opcode 54) representa `HostCall` com `u8 function` (0 =
   `read_file`), `u16 argc` e `u32 args[]`; função desconhecida é `unknown_opcode`.
   A semântica e o efeito vêm da ABI (ADR-0036), não do texto/bytecode.
@@ -45,8 +49,9 @@ constrói módulos estruturalmente válidos. Depende de `rvm-spec` e `rvm-ir`.
 - Ambiguidade conhecida: `return <nome>` é distinguido de `return` seguido de
   novo bloco (`<nome>:`) olhando o token seguinte; se for `:` ou `(`, o nome abre
   bloco e o retorno não tem valor (`lib.rs` doc do crate).
-- Impressão canônica: `module`, `entry`, funções e blocos na ordem dos IDs,
-  recuo de dois espaços, definições como `v<id>`, parâmetros e parâmetros de bloco
+- Impressão canônica: `module`, `entry`, `type`, `enum`, `struct`, `import`,
+  funções e blocos na ordem dos IDs, recuo de dois espaços, definições como
+  `v<id>`, parâmetros e parâmetros de bloco
   pelo nome armazenado. Para módulos originados do texto, `parse(print(m))`
   preserva estrutura **e** IDs; para módulos de API/bytecode com IDs fora da
   ordem textual, pode renumerar valores.
