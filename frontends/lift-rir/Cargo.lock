@@ -25,6 +25,7 @@ dependencies = [
  "lift_lexer",
  "lift_parser",
  "lift_sema",
+ "rvm-bytecode",
  "rvm-interpreter",
  "rvm-ir",
  "rvm-runtime",
@@ -35,12 +36,12 @@ dependencies = [
 [[package]]
 name = "lift_ast"
 version = "0.1.0"
-source = "git+https://github.com/maquineh/lift?rev=5e59af55baba7af53f8763140d35c972399d2851#5e59af55baba7af53f8763140d35c972399d2851"
+source = "git+https://github.com/maquineh/lift?rev=e04bc26e5e70ecd82b0158fb7154f93b9045dfbe#e04bc26e5e70ecd82b0158fb7154f93b9045dfbe"
 
 [[package]]
 name = "lift_lexer"
 version = "0.1.0"
-source = "git+https://github.com/maquineh/lift?rev=5e59af55baba7af53f8763140d35c972399d2851#5e59af55baba7af53f8763140d35c972399d2851"
+source = "git+https://github.com/maquineh/lift?rev=e04bc26e5e70ecd82b0158fb7154f93b9045dfbe#e04bc26e5e70ecd82b0158fb7154f93b9045dfbe"
 dependencies = [
  "lift_ast",
  "logos",
@@ -49,7 +50,7 @@ dependencies = [
 [[package]]
 name = "lift_parser"
 version = "0.1.0"
-source = "git+https://github.com/maquineh/lift?rev=5e59af55baba7af53f8763140d35c972399d2851#5e59af55baba7af53f8763140d35c972399d2851"
+source = "git+https://github.com/maquineh/lift?rev=e04bc26e5e70ecd82b0158fb7154f93b9045dfbe#e04bc26e5e70ecd82b0158fb7154f93b9045dfbe"
 dependencies = [
  "lift_ast",
  "lift_lexer",
@@ -58,7 +59,7 @@ dependencies = [
 [[package]]
 name = "lift_sema"
 version = "0.1.0"
-source = "git+https://github.com/maquineh/lift?rev=5e59af55baba7af53f8763140d35c972399d2851#5e59af55baba7af53f8763140d35c972399d2851"
+source = "git+https://github.com/maquineh/lift?rev=e04bc26e5e70ecd82b0158fb7154f93b9045dfbe#e04bc26e5e70ecd82b0158fb7154f93b9045dfbe"
 dependencies = [
  "lift_ast",
 ]
@@ -137,8 +138,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
+name = "rvm-bytecode"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "rvm-ir",
+ "rvm-spec",
+]
+
+[[package]]
 name = "rvm-interpreter"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "rvm-ir",
  "rvm-runtime",
@@ -148,25 +157,25 @@ dependencies = [
 
 [[package]]
 name = "rvm-ir"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "rvm-spec",
 ]
 
 [[package]]
 name = "rvm-runtime"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "rvm-spec",
 ]
 
 [[package]]
 name = "rvm-spec"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 
 [[package]]
 name = "rvm-verify"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "rvm-ir",
  "rvm-spec",

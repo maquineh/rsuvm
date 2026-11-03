@@ -2,48 +2,61 @@
 
 ## Overview
 
-`lift-rir` traduz um subconjunto de programas **Lift** para a RIR do EXP-0. A
-entrada é código-fonte `.lift` (via `lift_lexer`/`lift_parser`/`lift_sema`) ou uma
-`HirProgram` já analisada; a saída é um `rvm_ir::Module` pronto para
-`rvm_verify::VerifiedModule::verify`. O crate fica fora do núcleo (ADR-0001) e é um
-workspace separado (ADR-0021).
+`lift-rir` translates a subset of **Lift** programs to the EXP-0 RIR. Input is
+`.lift` source (via `lift_lexer`/`lift_parser`/`lift_sema`) or an analyzed
+`HirProgram`; output is an `rvm_ir::Module` ready for
+`rvm_verify::VerifiedModule::verify`. It lives outside the core (ADR-0001) and is
+a separate workspace (ADR-0021).
 
 ## Interface
 
 - `pub fn lower_source(source: &str, entry: &str) -> Result<Module, AdapterError>`
-  (`src/lib.rs:lower_source`) — roda o pipeline do Lift e baixa para a RIR.
+  (`src/lib.rs:lower_source`) — runs the Lift pipeline and lowers to RIR.
 - `pub fn lower(program: &HirProgram, entry: &str) -> Result<Module, AdapterError>`
-  (`src/lib.rs:lower`) — baixa uma HIR já analisada.
+  (`src/lib.rs:lower`) — lowers an already analyzed HIR.
 - `pub enum AdapterError { LiftPipeline(String), Unsupported(String) }`
   (`src/lib.rs:AdapterError`).
-- Binário **`lift-run`** (`src/bin/lift_run.rs`): CLI que roda um `.lift` ponta a
-  ponta na RVM e imprime o valor (`i64:30`, `bool:true`, `unit`), com os mesmos
-  códigos de exit do `rsuvm` (0/2/3/4/1).
+- Binary **`lift-run`** (`src/bin/lift_run.rs`): executes a `.lift` end-to-end on
+  the RVM and prints the value (`i64:30`, `bool:true`, `unit`), with the same
+  exit codes as `rsuvm` (0/2/3/4/1).
+- Binary **`lift-encode`** (`src/bin/lift_encode.rs`): lowers, verifies, and
+  writes `.rsvmbc`; it does not execute.
 
 ## Invariants
 
-- **Subconjunto explícito**: funções `int`/`boolean`/`string`/`void`, `let`/`const`,
-  **atribuição**, `return`, `if`/`else if`/`else` (com merge e `if` sem `else`) e
-  **`while`**; `+ - * / %`, comparações (`==`/`!=` de `string` por conteúdo),
-  negação, lógica `!`/`&&`/`||` (curto-circuito) e chamadas internas. Qualquer
-  outra construção é `AdapterError::Unsupported` — nunca um módulo incorreto.
-- **CFG/SSA com phi explícito**: cada `BindingId` é rastreado para o `ValueId`
-  corrente; `if`/`else` e `while` passam o ambiente como **parâmetros de bloco** (no
-  merge e no cabeçalho do laço); `&&`/`||`/`!` viram fluxo com merge de um `bool`.
-- **Overflow é trap**: `+ - *` viram `*_i64_checked`, como no EXP-0.
-- **Determinismo**: a ordem das declarações define os `FnId`; sem `HashMap`,
-  relógio ou ambiente.
-- **Fronteira**: o núcleo não importa este crate; ele depende do núcleo, nunca o
-  contrário.
+- **Explicit subset:** functions with `int`/`number`/`boolean`/`string`/`void`,
+  arrays, interfaces/structs, `T?`, `let`/`const`, **assignment**, `return`,
+  `if`/`else if`/`else` (with merge and `if` without `else`), **`while`**;
+  arithmetic/comparisons/string comparison, unary negation, short-circuit
+  `!`/`&&`/`||`, and internal calls. Any other construct is
+  `AdapterError::Unsupported` — never an incorrect module.
+- **CFG/SSA with explicit phi:** each `BindingId` is tracked to the current
+  `ValueId`; `if`/`else` and `while` carry the environment as **block
+  parameters**; `&&`/`||`/`!` become control flow with a `bool` merge.
+- **Overflow is a trap:** `+ - *` become `*_i64_checked`, as in EXP-0.
+- **Determinism:** declaration order defines `FnId`; no `HashMap`, clock, or
+  environment.
+- **Boundary:** the core never imports this crate; this crate depends on the
+  core, never the reverse.
+- **New Lift features fail closed:** enums, unions, generics, closures,
+  function values, higher-order array methods, `match`, `for-of`, `break`,
+  `continue`, `throw`, `try/catch`, `?`, imports/modules, FFI, and
+  `result.ok`/`result.err` are rejected with `Unsupported`.
 
 ## Side Effects
 
-- `None`. Transformação pura em memória; não lê arquivos, rede, ambiente ou
-  relógio. (O teste diferencial compara com o oráculo do Lift registrado, sem
-  invocar o compilador do Lift em tempo de teste.)
+- `None` for lowering. `lift-run` reads one `.lift` file and writes to
+  stdout/stderr; `lift-encode` reads one `.lift` file and writes one `.rsvmbc`.
+  Neither grants filesystem/network/clock/process effects to the Lift program.
+  (The differential test compares against the recorded Lift oracle, without
+  invoking the Lift compiler at test time.)
 
 ## Verification
 
-- `cargo test --manifest-path frontends/lift-rir/Cargo.toml` (8 testes em
-  `tests/diferencial.rs` e 5 em `tests/cli.rs`).
-- Oráculo do Lift e comparação: `docs/RELATORIOS/ADAPTADOR-LIFT-RIR.md`.
+```bash
+cargo test --manifest-path frontends/lift-rir/Cargo.toml
+```
+
+Current tests: 9 CLI + 34 differential + 4 encode = **47 passed**.
+
+Lift oracle and matrix: `docs/RELATORIOS/ADAPTADOR-LIFT-RIR.md`.

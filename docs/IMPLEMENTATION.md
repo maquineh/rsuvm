@@ -92,6 +92,23 @@ The executor only accepts `VerifiedModule`.
   `--max-depth`, `--memory`, `--allow-fs-read`.
 - Stable exit codes 0–5 (success, usage/I/O, module, trap, resource, capability).
 
+### Lift adapter (prototype)
+
+- `frontends/lift-rir` consumes Lift's public HIR (pinned to Lift commit
+  `e04bc26`) and lowers a supported subset to RIR.
+- `lift-run` executes a lifted program directly on the RVM.
+- `lift-encode <file.lift> <entry> <out.rsvmbc>` verifies and emits RVM bytecode;
+  the result runs with `rsuvm run-bc`.
+- Supported: functions with scalars/arrays/structs/`T?`, `let`/`const`,
+  assignment (non-aliased local), `if`/`else`, `while`, `??`,
+  `== null`/`!= null`, calls, arithmetic/comparison/logic.
+- Unsupported (fail closed): enums, unions, generics, closures/function values,
+  higher-order array methods, `match`, `for-of`, `break`/`continue`,
+  `throw`/`try`/`?`, imports/modules, FFI, `console.log`.
+- Tests: 9 CLI + 34 differential + 4 encode = **47 passed**.
+- Guide: `docs/LIFT-TO-RVM.md`; detailed report:
+  `docs/RELATORIOS/ADAPTADOR-LIFT-RIR.md` (Portuguese).
+
 ## 6. Tests and evidence
 
 | Item | Result |

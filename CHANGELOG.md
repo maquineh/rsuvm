@@ -7,6 +7,21 @@ project uses semantic versioning `0.x`: incompatible changes may occur in minor
 releases. IR/text/bytecode formats are **experimental** and have no cross-version
 compatibility.
 
+## [Unreleased]
+
+### Added
+
+- Lift adapter updated to Lift commit `e04bc26`; new language features that RIR
+  cannot represent (enums, unions, generics, closures, `match`, `for-of`,
+  `try/catch`, `?`, modules, FFI) fail closed with `Unsupported`.
+- `lift-encode` compiles the supported Lift subset to verified RVM bytecode
+  (`.rsvmbc`); `lift-run` remains the direct execution path.
+- Lift examples under `examples/lift/` and guide `docs/LIFT-TO-RVM.md`.
+
+### Verification
+
+- Lift adapter: 9 CLI + 34 differential + 4 encode = **47 passed**.
+
 ## [0.1.0-alpha.1] - 2026-11-02
 
 ### Added

@@ -29,8 +29,9 @@ deterministic interpreter, execution quotas, and a minimal host ABI.
 - There is no aggregate I/O/time/rate quota.
 - IR/text/bytecode formats and the Rust API are experimental, with no
   cross-version compatibility.
-- There is no real integrated frontend yet; current use is via `.rvm` or the
-  library.
+- There is a Lift→RIR prototype adapter (subset: no enums, unions, generics,
+  closures, `match`, `for-of`, `try/catch`, or modules); `lift-encode` emits
+  `.rsvmbc` for the supported subset.
 
 ## Try it
 

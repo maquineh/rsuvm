@@ -10,26 +10,31 @@
 name = "lift-rir"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.75"
+rust-version = "1.94.1"
 license = "MIT OR Apache-2.0"
 publish = false
 # Só o binário `lift-run`; sem auto-descoberta de `src/bin/*`.
 autobins = false
 
 [dependencies]
-lift_ast = { git = "https://github.com/maquineh/lift", rev = "5e59af55baba7af53f8763140d35c972399d2851" }
-lift_lexer = { git = "https://github.com/maquineh/lift", rev = "5e59af55baba7af53f8763140d35c972399d2851" }
-lift_parser = { git = "https://github.com/maquineh/lift", rev = "5e59af55baba7af53f8763140d35c972399d2851" }
-lift_sema = { git = "https://github.com/maquineh/lift", rev = "5e59af55baba7af53f8763140d35c972399d2851" }
+lift_ast = { git = "https://github.com/maquineh/lift", rev = "e04bc26e5e70ecd82b0158fb7154f93b9045dfbe" }
+lift_lexer = { git = "https://github.com/maquineh/lift", rev = "e04bc26e5e70ecd82b0158fb7154f93b9045dfbe" }
+lift_parser = { git = "https://github.com/maquineh/lift", rev = "e04bc26e5e70ecd82b0158fb7154f93b9045dfbe" }
+lift_sema = { git = "https://github.com/maquineh/lift", rev = "e04bc26e5e70ecd82b0158fb7154f93b9045dfbe" }
 rvm-spec = { path = "../../crates/rvm-spec" }
 rvm-ir = { path = "../../crates/rvm-ir" }
 rvm-runtime = { path = "../../crates/rvm-runtime" }
 rvm-verify = { path = "../../crates/rvm-verify" }
 rvm-interpreter = { path = "../../crates/rvm-interpreter" }
+rvm-bytecode = { path = "../../crates/rvm-bytecode" }
 
 [[bin]]
 name = "lift-run"
 path = "src/bin/lift_run.rs"
+
+[[bin]]
+name = "lift-encode"
+path = "src/bin/lift_encode.rs"
 
 [workspace]
 members = ["."]

@@ -137,6 +137,11 @@ pub fn lower(program: &HirProgram, entry: &str) -> Result<Module, AdapterError> 
                     "statement de topo (programa deve declarar apenas funções)".to_string(),
                 ));
             }
+            HirDeclaration::Enum(_) | HirDeclaration::ExternStruct(_) => {
+                return Err(AdapterError::Unsupported(
+                    "enum/import interface do Lift ainda não suportado".to_string(),
+                ));
+            }
         }
     }
 
@@ -361,6 +366,17 @@ fn collect_statement_types(
                 collect_expr_types(&node.condition, structs, table)?;
                 collect_statement_types(&node.body.statements, structs, table)?;
             }
+            HirStatement::Narrow(_)
+            | HirStatement::Match(_)
+            | HirStatement::ForOf(_)
+            | HirStatement::Break(_)
+            | HirStatement::Continue(_)
+            | HirStatement::Throw(_)
+            | HirStatement::TryCatch(_) => {
+                return Err(AdapterError::Unsupported(
+                    "statement Lift ainda não suportado pelo adaptador".to_string(),
+                ));
+            }
         }
     }
     Ok(())
@@ -442,6 +458,16 @@ fn collect_expr_types(
         | HirExprKind::BooleanLiteral(_)
         | HirExprKind::OptionNone
         | HirExprKind::Local { .. } => {}
+        HirExprKind::FunctionValue { .. }
+        | HirExprKind::ArrayMethod { .. }
+        | HirExprKind::EnumConstruct { .. }
+        | HirExprKind::ResultOk(_)
+        | HirExprKind::ResultErr(_)
+        | HirExprKind::TryPropagate { .. } => {
+            return Err(AdapterError::Unsupported(
+                "expressão Lift ainda não suportada pelo adaptador".to_string(),
+            ));
+        }
     }
     Ok(())
 }
@@ -723,6 +749,17 @@ impl FuncLower {
                 },
                 HirStatement::While(node) => {
                     env = self.lower_while(names, node, env)?;
+                }
+                HirStatement::Narrow(_)
+                | HirStatement::Match(_)
+                | HirStatement::ForOf(_)
+                | HirStatement::Break(_)
+                | HirStatement::Continue(_)
+                | HirStatement::Throw(_)
+                | HirStatement::TryCatch(_) => {
+                    return Err(AdapterError::Unsupported(
+                        "statement Lift ainda não suportado pelo adaptador".to_string(),
+                    ));
                 }
             }
         }
@@ -1399,6 +1436,13 @@ fn collect_literal_locals(statements: &[HirStatement], out: &mut BTreeSet<Bindin
             }
             HirStatement::Assignment(_) | HirStatement::Expression(_) | HirStatement::Return(_) => {
             }
+            HirStatement::Narrow(_)
+            | HirStatement::Match(_)
+            | HirStatement::ForOf(_)
+            | HirStatement::Break(_)
+            | HirStatement::Continue(_)
+            | HirStatement::Throw(_)
+            | HirStatement::TryCatch(_) => {}
         }
     }
 }
@@ -1441,6 +1485,13 @@ fn scan_statement(statement: &HirStatement, escaping: &mut BTreeSet<BindingId>) 
             scan_expr(&node.condition, escaping);
             scan_block(&node.body.statements, escaping);
         }
+        HirStatement::Narrow(_)
+        | HirStatement::Match(_)
+        | HirStatement::ForOf(_)
+        | HirStatement::Break(_)
+        | HirStatement::Continue(_)
+        | HirStatement::Throw(_)
+        | HirStatement::TryCatch(_) => {}
     }
 }
 
@@ -1517,6 +1568,12 @@ fn scan_expr(expression: &HirExpr, escaping: &mut BTreeSet<BindingId>) {
         | HirExprKind::StringLiteral(_)
         | HirExprKind::BooleanLiteral(_)
         | HirExprKind::OptionNone => {}
+        HirExprKind::FunctionValue { .. }
+        | HirExprKind::ArrayMethod { .. }
+        | HirExprKind::EnumConstruct { .. }
+        | HirExprKind::ResultOk(_)
+        | HirExprKind::ResultErr(_)
+        | HirExprKind::TryPropagate { .. } => {}
     }
 }
 

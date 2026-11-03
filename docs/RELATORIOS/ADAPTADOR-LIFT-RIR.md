@@ -334,10 +334,39 @@ exercita.
 
 Resultado: `34 passed` (diferencial) + `9 passed` (CLI) = **43 passed; 0 failed**.
 
+### 2.13 Lift atualizado (`e04bc26`) e `lift-encode`
+
+O adaptador foi atualizado para o Lift `e04bc26` (commit atual da `main`). A
+linguagem ganhou enums, unions, generics, closures, `match`, `for-of`,
+`try/catch`, `?` e FFI; o RIR do EXP-0 não representa esses recursos. O adaptador
+**falha fechado** com `AdapterError::Unsupported` para eles, em vez de gerar um
+módulo aproximado.
+
+- Subconjunto antigo: **43 testes** continuam passando contra `e04bc26`.
+- Novo binário **`lift-encode`**: `lift <arquivo.lift> <entry> <saida.rsvmbc>`;
+  roda lexer/parser/analisador, baixa para RIR, verifica e codifica; não executa.
+- Novos testes `tests/encode.rs`: decodificam o `.rsvmbc`, verificam e executam
+  na RVM; também compilam os seis exemplos em `examples/lift/`.
+- Total atual: **9 CLI + 34 diferencial + 4 encode = 47 passed; 0 failed**.
+
+```bash
+cargo run --manifest-path frontends/lift-rir/Cargo.toml --bin lift-encode -- \
+    examples/lift/soma.lift soma /tmp/soma.rsvmbc
+rsuvm run-bc /tmp/soma.rsvmbc --arg i64:10 --arg i64:20
+# i64:30
+```
+
+Nota: o checkout local do Lift tem alterações não commitadas em
+`lift_ast`/`lift_parser`/`lift_sema` (enums genéricos). O pin do adaptador usa
+`e04bc26`, que está publicado; para incorporar essas alterações, é preciso
+commit/push no Lift e atualizar o rev do adaptador.
+
 ## 3. Limitações
 
-1. Subconjunto ainda estreito: **sem** closures, `console.log`/`import`. Fora
-   disso, `AdapterError::Unsupported`. Divisão/resto, `string` (com concatenação),
+1. Subconjunto ainda estreito: **sem** enums, unions, generics, closures/valores
+   de função, métodos higher-order de array, `match`, `for-of`, `break`/
+   `continue`, `throw`/`try-catch`/`?`, `console.log`/`import`/FFI. Fora disso,
+   `AdapterError::Unsupported`. Divisão/resto, `string` (com concatenação),
    `f64` (`number`), arrays (literal, índice e `xs[i] = v`), structs (`interface`,
    literal, `obj.campo` e `obj.campo = v`) e opcionais (`null`,
    `option.some`/`is_some`/`unwrap`, `??`, `== null`/`!= null`), inclusive

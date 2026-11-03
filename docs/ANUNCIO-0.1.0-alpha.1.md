@@ -29,7 +29,9 @@ com intérprete determinístico, quotas de execução e uma ABI mínima de host.
 - Não há quota agregada de IO/tempo/taxa.
 - Formatos IR/texto/bytecode e API são experimentais, sem compatibilidade entre
   versões.
-- Não há frontend real integrado; o uso atual é via `.rvm` ou pela biblioteca.
+- Há um adaptador Lift→RIR protótipo (subconjunto: sem enums, unions, generics,
+  closures, `match`, `for-of`, `try/catch` ou módulos); `lift-encode` gera
+  `.rsvmbc` para o subconjunto suportado.
 
 ## Como experimentar
 

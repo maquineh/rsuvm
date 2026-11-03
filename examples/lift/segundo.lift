@@ -1,0 +1,7 @@
+// Exemplo Lift: array literal e indexação.
+// Compilar: cargo run --manifest-path frontends/lift-rir/Cargo.toml --bin lift-encode -- examples/lift/segundo.lift segundo examples/lift/segundo.rsvmbc
+// Executar: rsuvm run-bc examples/lift/segundo.rsvmbc
+function segundo(): int {
+  let xs = [10, 20, 30];
+  return xs[1];
+}

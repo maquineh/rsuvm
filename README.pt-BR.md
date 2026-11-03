@@ -44,7 +44,9 @@ cargo run -p rvm-cli -- run examples/soma.rvm --arg i64:10 --arg i64:20
 
 Guia completo: [GUIA-USUARIO](./docs/GUIA-USUARIO.md). Para incorporar a VM:
 [INCORPORACAO](./docs/INCORPORACAO.md). Versionamento:
-[COMPATIBILIDADE](./docs/COMPATIBILIDADE.md).
+[COMPATIBILIDADE](./docs/COMPATIBILIDADE.md). Lift → bytecode RVM:
+[LIFT-TO-RVM](./docs/LIFT-TO-RVM.md) (inglês; relatório em português em
+[ADAPTADOR-LIFT-RIR](./docs/RELATORIOS/ADAPTADOR-LIFT-RIR.md)).
 
 ## Subdirectories & System Boundaries
 
@@ -61,7 +63,9 @@ Guia completo: [GUIA-USUARIO](./docs/GUIA-USUARIO.md). Para incorporar a VM:
 - [fuzz](./fuzz/README.md) — workspace **separado** de fuzzing guiado por cobertura
   (nightly, dependência de dev; não faz parte do workspace principal; ADR-0020).
 - [frontends](./frontends/README.md) — adaptadores de linguagem fora do núcleo;
-  protótipo Lift→RIR (ADR-0021), também workspace separado.
+  protótipo Lift→RIR (ADR-0021), também workspace separado. Executa um
+  subconjunto de Lift ou gera `.rsvmbc` com `lift-encode`; ver
+  [LIFT-TO-RVM](./docs/LIFT-TO-RVM.md).
 
 ## Workspace Invariants
 

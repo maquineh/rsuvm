@@ -1,0 +1,12 @@
+// Exemplo Lift: interface/struct, literal e acesso a campo.
+// Compilar: cargo run --manifest-path frontends/lift-rir/Cargo.toml --bin lift-encode -- examples/lift/soma_ponto.lift soma_ponto examples/lift/soma_ponto.rsvmbc
+// Executar: rsuvm run-bc examples/lift/soma_ponto.rsvmbc
+interface Ponto {
+  x: int,
+  y: int,
+}
+
+function soma_ponto(): int {
+  let p: Ponto = { x: 3, y: 4 };
+  return p.x + p.y;
+}

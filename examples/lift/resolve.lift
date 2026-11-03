@@ -1,0 +1,7 @@
+// Exemplo Lift: opcional e coalescência.
+// Compilar: cargo run --manifest-path frontends/lift-rir/Cargo.toml --bin lift-encode -- examples/lift/resolve.lift resolve examples/lift/resolve.rsvmbc
+// Executar: rsuvm run-bc examples/lift/resolve.rsvmbc
+function resolve(): int {
+  let x: int? = null;
+  return x ?? 42;
+}

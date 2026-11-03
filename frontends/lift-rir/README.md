@@ -2,29 +2,69 @@
 
 ## Overview
 
-Protótipo do adaptador **Lift → RIR** (ADR-0021). Consome a **HIR pública** do Lift
-(`lift_sema::analyze` → `HirProgram`) e emite um `rvm_ir::Module` para um
-subconjunto de funções `int`/`boolean`/`string`/`void` com `let`/const,
-**atribuição**, `if`/`else if`/`else` (com merge), **`while`** e lógica
-`!`/`&&`/`||` (curto-circuito). É um **workspace Cargo separado**: depende do Lift
-por git fixado (`5e59af5`) e não entra no build/CI do núcleo. O teste diferencial
-compara o resultado executado na RSUVM com o oráculo do compilador do Lift.
+Prototype **Lift → RIR** adapter (ADR-0021). It consumes Lift's public HIR
+(`lift_sema::analyze` → `HirProgram`) and emits an `rvm_ir::Module` for a subset
+of `int`/`number`/`boolean`/`string`/`void` functions with `let`/`const`,
+**assignment**, `if`/`else if`/`else` (with merge), **`while`**, arrays,
+interfaces/structs, `T?`, `??`, `== null`/`!= null`, and short-circuit
+`!`/`&&`/`||`.
+
+It is a **separate Cargo workspace**: it depends on Lift pinned by git
+(`e04bc26`) and is not part of the core build/CI. The core RSUVM remains free of
+external dependencies. The differential test compares the RSUVM result with the
+recorded Lift compiler oracle.
 
 ## Subdirectories & Boundaries
 
-- [src](./src/README.md) — contrato do pacote: `lower_source`/`lower`,
-  `AdapterError` e o subconjunto suportado; binário `lift-run`
-  (`src/bin/lift_run.rs`).
-- `tests/` — `diferencial.rs` (Lift→RIR→verificação→execução) e `cli.rs` (binário
-  `lift-run`: saída e códigos de exit).
+- [src](./src/README.md) — package contract: `lower_source`/`lower`,
+  `AdapterError`, supported subset; `lift-run` and `lift-encode` binaries.
+- `tests/` — `diferencial.rs` (Lift→RIR→verify→execute), `cli.rs` (`lift-run`
+  output/exit codes), `encode.rs` (`lift-encode` bytecode + execution).
 
-## Binário `lift-run`
+## Binaries
+
+### `lift-run` — execute directly
 
 ```bash
 cargo run --manifest-path frontends/lift-rir/Cargo.toml --bin lift-run -- \
-    fib.lift fib --arg i64:10
+    examples/lift/fib.lift fib --arg i64:10
 # i64:55
 ```
 
-Verificação: `cargo test --manifest-path frontends/lift-rir/Cargo.toml`.
-Relatório: `docs/RELATORIOS/ADAPTADOR-LIFT-RIR.md`.
+### `lift-encode` — emit RVM bytecode
+
+```bash
+cargo run --manifest-path frontends/lift-rir/Cargo.toml --bin lift-encode -- \
+    examples/lift/soma.lift soma /tmp/soma.rsvmbc
+rsuvm run-bc /tmp/soma.rsvmbc --arg i64:10 --arg i64:20
+# i64:30
+```
+
+`lift-encode` runs the Lift pipeline, lowers to RIR, verifies, and then encodes;
+it does not execute and does not grant host effects.
+
+## Supported / unsupported
+
+Supported: functions, scalars, arrays, interfaces/structs, `T?`, `??`,
+`== null`/`!= null`, `let`/`const`, assignment (non-aliased local), `if`/`else`,
+`while`, arithmetic/comparisons/logic, internal calls.
+
+Unsupported (fail closed with `AdapterError::Unsupported`): enums, unions,
+generics, closures/function values, higher-order array methods, `match`,
+`for-of`, `break`, `continue`, `throw`, `try/catch`, `?` propagation,
+`console.log`, top-level statements, imports/modules, FFI, `import interface`,
+and `result.ok`/`result.err`.
+
+The RIR subset cannot represent these features directly; the adapter rejects
+them instead of approximating semantics. See [LIFT-TO-RVM](../../docs/LIFT-TO-RVM.md)
+for the user guide and examples.
+
+## Verification
+
+```bash
+cargo test --manifest-path frontends/lift-rir/Cargo.toml
+```
+
+Current tests: 9 CLI + 34 differential + 4 encode = **47 passed**.
+
+Report: `docs/RELATORIOS/ADAPTADOR-LIFT-RIR.md`.

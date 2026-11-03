@@ -1,0 +1,6 @@
+// Exemplo Lift: dois parâmetros int e soma.
+// Compilar: cargo run --manifest-path frontends/lift-rir/Cargo.toml --bin lift-encode -- examples/lift/soma.lift soma examples/lift/soma.rsvmbc
+// Executar: rsuvm run-bc examples/lift/soma.rsvmbc --arg i64:10 --arg i64:20
+function soma(a: int, b: int): int {
+  return a + b;
+}

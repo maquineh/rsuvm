@@ -46,6 +46,7 @@ cargo run -p rvm-cli -- run examples/soma.rvm --arg i64:10 --arg i64:20
 - Embedding the VM: [EMBEDDING](./docs/EMBEDDING.md)
 - Versioning: [COMPATIBILITY](./docs/COMPATIBILITY.md)
 - What is implemented: [IMPLEMENTATION](./docs/IMPLEMENTATION.md)
+- Lift → RVM bytecode: [LIFT-TO-RVM](./docs/LIFT-TO-RVM.md)
 - Security policy: [SECURITY](./SECURITY.md)
 - Contributing: [CONTRIBUTING](./CONTRIBUTING.md)
 - Changelog: [CHANGELOG](./CHANGELOG.md)
@@ -69,7 +70,9 @@ Portuguese versions: [README](./README.pt-BR.md),
 - [fuzz](./fuzz/README.md) — **separate** coverage-guided fuzzing workspace
   (nightly, dev dependency; not part of the main workspace; ADR-0020).
 - [frontends](./frontends/README.md) — language adapters outside the core; the
-  Lift→RIR prototype (ADR-0021), also a separate workspace.
+  Lift→RIR prototype (ADR-0021), also a separate workspace. It can execute a
+  supported Lift subset or emit `.rsvmbc` with `lift-encode`; see
+  [LIFT-TO-RVM](./docs/LIFT-TO-RVM.md).
 
 ## Workspace Invariants
 

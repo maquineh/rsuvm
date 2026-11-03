@@ -1,0 +1,10 @@
+// Exemplo Lift: recursão.
+// Compilar: cargo run --manifest-path frontends/lift-rir/Cargo.toml --bin lift-encode -- examples/lift/fib.lift fib examples/lift/fib.rsvmbc
+// Executar: rsuvm run-bc examples/lift/fib.rsvmbc --arg i64:10
+function fib(n: int): int {
+  if n <= 1 {
+    return n;
+  } else {
+    return fib(n - 1) + fib(n - 2);
+  }
+}

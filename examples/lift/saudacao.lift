@@ -1,0 +1,6 @@
+// Exemplo Lift: string.
+// Compilar: cargo run --manifest-path frontends/lift-rir/Cargo.toml --bin lift-encode -- examples/lift/saudacao.lift saudacao examples/lift/saudacao.rsvmbc
+// Executar: rsuvm run-bc examples/lift/saudacao.rsvmbc
+function saudacao(): string {
+  return "ola";
+}
