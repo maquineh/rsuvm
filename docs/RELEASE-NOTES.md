@@ -1,6 +1,6 @@
 # RSUVM — Experimental Release
 
-**English** | [Português (BR)](./RELEASE-NOTES.pt-BR.md)
+**English** | [Português (BR)](https://github.com/maquineh/rsuvm/blob/main/docs/RELEASE-NOTES.pt-BR.md)
 
 > **This is a research alpha.** Single-tenant, not a sandbox, no process/OS
 > isolation, no multi-tenant support. IR/text/bytecode formats and the Rust API
@@ -26,8 +26,9 @@
 - **No** aggregate I/O/time/rate quota, OS isolation, or independent audit.
 - TOCTOU and hard links remain residual.
 
-Read [SECURITY.md](../SECURITY.md), [USER-GUIDE](./USER-GUIDE.md), and
-[COMPATIBILITY](./COMPATIBILITY.md).
+Read [SECURITY.md](https://github.com/maquineh/rsuvm/blob/main/SECURITY.md),
+[USER-GUIDE](https://github.com/maquineh/rsuvm/blob/main/docs/USER-GUIDE.md), and
+[COMPATIBILITY](https://github.com/maquineh/rsuvm/blob/main/docs/COMPATIBILITY.md).
 
 ## Verification
 
