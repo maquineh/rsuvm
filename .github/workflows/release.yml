@@ -98,4 +98,5 @@ jobs:
         run: |
           gh release create "${GITHUB_REF_NAME}" dist/* \
             --title "RSUVM ${GITHUB_REF_NAME} (experimental)" \
-            --notes-file docs/RELEASE-NOTES.md
+            --notes-file docs/RELEASE-NOTES.md \
+            --prerelease --latest=false

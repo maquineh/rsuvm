@@ -28,10 +28,11 @@ cargo build --release --locked -p rvm-cli
 
 ### Release binaries
 
-Official artifacts (when published) are at
-<https://github.com/maquineh/rsuvm/releases>. Verify `SHA256SUMS` before running.
-Tested platforms: Linux x86_64 and Windows x86_64; macOS is not distributed
-without testing.
+Official artifacts are at
+<https://github.com/maquineh/rsuvm/releases> (latest:
+[v0.1.0-alpha.1](https://github.com/maquineh/rsuvm/releases/tag/v0.1.0-alpha.1)).
+Verify `SHA256SUMS` before running. Tested platforms: Linux x86_64 and Windows
+x86_64; macOS is not distributed without testing.
 
 ### Docker
 

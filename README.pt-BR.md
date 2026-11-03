@@ -5,6 +5,8 @@
 [![CI](https://github.com/maquineh/rsuvm/actions/workflows/ci.yml/badge.svg)](https://github.com/maquineh/rsuvm/actions/workflows/ci.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](./LICENSE-MIT)
 
+**Release:** [v0.1.0-alpha.1](https://github.com/maquineh/rsuvm/releases/tag/v0.1.0-alpha.1)
+
 ## System Overview
 
 RSUVM é um **protótipo experimental de pesquisa** (EXP-0): uma máquina virtual em

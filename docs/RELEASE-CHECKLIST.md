@@ -59,6 +59,7 @@ público; itens marcados “bloqueante” impedem a tag.
 - [ ] `SHA256SUMS` gerado e verificado.
 - [ ] Release notes com limitações, benchmark H06 e link para segurança.
 - [ ] Tag anotada `vX.Y.Z-alpha.N` criada a partir do commit validado.
+- [ ] Release marcado como **pre-release** (`--prerelease --latest=false`).
 
 ## 6. Pós-release
 
