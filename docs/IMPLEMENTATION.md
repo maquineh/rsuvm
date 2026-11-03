@@ -105,6 +105,9 @@ The executor only accepts `VerifiedModule`.
 - Unsupported (fail closed): enums, unions, generics, closures/function values,
   higher-order array methods, `match`, `for-of`, `break`/`continue`,
   `throw`/`try`/`?`, imports/modules, FFI, `console.log`.
+- Proposed RIR support for enums/unions (not implemented):
+  `docs/ADRs/ADR-0039-ENUMS-UNIONS-RIR.md` and
+  `docs/CONTRATOS/ENUMS-UNIONS-PROPOSTA.md`.
 - Tests: 9 CLI + 34 differential + 4 encode = **47 passed**.
 - Guide: `docs/LIFT-TO-RVM.md`; detailed report:
   `docs/RELATORIOS/ADAPTADOR-LIFT-RIR.md` (Portuguese).
@@ -151,6 +154,7 @@ Detailed reports (Portuguese):
 | 0036 | Minimal host ABI with capabilities |
 | 0037 | File scope canonicalization; handles deferred |
 | 0038 | Quota reservation before host I/O |
+| 0039 | **Proposed** nominal enums/unions in RIR (not implemented) |
 
 Full index: `docs/ADRs/README.md` (Portuguese).
 

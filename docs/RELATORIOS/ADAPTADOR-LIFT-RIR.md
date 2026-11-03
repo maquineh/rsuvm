@@ -361,6 +361,11 @@ Nota: o checkout local do Lift tem alterações não commitadas em
 `e04bc26`, que está publicado; para incorporar essas alterações, é preciso
 commit/push no Lift e atualizar o rev do adaptador.
 
+A proposta de suporte a enums/unions no RIR está em
+[ADR-0039](../ADRs/ADR-0039-ENUMS-UNIONS-RIR.md) e
+[ENUMS-UNIONS-PROPOSTA](../CONTRATOS/ENUMS-UNIONS-PROPOSTA.md). Nada foi
+implementado; o adaptador continua rejeitando esses recursos.
+
 ## 3. Limitações
 
 1. Subconjunto ainda estreito: **sem** enums, unions, generics, closures/valores

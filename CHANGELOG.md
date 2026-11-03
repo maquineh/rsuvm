@@ -18,6 +18,13 @@ compatibility.
   (`.rsvmbc`); `lift-run` remains the direct execution path.
 - Lift examples under `examples/lift/` and guide `docs/LIFT-TO-RVM.md`.
 
+### Proposed (not implemented)
+
+- ADR-0039 / `docs/CONTRATOS/ENUMS-UNIONS-PROPOSTA.md`: nominal enums, tagged
+  variant payloads, recursive enums, enum ops, text/bytecode mapping and Lift
+  lowering plan. No code or format change yet; the adapter still rejects
+  enums/unions.
+
 ### Verification
 
 - Lift adapter: 9 CLI + 34 differential + 4 encode = **47 passed**.

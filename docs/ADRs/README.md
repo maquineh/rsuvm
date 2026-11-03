@@ -40,6 +40,7 @@ memória/transferência, integração Lift e integração Rio).
 | [0036](ADR-0036-ABI-HOST-CAPABILITIES.md) | ABI mínima de host com capabilities, escopo e quota por efeito | Aceito experimentalmente |
 | [0037](ADR-0037-ESCOPO-DE-ARQUIVO.md) | Escopo de arquivo: canonicalização no host e handles adiados | Aceito experimentalmente |
 | [0038](ADR-0038-RESERVA-DE-QUOTA-NO-IO.md) | Reserva de quota antes do IO de host | Aceito experimentalmente |
+| [0039](ADR-0039-ENUMS-UNIONS-RIR.md) | Enums e unions no RIR (proposta) | Proposto |
 
 Estados usados: `Proposto`, `Aceito experimentalmente`, `Validado no escopo`,
 `Rejeitado`, `Substituído`. "Validado no escopo" exige critério e evidência

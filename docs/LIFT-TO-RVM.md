@@ -89,6 +89,11 @@ and does not grant host effects.
 These are Lift features that the RIR subset cannot represent directly. The
 adapter fails closed instead of approximating them.
 
+A proposed RIR design for enums/unions is in
+[ADR-0039](../ADRs/ADR-0039-ENUMS-UNIONS-RIR.md) and
+[ENUMS-UNIONS-PROPOSTA](./ENUMS-UNIONS-PROPOSTA.md) (Portuguese; proposal only,
+not implemented).
+
 ## 5. Examples
 
 | File | Entry | Command | Expected |
